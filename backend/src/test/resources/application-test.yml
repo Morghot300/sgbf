@@ -1,0 +1,19 @@
+# Configuration du profil "test" - utilisee par les tests d'integration
+# (@SpringBootTest). Pointe vers une base MySQL dediee (sgbf_test_db,
+# separee de sgbf_db) plutot que Testcontainers : Docker n'est pas installe
+# sur ce poste de developpement (voir architecture technique, §3 et §8).
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/sgbf_test_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Africa/Douala&characterEncoding=utf8
+    username: ITadmin
+    password: J3su1s@dm1n
+
+app:
+  security:
+    jwt:
+      secret: dGVzdC1zZWNyZXQta2V5LXBvdXItbGVzLXRlc3RzLXVuaXF1ZW1lbnQtamFtYWlzLWVuLXByb2R1Y3Rpb24tMjU2Yml0cw==
+    cookie-secure: false
+  bootstrap:
+    admin-email: ""
+    admin-password: ""

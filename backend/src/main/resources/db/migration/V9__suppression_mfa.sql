@@ -1,0 +1,23 @@
+-- ============================================================================
+-- V9 : Suppression complete du second facteur d'authentification (MFA/OTP)
+-- ----------------------------------------------------------------------------
+-- Decision explicite du 2026-08-17 (annule et remplace V6__mfa_obligatoire.sql,
+-- qui rendait ce meme second facteur obligatoire pour tous les comptes le
+-- meme jour) : l'authentification repose desormais uniquement sur
+-- identifiant/e-mail + mot de passe, sans aucune etape supplementaire.
+--
+-- otp_challenge ne sert exclusivement qu'a ce mecanisme (code a usage
+-- unique envoye par e-mail, avec compteur de tentatives et anti-abus de
+-- renvoi) : aucune autre fonctionnalite n'y fait reference (verifie avant
+-- d'ecrire cette migration - aucune contrainte etrangere n'y pointe depuis
+-- une autre table). Une migration immuable (V2, V6) n'est jamais editee ni
+-- supprimee retroactivement ; la suppression procede donc d'une nouvelle
+-- migration DOWN, comme toute correction de schema dans ce projet
+-- (voir principe deja applique pour users.mfa_actif en V6).
+--
+-- La colonne users.email est conservee intacte : elle reste l'adresse de
+-- contact du compte (utilisable comme identifiant alternatif de connexion,
+-- voir UserDetailsServiceImpl), independamment de tout envoi de code.
+-- ============================================================================
+
+DROP TABLE otp_challenge;

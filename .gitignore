@@ -1,0 +1,31 @@
+# Secrets locaux
+backend/src/main/resources/application-local.yml
+
+# Backend (Maven)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+bin/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Fichiers de travail temporaires
+_extracted*.txt
+_mvn_debug.txt
+backend/_run*.log
+frontend/_vite.log

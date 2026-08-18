@@ -1,0 +1,19 @@
+# Copier ce fichier en application-local.yml (non versionne) et renseigner les
+# valeurs reelles. Ne jamais committer application-local.yml.
+
+DB_HOST: localhost
+DB_PORT: 3306
+DB_NAME: sgbf_db
+DB_USERNAME: ITadmin
+DB_PASSWORD: ""
+
+# Genere avec: openssl rand -base64 64 (ou equivalent) - minimum 256 bits pour HS256
+JWT_SECRET: ""
+
+APP_ORG_NOM: "SNEF Cameroun SA - Groupe SNEF"
+SERVER_PORT: 8080
+FRONTEND_ORIGIN: "http://localhost:5173"
+COOKIE_SECURE: false
+
+ADMIN_BOOTSTRAP_EMAIL: ""
+ADMIN_BOOTSTRAP_PASSWORD: ""

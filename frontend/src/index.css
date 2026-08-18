@@ -1,0 +1,405 @@
+/*
+ * Feuille de style de l'application - couche 3 (composants) du systeme de
+ * tokens (voir styles/tokens.css, importe avant ce fichier dans main.tsx).
+ *
+ * Regle stricte : aucune valeur hexadecimale en dur ici - uniquement des
+ * var(--token). Verifie par :
+ *   grep -rE "#[0-9A-Fa-f]{6}" src/ --include=*.tsx --include=*.css
+ * qui ne doit plus rien remonter en dehors de tokens.css.
+ *
+ * Echelle typographique 1.200 (majeure seconde) - application de saisie
+ * dense, pas une vitrine (mission charte graphique, etape 5).
+ */
+
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --taille-base: 1rem;         /* 16px */
+  --taille-petite: 0.833rem;   /* 16 / 1.2 */
+  --taille-h3: 1.2rem;
+  --taille-h2: 1.44rem;
+  --taille-h1: 1.728rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--surface-page);
+  color: var(--texte-principal);
+  font-size: var(--taille-base);
+  line-height: 1.5;
+}
+
+h1 { font-size: var(--taille-h1); margin: 0 0 1rem; }
+h2 { font-size: var(--taille-h2); margin: 1.5rem 0 0.75rem; }
+h3 { font-size: var(--taille-h3); margin: 1.25rem 0 0.5rem; }
+
+a { color: var(--texte-lien); }
+
+/* Focus clavier visible sur tout element interactif (mission, critere d'acceptation 3 - WCAG 2.4.7). */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--bordure-focus);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+ * Page de connexion (ecran non authentifie)
+ * ========================================================================== */
+.page-login {
+  max-width: 420px;
+  margin: 4rem auto;
+  padding: 2rem;
+  background: var(--surface-carte);
+  border-radius: var(--rayon-defaut);
+  box-shadow: var(--ombre-carte);
+}
+
+/* Lockup logo + zone de protection (mission etape 6) - `--logo-clearspace`
+   provisoire, a confirmer par la communication SNEF (voir note de validation). */
+.logo-lockup {
+  display: block;
+  height: 40px;
+  width: auto;
+  margin: 0 0 calc(var(--logo-clearspace) * 2) 0;
+  padding: var(--logo-clearspace);
+}
+
+.page-login form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ==========================================================================
+ * Formulaires (partages par toute l'application authentifiee)
+ * ========================================================================== */
+.formulaire {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 520px;
+}
+
+.formulaire-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+label {
+  font-weight: 600;
+  font-size: var(--taille-petite);
+  color: var(--texte-secondaire);
+}
+
+input, select, textarea {
+  padding: 0.5rem;
+  border: 1px solid var(--bordure-defaut);
+  border-radius: var(--rayon-defaut);
+  font-size: var(--taille-base);
+  font-family: inherit;
+  background: var(--surface-carte);
+  color: var(--texte-principal);
+}
+
+textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+/* Chiffres tabulaires sur references, quantites et montants - alignement en
+   colonnes (mission etape 5). */
+.tableau td, .fiche td, input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  padding: 0.6rem 1rem;
+  background-color: var(--action-fond);
+  color: var(--action-texte);
+  border: none;
+  border-radius: var(--rayon-defaut);
+  font-size: var(--taille-base);
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background-color: var(--action-fond-survol);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bouton-principal {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  background-color: var(--action-fond);
+  color: var(--action-texte);
+  border-radius: var(--rayon-defaut);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+[role="alert"] {
+  color: var(--etat-erreur);
+  background: var(--etat-erreur-fond);
+  border-radius: var(--rayon-defaut);
+  padding: 0.5rem 0.75rem;
+  font-size: var(--taille-petite);
+  margin: 0.5rem 0;
+}
+
+.etat-chargement {
+  color: var(--texte-secondaire);
+}
+
+/* ==========================================================================
+ * Ossature applicative (AppLayout) - en-tete, navigation, contenu
+ * ========================================================================== */
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface-entete);
+  border-bottom: 1px solid var(--bordure-defaut);
+  flex-wrap: wrap;
+}
+
+.app-header__marque {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: var(--taille-h3);
+  color: var(--brand-1-text);
+  letter-spacing: 0.02em;
+}
+
+/* Variante compacte du lockup pour l'en-tete (voir .logo-lockup, page de connexion) :
+   pas de zone de protection verticale ici, l'en-tete porte deja son propre espacement. */
+.logo-lockup--entete {
+  height: 24px;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.app-nav {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.app-nav a {
+  color: var(--texte-secondaire);
+  text-decoration: none;
+  padding: 0.4rem 0.2rem;
+  border-bottom: 2px solid transparent;
+  font-size: var(--taille-petite);
+  font-weight: 600;
+}
+.app-nav a.active,
+.app-nav a[aria-current="page"] {
+  color: var(--texte-principal);
+  border-bottom-color: var(--brand-2-text);
+}
+
+.app-header__utilisateur {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: var(--taille-petite);
+  color: var(--texte-secondaire);
+}
+.app-header__utilisateur button {
+  padding: 0.4rem 0.75rem;
+  font-size: var(--taille-petite);
+}
+
+.app-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.page-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.barre-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+
+/* ==========================================================================
+ * Tableaux et fiches
+ * ========================================================================== */
+.tableau {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-carte);
+  border-radius: var(--rayon-defaut);
+  overflow: hidden;
+  font-size: var(--taille-petite);
+}
+.tableau th, .tableau td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--bordure-defaut);
+}
+.tableau th {
+  background: var(--surface-page);
+  color: var(--texte-secondaire);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+.tableau tbody tr:hover {
+  background: var(--surface-survol);
+}
+.tableau--compact th, .tableau--compact td {
+  padding: 0.4rem 0.6rem;
+}
+
+/* Un tableau large ne doit jamais faire deborder la page (mission, critere
+   d'acceptation 6 - rendu correct de 360px a 1920px). */
+.app-content > .tableau,
+.app-content table {
+  display: block;
+  overflow-x: auto;
+}
+
+.fiche {
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.fiche th {
+  text-align: left;
+  color: var(--texte-secondaire);
+  font-weight: 600;
+  padding: 0.4rem 1rem 0.4rem 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.fiche td {
+  padding: 0.4rem 0;
+}
+
+.admin-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--bordure-defaut);
+  padding-bottom: 0.5rem;
+}
+.admin-nav a {
+  color: var(--texte-secondaire);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: var(--taille-petite);
+}
+.admin-nav a.active,
+.admin-nav a[aria-current="page"] {
+  color: var(--brand-2-text);
+}
+
+.panneau-imbrique {
+  background: var(--surface-page);
+  border-radius: var(--rayon-defaut);
+  padding: 1rem;
+  margin: 0.5rem 0;
+}
+
+/* ==========================================================================
+ * Badges de statut (components/StatutBadge.tsx) - le libelle textuel
+ * accompagne toujours la couleur (mission, critere d'acceptation 4 - WCAG 1.4.1).
+ * ========================================================================== */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: var(--taille-petite);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge--neutre  { background: var(--statut-neutre-fond);  color: var(--statut-neutre-texte); }
+.badge--attente { background: var(--statut-attente-fond); color: var(--statut-attente-texte); }
+.badge--info    { background: var(--statut-info-fond);    color: var(--statut-info-texte); }
+.badge--succes  { background: var(--statut-succes-fond);  color: var(--statut-succes-texte); }
+.badge--danger  { background: var(--statut-danger-fond);  color: var(--statut-danger-texte); }
+
+/* ==========================================================================
+ * Tableau de bord
+ * ========================================================================== */
+.dashboard-accueil {
+  color: var(--texte-secondaire);
+}
+.dashboard-cartes {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.5rem;
+}
+.carte-resume {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--surface-carte);
+  border-radius: var(--rayon-defaut);
+  box-shadow: var(--ombre-carte);
+  padding: 1rem 1.5rem;
+  min-width: 220px;
+  text-decoration: none;
+  color: var(--texte-principal);
+}
+.carte-resume__nombre {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-1-text);
+}
+.carte-resume__libelle {
+  color: var(--texte-secondaire);
+  font-size: var(--taille-petite);
+}
+
+/* ==========================================================================
+ * Responsive - rendu correct de 360px a 1920px (mission, critere d'acceptation 6)
+ * ========================================================================== */
+@media (max-width: 640px) {
+  .app-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .app-content {
+    padding: 1rem;
+  }
+  .page-entete {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

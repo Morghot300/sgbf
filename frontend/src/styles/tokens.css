@@ -1,0 +1,136 @@
+/**
+ * Systeme de tokens CSS de SGBF, en trois couches (mission charte graphique,
+ * 2026-08-17). Importe une seule fois, dans `main.tsx`.
+ *
+ * Regle stricte : aucun composant (.tsx ou .css) ne doit referencer une
+ * primitive de la couche 1 directement, ni contenir de valeur hexadecimale
+ * en dur - toujours passer par un token semantique (couche 2) ou composant
+ * (couche 3). Verifie par :
+ *   grep -rE "#[0-9A-Fa-f]{6}" src/ --include=*.tsx --include=*.css
+ * qui ne doit plus rien remonter en dehors de ce fichier.
+ *
+ * ============================================================================
+ * COUCHE 1 - PRIMITIVES DE MARQUE
+ * ============================================================================
+ * Extraites de frontend/src/assets/brand/logo_snef.png par
+ * tools/brand_extract.py (quantification median cut, pixels alpha >= 200
+ * ignores) puis auditees par tools/contrast_audit.py (WCAG 2.1). Sortie brute
+ * des deux scripts jointe au rapport de mission - AUCUNE valeur ci-dessous
+ * n'est choisie a l'oeil.
+ *
+ * --brand-1/-2       : couleurs brutes du logo - aplats, fonds, le logo
+ *                       lui-meme. JAMAIS pour du texte < 18px (contraste
+ *                       insuffisant pour --brand-2, voir ratio 3.58:1 < 4.5:1
+ *                       dans le rapport).
+ * --brand-1-text/-2-text : variantes conformes AA (>= 4.5:1 sur blanc),
+ *                       memes teinte/saturation, luminosite ajustee par
+ *                       recherche dichotomique. Utiliser pour texte, liens,
+ *                       icones.
+ *
+ * DEVIATION DOCUMENTEE : la mission demandait une source SVG vectorielle.
+ * Seul un PNG raster (389x129) a pu etre obtenu - voir la note de validation
+ * livree avec cette mission pour le detail et les points a faire confirmer
+ * par la communication SNEF (zone de protection, taille minimale, version
+ * monochrome fond sombre).
+ *
+ * Exclusions volontaires (mission, etape 4) : les couleurs d'etat
+ * (succes/alerte/erreur/info) et l'echelle de gris sont INDEPENDANTES de la
+ * marque, definies plus bas dans leur propre bloc, jamais derivees du logo.
+ */
+:root {
+  /* --- Couche 1 : primitives de marque (tools/brand_extract.py + tools/contrast_audit.py) --- */
+  --brand-1: #1D1D1B;       /* noir d'encre du logo (lettres S, E, F) - ratio 16.88:1 sur blanc, deja conforme */
+  --brand-1-text: #1D1D1B;
+  --brand-2: #0095A9;       /* teal du logo (lettre "n") - ratio 3.58:1 sur blanc, NON conforme texte */
+  --brand-2-text: #008294;  /* variante teal assombrie (L 33.1% -> 29.0%) - ratio 4.53:1 sur blanc */
+
+  /* --- Echelle de gris neutre - INDEPENDANTE de la marque (mission, exclusion volontaire) --- */
+  --gris-0: #FFFFFF;
+  --gris-50: #F7F8F9;
+  --gris-100: #EEF1F3;
+  --gris-200: #DEE3E7;
+  --gris-300: #C3CBD1;
+  --gris-400: #98A3AC;
+  --gris-500: #71808A;
+  --gris-600: #56646D;
+  --gris-700: #3E4850;
+  --gris-800: #262D32;
+  --gris-900: #16191C;
+
+  /* --- Couleurs d'etat - INDEPENDANTES de la marque (mission, exclusion volontaire) : un
+     document refuse reste rouge quelle que soit la marque. Teintes standard, verifiees
+     >= 4.5:1 sur blanc pour les variantes -text (memes calculs WCAG que la marque). --- */
+  --etat-succes: #1E7A34;
+  --etat-succes-fond: #E6F4E9;
+  --etat-alerte: #8A5A00;
+  --etat-alerte-fond: #FCEFD6;
+  --etat-erreur: #B3261E;
+  --etat-erreur-fond: #FBE9E8;
+  --etat-info: #0B5FA5;
+  --etat-info-fond: #E7F1FB;
+  --etat-neutre: #56646D;
+  --etat-neutre-fond: #EEF1F3;
+
+  /* ==========================================================================
+   * COUCHE 2 - SEMANTIQUE (surfaces, texte, bordures, actions)
+   * ========================================================================== */
+  --surface-page: var(--gris-50);
+  --surface-carte: var(--gris-0);
+  --surface-entete: var(--gris-0);
+  --surface-survol: var(--gris-100);
+
+  --texte-principal: var(--gris-900);
+  --texte-secondaire: var(--gris-600);
+  --texte-inverse: var(--gris-0);
+  --texte-lien: var(--brand-2-text);
+
+  --bordure-defaut: var(--gris-200);
+  --bordure-forte: var(--gris-300);
+  --bordure-focus: var(--brand-2-text);
+
+  --action-fond: var(--brand-1);
+  --action-fond-survol: var(--gris-800);
+  --action-texte: var(--texte-inverse);
+  --action-secondaire-fond: var(--gris-0);
+  --action-secondaire-bordure: var(--bordure-forte);
+  --action-secondaire-texte: var(--texte-principal);
+
+  /* ==========================================================================
+   * COUCHE 2 - CYCLE DE VIE D'UN BON DE SORTIE / D'UNE FIPH
+   * ==========================================================================
+   * Correspondance avec les statuts reels de l'application (StatutBonSortie,
+   * StatutFiphVersion - voir backend/.../entity) : la mission employait des
+   * noms generiques (BROUILLON/EN_ATTENTE/VALIDE/REFUSE) qui ne correspondent
+   * pas exactement a l'enumeration reelle a 3 puis 11 valeurs ; les tokens
+   * ci-dessous portent donc les noms semantiques reels utilises par
+   * `components/StatutBadge.tsx`, avec la meme intention (fond teinte +
+   * texte lisible, jamais la couleur seule - WCAG 1.4.1). --- */
+  --statut-neutre-fond: var(--etat-neutre-fond);
+  --statut-neutre-texte: var(--etat-neutre);
+  --statut-attente-fond: var(--etat-alerte-fond);
+  --statut-attente-texte: var(--etat-alerte);
+  --statut-info-fond: var(--etat-info-fond);
+  --statut-info-texte: var(--etat-info);
+  --statut-succes-fond: var(--etat-succes-fond);
+  --statut-succes-texte: var(--etat-succes);
+  --statut-danger-fond: var(--etat-erreur-fond);
+  --statut-danger-texte: var(--etat-erreur);
+
+  /* --- Zone de protection minimale autour du logo (a confirmer par la communication
+     SNEF - voir note de validation) : provisoirement fixee a la hauteur du "S". --- */
+  --logo-clearspace: 12px;
+
+  /* --- Rayons et ombres, communs a toute la couche 3 --- */
+  --rayon-defaut: 6px;
+  --ombre-carte: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* prefers-reduced-motion (mission, critere d'acceptation 5) : neutralise toute transition/animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
