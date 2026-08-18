@@ -15,6 +15,8 @@
    - votre **login ou votre adresse e-mail** (l'un ou l'autre fonctionne indifféremment) ;
    - votre **mot de passe**.
 
+   Si vous souhaitez vérifier ce que vous avez saisi (poste personnel, clavier peu familier), cochez la case **Afficher le mot de passe** sous le champ : le mot de passe s'affiche alors en clair le temps de la saisie. Décochez-la pour revenir au masquage habituel. Cette case est également disponible partout où un mot de passe est saisi dans l'application (ex. création de compte par l'Administrateur).
+
 2. **Cliquez sur Se connecter.**
 
 **Résultat attendu** — Vous accédez immédiatement au tableau de bord de l'application, avec les menus et actions correspondant à vos habilitations. Aucune étape supplémentaire n'est demandée.

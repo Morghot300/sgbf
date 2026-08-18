@@ -46,7 +46,11 @@
 
 **Accès** — Fiche du bon de sortie, bouton **Imprimer (PDF)** — visible uniquement au statut **Validé**.
 
-**Résultat attendu** — Le PDF s'ouvre dans un nouvel onglet. Il est régénéré à chaque demande à partir des données actuelles ; l'impression n'a aucun effet sur le contenu ni le statut du bon de sortie.
+**Étapes** — Cliquez sur **Imprimer (PDF)**.
+
+**Résultat attendu** — Le document s'ouvre dans un nouvel onglet, avec l'en-tête stylisé et le logo SNEF, puis la boîte de dialogue d'impression de votre navigateur s'ouvre automatiquement après un court instant. Vous y choisissez vous-même la destination : votre imprimante par défaut (déjà présélectionnée), une autre imprimante réseau disponible sur le poste, ou l'enregistrement en fichier PDF sur le poste (option « Enregistrer au format PDF » de la boîte de dialogue). Le document est régénéré à chaque demande à partir des données actuelles ; l'impression n'a aucun effet sur le contenu ni le statut du bon de sortie.
+
+Si votre navigateur bloque l'ouverture automatique de la boîte de dialogue d'impression (certains bloqueurs de fenêtres pop-up), l'onglet du PDF reste ouvert : utilisez alors le bouton d'impression du lecteur PDF intégré à votre navigateur.
 
 **Messages d'erreur possibles**
 

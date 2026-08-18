@@ -17,6 +17,7 @@ import com.snef.sgbf.fiph.dto.ValiderFiphRequest;
 import com.snef.sgbf.fiph.entity.DecisionValidation;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
+import com.snef.sgbf.fiph.entity.OrigineFiph;
 import com.snef.sgbf.fiph.entity.Pointage;
 import com.snef.sgbf.fiph.entity.Signature;
 import com.snef.sgbf.fiph.entity.StatutFiphVersion;
@@ -126,7 +127,7 @@ public class FiphVersionService {
     public FiphVersionDto completerPointage(Long fiphVersionId, CompleterPointageRequest requete, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
         fiphService.verifierPerimetreGestionnaire(auteur, version.getFiph().getAgent());
-        verifierModifiable(version);
+        verifierPointageModifiable(version);
 
         Pointage pointage = pointageRepository.findByFiphVersion_IdAndDatePointage(version.getId(), requete.datePointage())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -152,6 +153,15 @@ public class FiphVersionService {
      * Signature de l'emetteur (RG-FIPH-019) : condition prealable
      * obligatoire a la soumission, reservee au titulaire de la FIPH.
      * Controle de coherence RG-FIPH-025 execute avant toute signature.
+     *
+     * <p><strong>Reste pertinente uniquement pour une FIPH
+     * {@link OrigineFiph#MANUELLE}</strong> (evolution du workflow FIPH,
+     * 2026-08-18) : pour une origine {@link OrigineFiph#BON_SORTIE}, le visa
+     * de l'agent titulaire est desormais acquis automatiquement des la
+     * precreation (voir {@code FiphService#creerFiphEtVersionInitiale}) - la
+     * version demarre alors directement a {@code SIGNEE}, et cette methode
+     * echoue naturellement si on l'appelle a nouveau ({@link #verifierModifiable}
+     * n'accepte que {@code BROUILLON}/{@code EN_COMPLEMENT}).
      */
     public FiphVersionDto signer(Long fiphVersionId, String adresseIp, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
@@ -178,7 +188,14 @@ public class FiphVersionService {
         return versDto(chargerVersion(fiphVersionId));
     }
 
-    /** Soumission au circuit de validation (RG-FIPH-019 : uniquement apres signature). Reservee au gestionnaire du service. */
+    /**
+     * Soumission au circuit de validation (RG-FIPH-019 : uniquement apres
+     * signature). Reservee au gestionnaire du service. Reste disponible mais
+     * n'est plus une etape obligatoire depuis l'evolution du workflow FIPH
+     * (2026-08-18) : le Charge d'Affaires/la personne habilitee peut valider
+     * directement au niveau 2 une version {@code SIGNEE} sans passer par
+     * cette methode (voir {@link #ETATS_ELIGIBLES_NIVEAU_2}).
+     */
     public FiphVersionDto soumettre(Long fiphVersionId, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
         fiphService.verifierPerimetreGestionnaire(auteur, version.getFiph().getAgent());
@@ -198,9 +215,16 @@ public class FiphVersionService {
     }
 
     /**
-     * Decision de validation a un niveau donne (2 : Charge d'Affaires -
-     * RG-FIPH-012 ; 3 : Responsable d'activite - RG-FIPH-013 ; 4 : Direction,
-     * definitive - RG-FIPH-014/015). Applique RG-HAB-004 (separation des
+     * Decision de validation a un niveau donne (2 : Charge d'Affaires ou
+     * personne habilitee ("Responsable designe") - RG-FIPH-012 ; 3 :
+     * Responsable d'activite - RG-FIPH-013 ; 4 : Direction (DG),
+     * definitive - RG-FIPH-014/015). Une seule des deux habilitations
+     * possibles au niveau 2 suffit a faire avancer le circuit ; si le meme
+     * utilisateur porte a la fois l'habilitation Charge d'Affaires et
+     * Responsable d'activite sur le service concerne, rien ne l'empeche
+     * d'effectuer successivement les deux validations (niveau 2 puis niveau
+     * 3) - chacune reste neanmoins tracee individuellement (une ligne
+     * {@link Validation} distincte par niveau). Applique RG-HAB-004 (separation des
      * responsabilites) avant toute autre verification.
      */
     public FiphVersionDto valider(Long fiphVersionId, int niveau, ValiderFiphRequest requete, String adresseIp, Utilisateur auteur) {
@@ -265,10 +289,36 @@ public class FiphVersionService {
 
     // --- Controles ---
 
+    /** Gate stricte : n'autorise que les etats ou la signature du titulaire n'a pas encore ete apposee (voir {@code signer}). */
     private void verifierModifiable(FIPHVersion version) {
         if (!version.getStatutVersion().estModifiable()) {
             throw new BusinessRuleViolationException("RG-VER-001",
                     "Cette version n'est plus modifiable dans son etat actuel (" + version.getStatutVersion() + ").");
+        }
+    }
+
+    /**
+     * Gate elargie utilisee pour le complement du pointage : contrairement a
+     * {@link #verifierModifiable}, autorise egalement l'etat {@code SIGNEE},
+     * mais uniquement pour une FIPH {@link OrigineFiph#BON_SORTIE}.
+     * Necessaire depuis que le visa de l'agent titulaire y est acquis
+     * automatiquement des la precreation (voir
+     * {@code FiphService#creerFiphEtVersionInitiale}) : le pointage doit
+     * rester corrigeable par le Charge d'Affaires / la personne habilitee
+     * jusqu'a l'entree reelle dans le circuit de validation, meme si la
+     * version est deja techniquement "signee". Pour une FIPH
+     * {@link OrigineFiph#MANUELLE}, la signature reste un acte delibere du
+     * titulaire : la gate stricte {@link #verifierModifiable} continue de
+     * s'appliquer, pour ne pas permettre de modifier silencieusement un
+     * pointage apres que l'agent l'a personnellement signe.
+     */
+    private void verifierPointageModifiable(FIPHVersion version) {
+        boolean modifiable = version.getFiph().getOrigine() == OrigineFiph.BON_SORTIE
+                ? version.getStatutVersion().estPointageModifiable()
+                : version.getStatutVersion().estModifiable();
+        if (!modifiable) {
+            throw new BusinessRuleViolationException("RG-VER-001",
+                    "Le pointage de cette version n'est plus modifiable dans son etat actuel (" + version.getStatutVersion() + ").");
         }
     }
 
@@ -315,9 +365,22 @@ public class FiphVersionService {
      * lui-meme creee ou completee, meme en cumulant plusieurs habilitations -
      * verifie via le journal d'audit, seule source exhaustive de "qui a agi
      * sur cette version".
+     *
+     * <p>Le controle sur {@link FIPHVersion#getCreePar()} n'est applique que
+     * pour une FIPH {@link OrigineFiph#MANUELLE} (creation deliberee, Code
+     * Service) : pour une origine {@link OrigineFiph#BON_SORTIE}, ce champ
+     * porte le Charge d'Affaires/la personne habilitee qui a valide le bon
+     * de sortie declencheur - une precreation automatique du systeme, non un
+     * choix de contenu de sa part - et le nouveau workflow FIPH
+     * (evolution du 2026-08-18) autorise explicitement ce meme Charge
+     * d'Affaires/cette meme personne habilitee a valider ensuite la FIPH au
+     * niveau 2. La protection reste entiere dans ce cas via le controle
+     * d'historique ci-dessous : un Charge d'Affaires qui a lui-meme complete
+     * le pointage (RG-FIPH-009/010) reste bloque pour la validation.
      */
     private void verifierSeparationResponsabilites(FIPHVersion version, Utilisateur auteur) {
-        if (auteur.getId().equals(version.getCreePar().getId())) {
+        if (version.getFiph().getOrigine() == OrigineFiph.MANUELLE
+                && auteur.getId().equals(version.getCreePar().getId())) {
             throw new ForbiddenOperationException(
                     "Vous ne pouvez pas valider une FIPH que vous avez vous-meme creee (RG-HAB-004).");
         }
@@ -332,18 +395,51 @@ public class FiphVersionService {
         }
     }
 
+    /**
+     * Etats depuis lesquels une validation de niveau 2 (Charge d'Affaires ou
+     * personne habilitee) peut etre engagee directement pour une FIPH
+     * {@link OrigineFiph#BON_SORTIE}, sans etape de signature ni de
+     * soumission bloquante prealable (evolution du workflow FIPH,
+     * 2026-08-18) : le visa de l'agent titulaire etant deja acquis d'office
+     * dans ce cas (voir {@code FiphService#creerFiphEtVersionInitiale}),
+     * {@code SIGNEE} est le point d'entree habituel ;
+     * {@code BROUILLON}/{@code EN_COMPLEMENT} restent egalement acceptes
+     * (ex. pointage complete puis valide sans etape de soumission separee) ;
+     * {@code SOUMISE} reste acceptee pour compatibilite avec un appel
+     * explicite a {@code soumettre()}, reste possible mais non obligatoire.
+     *
+     * <p>Pour une FIPH {@link OrigineFiph#MANUELLE}, ce raccourci ne
+     * s'applique pas : la signature explicite du titulaire (via
+     * {@code signer()}) puis la soumission (via {@code soumettre()}) restent
+     * un prealable obligatoire, comme avant cette evolution - seul
+     * {@code SOUMISE} y est accepte.
+     */
+    private static final Set<StatutFiphVersion> ETATS_ELIGIBLES_NIVEAU_2_BON_SORTIE = Set.of(
+            StatutFiphVersion.BROUILLON, StatutFiphVersion.EN_COMPLEMENT,
+            StatutFiphVersion.SIGNEE, StatutFiphVersion.SOUMISE);
+
     private void verifierSequencementNiveau(FIPHVersion version, int niveau) {
+        if (niveau == 2) {
+            // RG-FIPH-012 : une seconde validation de niveau 2, alors que le
+            // statut est deja VALIDEE_NIVEAU_2, reste acceptee (a titre
+            // informatif) plutot que rejetee comme hors sequence.
+            boolean secondeValidationNiveau2 = version.getStatutVersion() == StatutFiphVersion.VALIDEE_NIVEAU_2;
+            boolean eligible = version.getFiph().getOrigine() == OrigineFiph.BON_SORTIE
+                    ? ETATS_ELIGIBLES_NIVEAU_2_BON_SORTIE.contains(version.getStatutVersion())
+                    : version.getStatutVersion() == StatutFiphVersion.SOUMISE;
+            if (!eligible && !secondeValidationNiveau2) {
+                throw new BusinessRuleViolationException("RG-FIPH-013",
+                        "Cette FIPH n'est pas au statut requis pour une validation de niveau 2 "
+                                + "(statut actuel : " + version.getStatutVersion() + ").");
+            }
+            return;
+        }
         StatutFiphVersion statutRequis = switch (niveau) {
-            case 2 -> StatutFiphVersion.SOUMISE;
             case 3 -> StatutFiphVersion.VALIDEE_NIVEAU_2;
             case 4 -> StatutFiphVersion.VALIDEE_NIVEAU_3;
             default -> throw new BusinessRuleViolationException("section-12", "Niveau de validation invalide : " + niveau);
         };
-        // RG-FIPH-012 : une seconde validation de niveau 2, alors que le
-        // statut est deja VALIDEE_NIVEAU_2, reste acceptee (a titre
-        // informatif) plutot que rejetee comme hors sequence.
-        boolean secondeValidationNiveau2 = niveau == 2 && version.getStatutVersion() == StatutFiphVersion.VALIDEE_NIVEAU_2;
-        if (version.getStatutVersion() != statutRequis && !secondeValidationNiveau2) {
+        if (version.getStatutVersion() != statutRequis) {
             throw new BusinessRuleViolationException("RG-FIPH-013",
                     "Cette FIPH n'est pas au statut requis pour une validation de niveau " + niveau
                             + " (statut actuel : " + version.getStatutVersion() + ").");

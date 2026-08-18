@@ -11,7 +11,7 @@ import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutFiph } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
 import {
-  LIBELLES_JOUR_SEMAINE, LIBELLES_STATUT_FIPH, NIVEAU_VALIDATION_ATTENDU, estFiphModifiable,
+  LIBELLES_JOUR_SEMAINE, LIBELLES_STATUT_FIPH, NIVEAU_VALIDATION_ATTENDU, estFiphModifiable, estPointageModifiable,
   type DecisionValidation, type PointageDto,
 } from "../../types/fiph";
 
@@ -118,6 +118,13 @@ export default function FiphDetailPage() {
         )}
       </EtatAsync>
 
+      {fiph.data?.origine === "BON_SORTIE" && (
+        <p className="note">
+          Le visa de l'agent titulaire est acquis automatiquement dès la validation du bon de sortie déclencheur :
+          aucune signature supplémentaire ne lui est demandée pour cette FIPH.
+        </p>
+      )}
+
       {erreurAction && <p role="alert">{erreurAction}</p>}
 
       <EtatAsync chargement={version.isLoading} erreur={version.error} donnees={version.data}>
@@ -127,11 +134,11 @@ export default function FiphDetailPage() {
 
             <table className="tableau">
               <thead>
-                <tr><th>Jour</th><th>Date</th><th>Heures normales</th><th>Heures sup.</th><th>Mission / service</th>{estFiphModifiable(v.statutVersion) && peutCompleter && <th></th>}</tr>
+                <tr><th>Jour</th><th>Date</th><th>Heures normales</th><th>Heures sup.</th><th>Mission / service</th>{estPointageModifiable(v.statutVersion) && peutCompleter && <th></th>}</tr>
               </thead>
               <tbody>
                 {v.pointages.map((p) => {
-                  const modifiable = estFiphModifiable(v.statutVersion) && peutCompleter;
+                  const modifiable = estPointageModifiable(v.statutVersion) && peutCompleter;
                   const valeurs = pointagesModifies[p.id] ?? { heuresNormales: String(p.heuresNormales), heuresSup: String(p.heuresSup) };
                   return (
                     <tr key={p.id}>

@@ -113,6 +113,15 @@ label {
   padding: 0;
 }
 
+/* Note informative courte (ex. visa automatique de l'agent titulaire) - distincte d'un message d'erreur (role="alert"). */
+.note {
+  font-size: var(--taille-petite);
+  color: var(--texte-secondaire);
+  border-left: 3px solid var(--brand-2-text);
+  padding-left: 0.6rem;
+  margin: 0.75rem 0;
+}
+
 input, select, textarea {
   padding: 0.5rem;
   border: 1px solid var(--bordure-defaut);

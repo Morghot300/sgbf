@@ -31,8 +31,32 @@ public enum StatutFiphVersion {
     /** Proposee (section 12.3) : modification demandee apres validation definitive, ouvre une nouvelle version. */
     EN_REVISION;
 
+    /**
+     * Etats ou seul le titulaire de la FIPH peut encore la signer
+     * (RG-FIPH-019). Volontairement plus stricte que
+     * {@link #estPointageModifiable()} : une fois {@link #SIGNEE}, une
+     * nouvelle signature ne doit plus pouvoir etre demandee, y compris pour
+     * une FIPH issue d'un bon de sortie dont le visa de l'agent a ete acquis
+     * automatiquement a la precreation (evolution du workflow FIPH,
+     * 2026-08-18 - voir Javadoc de {@code FiphService#creerFiphEtVersionInitiale}).
+     */
     public boolean estModifiable() {
         return this == BROUILLON || this == EN_COMPLEMENT;
+    }
+
+    /**
+     * Etats ou le pointage (heures normales/supplementaires) reste encore
+     * modifiable par le Charge d'Affaires ou la personne habilitee.
+     * Deliberement plus large que {@link #estModifiable()} : depuis
+     * l'evolution du workflow FIPH (2026-08-18), une FIPH generee
+     * automatiquement a la validation d'un bon de sortie demarre directement
+     * a {@link #SIGNEE} (visa de l'agent acquis d'office) - le pointage doit
+     * pourtant rester corrigeable par le Charge d'Affaires/la personne
+     * habilitee jusqu'a ce que le circuit de validation soit reellement
+     * engage.
+     */
+    public boolean estPointageModifiable() {
+        return this == BROUILLON || this == EN_COMPLEMENT || this == SIGNEE;
     }
 
     public boolean estFigee() {

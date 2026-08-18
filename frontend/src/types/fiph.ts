@@ -120,15 +120,31 @@ export const LIBELLES_JOUR_SEMAINE: Record<JourSemaine, string> = {
   DIMANCHE: "Dimanche",
 };
 
-/** Niveau de validation attendu selon le statut courant (section 12 du document source). */
+/**
+ * Niveau de validation attendu selon le statut courant (section 12 du
+ * document source). SIGNEE est inclus depuis l'evolution du workflow FIPH
+ * (2026-08-18) : une FIPH issue d'un bon de sortie demarre directement a
+ * SIGNEE (visa de l'agent titulaire acquis automatiquement), et le Charge
+ * d'Affaires / la personne habilitee peut la valider au niveau 2 sans
+ * attendre une soumission explicite.
+ */
 export const NIVEAU_VALIDATION_ATTENDU: Partial<Record<StatutFiphVersion, number>> = {
+  BROUILLON: 2,
+  EN_COMPLEMENT: 2,
+  SIGNEE: 2,
   SOUMISE: 2,
   VALIDEE_NIVEAU_2: 3,
   VALIDEE_NIVEAU_3: 4,
 };
 
+/** Etats ou seul l'agent titulaire peut encore signer la FIPH (bouton "Signer"). Ne concerne plus les FIPH issues d'un bon de sortie (visa deja acquis). */
 export function estFiphModifiable(statut: StatutFiphVersion): boolean {
   return statut === "BROUILLON" || statut === "EN_COMPLEMENT";
+}
+
+/** Etats ou le pointage reste modifiable par le Charge d'Affaires / la personne habilitee — plus large que estFiphModifiable, voir StatutFiphVersion#estPointageModifiable côté backend. */
+export function estPointageModifiable(statut: StatutFiphVersion): boolean {
+  return statut === "BROUILLON" || statut === "EN_COMPLEMENT" || statut === "SIGNEE";
 }
 
 export function estFiphFigee(statut: StatutFiphVersion): boolean {

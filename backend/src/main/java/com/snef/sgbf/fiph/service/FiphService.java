@@ -14,11 +14,14 @@ import com.snef.sgbf.fiph.entity.FIPHVersion;
 import com.snef.sgbf.fiph.entity.JourSemaine;
 import com.snef.sgbf.fiph.entity.OrigineFiph;
 import com.snef.sgbf.fiph.entity.Pointage;
+import com.snef.sgbf.fiph.entity.Signature;
 import com.snef.sgbf.fiph.entity.StatutFiphVersion;
+import com.snef.sgbf.fiph.entity.TypeSignature;
 import com.snef.sgbf.fiph.mapper.FiphMapper;
 import com.snef.sgbf.fiph.repository.FiphRepository;
 import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
+import com.snef.sgbf.fiph.repository.SignatureRepository;
 import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
@@ -55,18 +58,20 @@ public class FiphService {
     private final PointageRepository pointageRepository;
     private final AgentRepository agentRepository;
     private final HabilitationRepository habilitationRepository;
+    private final SignatureRepository signatureRepository;
     private final FiphMapper fiphMapper;
     private final AuditService auditService;
 
     public FiphService(FiphRepository fiphRepository, FiphVersionRepository fiphVersionRepository,
                         PointageRepository pointageRepository, AgentRepository agentRepository,
-                        HabilitationRepository habilitationRepository, FiphMapper fiphMapper,
-                        AuditService auditService) {
+                        HabilitationRepository habilitationRepository, SignatureRepository signatureRepository,
+                        FiphMapper fiphMapper, AuditService auditService) {
         this.fiphRepository = fiphRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
         this.agentRepository = agentRepository;
         this.habilitationRepository = habilitationRepository;
+        this.signatureRepository = signatureRepository;
         this.fiphMapper = fiphMapper;
         this.auditService = auditService;
     }
@@ -129,18 +134,22 @@ public class FiphService {
      * <p>Quatre cas, du plus simple au plus contraint :
      * <ol>
      *   <li>aucune FIPH n'existe pour (agent, periode) - creation complete
-     *       (RG-FIPH-001) ;</li>
-     *   <li>une FIPH existe, sa version courante est encore BROUILLON ou
-     *       EN_COMPLEMENT - la ligne de pointage du jour est simplement
-     *       ajoutee/mise a jour sur cette version (RG-FIPH-002) ;</li>
-     *   <li>la version courante est SIGNEE/SOUMISE/VALIDEE_NIVEAU_2/3 -
+     *       (RG-FIPH-001), avec visa automatique de l'agent titulaire
+     *       (voir {@link #creerFiphEtVersionInitiale}) ;</li>
+     *   <li>une FIPH existe, sa version courante est encore
+     *       {@link StatutFiphVersion#estPointageModifiable() modifiable}
+     *       (brouillon, en complement, ou signee mais pas encore engagee
+     *       dans le circuit de validation) - la ligne de pointage du jour
+     *       est simplement ajoutee/mise a jour sur cette version
+     *       (RG-FIPH-002) ;</li>
+     *   <li>la version courante est SOUMISE/VALIDEE_NIVEAU_2/3 -
      *       extension raisonnee, documentee, des cas confirmes RG-FIPH-022/023
-     *       (interruption sur FIPH deja signee) : ajouter une ligne sans
-     *       revalidation reviendrait a modifier silencieusement un contenu
-     *       deja verifie par un valideur, ce que le document proscrit comme
-     *       principe general. La version repasse donc en EN_COMPLEMENT,
-     *       la ligne est ajoutee, une nouvelle signature et une nouvelle
-     *       soumission seront necessaires ;</li>
+     *       (interruption sur FIPH deja engagee dans le circuit) : ajouter
+     *       une ligne sans revalidation reviendrait a modifier silencieusement
+     *       un contenu deja verifie par un valideur, ce que le document
+     *       proscrit comme principe general. La version repasse donc en
+     *       EN_COMPLEMENT, la ligne est ajoutee, une nouvelle validation
+     *       complete du circuit sera necessaire ;</li>
      *   <li>la version courante est VALIDEE_DEFINITIVEMENT - RG-VER-001 et
      *       section 27.4 ("aucune voie de modification directe ... quelle
      *       que soit la nature de la correction demandee") imposent une
@@ -176,9 +185,10 @@ public class FiphService {
             return;
         }
 
-        if (!versionCourante.getStatutVersion().estModifiable()) {
-            // Cas 3 : la version a deja franchi la signature - repasse en
-            // EN_COMPLEMENT plutot que d'accepter une modification silencieuse
+        if (!versionCourante.getStatutVersion().estPointageModifiable()) {
+            // Cas 3 : la version est deja engagee dans le circuit de
+            // validation (soumise ou au-dela) - repasse en EN_COMPLEMENT
+            // plutot que d'accepter une modification silencieuse
             // (extension raisonnee de RG-FIPH-022/023, voir Javadoc).
             StatutFiphVersion avant = versionCourante.getStatutVersion();
             versionCourante.setStatutVersion(StatutFiphVersion.EN_COMPLEMENT);
@@ -195,6 +205,31 @@ public class FiphService {
         recalculerTotaux(fiph.getVersionCourante());
     }
 
+    /**
+     * Cree la FIPH et sa version initiale.
+     *
+     * <p><strong>Visa automatique de l'agent titulaire (evolution du
+     * workflow FIPH, 2026-08-18)</strong> - pour une origine
+     * {@link OrigineFiph#BON_SORTIE} uniquement : la precreation decoule
+     * elle-meme de la validation d'un bon de sortie que l'agent a deja visee
+     * (niveau 1) avant que le Charge d'Affaires ne le valide (niveau 2) - cet
+     * agent est donc considere comme ayant deja accompli sa part du
+     * processus, et il ne doit plus lui etre demande de signer une seconde
+     * fois sa FIPH. La version initiale est donc creee directement au statut
+     * {@link StatutFiphVersion#SIGNEE}, avec une {@link Signature}
+     * enregistree automatiquement (type {@link TypeSignature#VISA_APPLICATIF}),
+     * plutot qu'au statut {@code BROUILLON} en attente d'un appel explicite a
+     * {@code FiphVersionService.signer()}. Le circuit de validation demarre
+     * donc directement au Charge d'Affaires / a la personne habilitee
+     * (niveau 2, voir {@code FiphVersionService.valider}), sans etape de
+     * signature ni de soumission bloquante.
+     *
+     * <p>Pour une origine {@link OrigineFiph#MANUELLE} (Code Service), rien
+     * ne change : il n'existe alors aucun bon de sortie deja visee par
+     * l'agent dont deduire un visa automatique, la version reste creee au
+     * statut {@code BROUILLON} et l'agent titulaire doit encore la signer
+     * lui-meme via {@code FiphVersionService.signer()}.
+     */
     private FIPH creerFiphEtVersionInitiale(Agent agent, OrigineFiph origine, BonSortie bonSortieDeclencheur,
                                              LocalDate lundiDeLaSemaine, Utilisateur auteur) {
         FIPH fiph = new FIPH();
@@ -210,14 +245,23 @@ public class FiphService {
         fiph.setNumeroSemaine(lundiDeLaSemaine.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
         fiph.setDateDebutPeriode(lundiDeLaSemaine);
         fiph.setDateFinPeriode(lundiDeLaSemaine.with(DayOfWeek.SUNDAY));
-        fiph.setStatut(StatutFiphVersion.BROUILLON);
+        StatutFiphVersion statutInitial = origine == OrigineFiph.BON_SORTIE
+                ? StatutFiphVersion.SIGNEE : StatutFiphVersion.BROUILLON;
+        fiph.setStatut(statutInitial);
         fiph = fiphRepository.save(fiph);
 
         FIPHVersion version = new FIPHVersion();
         version.setFiph(fiph);
         version.setNumeroVersion(1);
         version.setCreePar(auteur);
-        version.setStatutVersion(StatutFiphVersion.BROUILLON);
+        version.setStatutVersion(statutInitial);
+        if (origine == OrigineFiph.BON_SORTIE) {
+            Signature visaAutomatique = signatureRepository.save(new Signature(TypeSignature.VISA_APPLICATIF,
+                    "auto:agent:" + agent.getId() + ":bon-sortie:"
+                            + (bonSortieDeclencheur != null ? bonSortieDeclencheur.getId() : "n/a"),
+                    null));
+            version.setSignatureEmetteur(visaAutomatique);
+        }
         version = fiphVersionRepository.save(version);
 
         fiph.setVersionCourante(version);
@@ -225,7 +269,18 @@ public class FiphService {
 
         auditService.enregistrer(EntiteAuditable.FIPH, fiph.getId(), auteur,
                 origine == OrigineFiph.BON_SORTIE ? TypeActionAudit.FIPH_AUTO_GENEREE : TypeActionAudit.CREATION,
-                null, fiphMapper.toDto(fiph), null, StatutFiphVersion.BROUILLON.name());
+                null, fiphMapper.toDto(fiph), null, statutInitial.name());
+        if (origine == OrigineFiph.BON_SORTIE) {
+            // Trace separement le visa automatique de l'agent (RG-FIPH-017 :
+            // toute action doit rester individuellement identifiable dans
+            // l'historique, meme lorsqu'elle est acquise d'office plutot que
+            // saisie manuellement).
+            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur, TypeActionAudit.SIGNATURE,
+                    StatutFiphVersion.BROUILLON.name(),
+                    "Visa automatique de l'agent titulaire " + agent.getMatricule()
+                            + " (deja acquis via le visa du bon de sortie declencheur)",
+                    StatutFiphVersion.BROUILLON.name(), StatutFiphVersion.SIGNEE.name());
+        }
         return fiph;
     }
 

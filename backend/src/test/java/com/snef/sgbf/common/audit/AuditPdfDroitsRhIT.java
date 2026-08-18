@@ -207,7 +207,10 @@ class AuditPdfDroitsRhIT {
         mockMvc.perform(get("/api/fiph-versions/" + versionId + "/pdf").header("Authorization", "Bearer " + tokenCa1))
                 .andExpect(status().isUnprocessableEntity());
 
-        // --- 8. Deroule le circuit complet (complement -> signature -> soumission -> validations 2/3/4). ---
+        // --- 8. Deroule le circuit complet (complement -> soumission -> validations 2/3/4). Plus
+        // d'etape de signature explicite : le visa de l'agent titulaire est deja acquis d'office
+        // des la precreation de cette FIPH issue d'un bon de sortie (evolution du workflow FIPH,
+        // 2026-08-18) - la version est deja SIGNEE a ce stade. ---
         String corpsCompletion = objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
             put("datePointage", LocalDate.now().toString());
             put("heuresNormales", 8);
@@ -216,8 +219,6 @@ class AuditPdfDroitsRhIT {
         mockMvc.perform(put("/api/fiph-versions/" + versionId + "/pointage")
                         .header("Authorization", "Bearer " + tokenCa1)
                         .contentType("application/json").content(corpsCompletion))
-                .andExpect(status().isOk());
-        mockMvc.perform(post("/api/fiph-versions/" + versionId + "/signer").header("Authorization", "Bearer " + tokenEmetteur))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/fiph-versions/" + versionId + "/soumettre").header("Authorization", "Bearer " + tokenCa1))
                 .andExpect(status().isOk());

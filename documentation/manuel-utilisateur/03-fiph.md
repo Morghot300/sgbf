@@ -1,6 +1,8 @@
 # Manuel d'utilisation — FIPH (Fiche Individuelle de Pointage Hebdomadaire)
 
-> S'adresse à l'agent titulaire, au Chargé d'Affaires / personne habilitée (complément, soumission), au Responsable d'activité (validation niveau 3), à la Direction (validation niveau 4) et à la RH (consultation globale en lecture seule).
+> S'adresse à l'agent titulaire, au Chargé d'Affaires / personne habilitée (complément, validation niveau 2), au Responsable d'activité (validation niveau 3), à la Direction/DG (validation niveau 4, définitive) et à la RH (consultation globale en lecture seule).
+>
+> **Évolution du 2026-08-18** — depuis une FIPH générée automatiquement à la validation d'un bon de sortie, l'agent titulaire n'a plus besoin de signer sa fiche une seconde fois : son visa est considéré comme déjà acquis (il a déjà visé son bon de sortie avant que le Chargé d'Affaires ne le valide). Le circuit démarre donc directement au Chargé d'Affaires / à la personne habilitée. Voir le chapitre dédié « Évolution du workflow FIPH » pour le détail complet.
 
 ## Consulter une FIPH
 
@@ -12,33 +14,43 @@ La fiche affiche : les informations de l'agent et de la période, le tableau des
 
 **Objectif** — Renseigner ou corriger les heures normales et supplémentaires de chaque jour.
 
-**Accès** — Fiche FIPH, tableau des pointages — les champs ne sont modifiables que si la version est encore au statut **Brouillon** ou **En complément**, et seulement pour un Chargé d'Affaires ou une personne habilitée du service concerné.
+**Accès** — Fiche FIPH, tableau des pointages — réservé au Chargé d'Affaires ou à la personne habilitée du service concerné.
+
+Pour une FIPH générée depuis un bon de sortie, les champs restent modifiables tant que le circuit de validation n'a pas réellement démarré (statuts **Brouillon**, **En complément** ou **Signée** — ce dernier étant désormais le statut de départ habituel, voir plus bas). Pour une FIPH créée manuellement (Code Service), seuls **Brouillon** et **En complément** restent modifiables : la signature de l'agent y reste un acte personnel qui fige le contenu.
 
 **Étapes** — Modifiez les valeurs **Heures normales** / **Heures sup.** de la ligne concernée, puis cliquez sur **Enregistrer** sur cette même ligne.
 
 **Résultat attendu** — La ligne est mise à jour, le total en pied de tableau est recalculé, et la fiche passe (la première fois) au statut **En complément**.
 
-## Signer, soumettre et faire valider
+## Faire valider la FIPH
 
 **Objectif** — Faire progresser la FIPH jusqu'à sa validation définitive.
 
-**Étapes**
-1. **Signature** — L'agent titulaire clique sur **Signer (je suis l'agent titulaire)**. La FIPH passe au statut **Signée** ; les données de mission de chaque ligne sont alors figées.
-2. **Soumission** — Un Chargé d'Affaires ou une personne habilitée clique sur **Soumettre au circuit de validation**. Statut **Soumise**.
-3. **Validation niveau 2** (Chargé d'Affaires) puis **niveau 3** (Responsable d'activité) puis **niveau 4** (Direction, définitive) : à chaque étape, la personne habilitée au niveau courant voit apparaître un encart **Décision de validation** avec trois boutons — **Valider**, **Retourner pour correction**, **Rejeter**.
+**Pour une FIPH générée depuis un bon de sortie** (cas le plus fréquent) : le visa de l'agent titulaire est **déjà acquis automatiquement** dès la précréation de la fiche (il a déjà visé son bon de sortie avant que le Chargé d'Affaires ne le valide — la fiche démarre directement au statut **Signée**). Aucune signature ne lui est redemandée. Le Chargé d'Affaires ou la personne habilitée ("Responsable désigné") peut valider directement au niveau 2, sans étape de soumission séparée à effectuer au préalable.
+
+**Pour une FIPH créée manuellement** (Code Service) : l'agent titulaire doit encore la signer lui-même (bouton **Signer (je suis l'agent titulaire)**), puis un Chargé d'Affaires ou une personne habilitée la soumet (bouton **Soumettre au circuit de validation**) avant de pouvoir la valider au niveau 2.
+
+**Étapes du circuit de validation** (identiques pour les deux cas à partir d'ici) :
+1. **Niveau 2** — le Chargé d'Affaires **ou** la personne habilitée du service (un seul des deux suffit) clique sur **Valider**. Statut **Validée niveau 2**.
+2. **Niveau 3** — le Responsable d'activité valide. Statut **Validée niveau 3**.
+3. **Niveau 4** — le Directeur (DG) valide, de façon définitive. Statut **Validée définitivement**.
+
+À chaque étape, la personne habilitée au niveau courant voit apparaître un encart **Décision de validation** avec trois boutons — **Valider**, **Retourner pour correction**, **Rejeter**.
+
+**Cas particulier — le Chargé d'Affaires est aussi Responsable d'activité** : si la même personne détient les deux habilitations sur le service concerné, rien ne l'empêche d'effectuer successivement les validations de niveau 2 puis de niveau 3 elle-même ; chacune des deux décisions reste néanmoins enregistrée et tracée séparément dans la section **Validations** de la fiche.
 
 **Résultat attendu** — Après la validation de niveau 4, la FIPH passe au statut **Validée définitivement** ; une empreinte d'intégrité (SHA-256) est calculée et affichée, garantissant que le contenu ne pourra plus être modifié en place.
 
 **Cas particuliers**
-- **RG-HAB-004 (séparation des responsabilités)** : la personne qui a créé, complété ou modifié une FIPH ne peut jamais la valider elle-même, à aucun niveau — même en cumulant plusieurs habilitations. Le serveur refuse la tentative avec un message explicite.
-- Un **retour pour correction** ramène la fiche au statut **En complément** : le pointage redevient modifiable, une nouvelle signature et une nouvelle soumission seront nécessaires.
+- **RG-HAB-004 (séparation des responsabilités)** : la personne qui a **complété ou modifié le pointage** d'une FIPH ne peut jamais la valider elle-même, à aucun niveau — même en cumulant plusieurs habilitations. Le serveur refuse la tentative avec un message explicite. (Le seul fait d'avoir validé le bon de sortie déclencheur, en revanche, n'empêche pas de valider ensuite la FIPH générée automatiquement.)
+- Un **retour pour correction** ramène la fiche au statut **En complément** : le pointage redevient modifiable, une nouvelle validation complète du circuit sera nécessaire.
 - Un **commentaire est obligatoire** pour un rejet ou un retour pour correction (laissé vide, le serveur refuse l'action).
 
-## Télécharger le PDF
+## Imprimer / télécharger le PDF
 
 **Accès** — Fiche FIPH, bouton **Télécharger le PDF** — visible uniquement une fois la version au statut **Validée définitivement**.
 
-**Résultat attendu** — Le PDF, cohérent avec l'empreinte d'intégrité affichée, est téléchargé.
+**Résultat attendu** — Comme pour le bon de sortie, le document s'ouvre dans un nouvel onglet (en-tête stylisé, logo SNEF) et la boîte de dialogue d'impression de votre navigateur s'ouvre automatiquement — imprimante par défaut, imprimante réseau, ou enregistrement en fichier PDF sur le poste. Le contenu est cohérent avec l'empreinte d'intégrité (SHA-256) affichée sur la fiche.
 
 ## Créer une nouvelle version (correction post-validation)
 
