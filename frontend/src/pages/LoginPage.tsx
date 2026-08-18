@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { extraireMessageErreur } from "../api/httpClient";
+import { ChampMotDePasse } from "../components/ChampMotDePasse";
 import logoSnef from "../assets/brand/logo_snef.png";
 
 /**
@@ -54,13 +55,11 @@ export default function LoginPage() {
           autoFocus
         />
 
-        <label htmlFor="mot-de-passe">Mot de passe</label>
-        <input
+        <ChampMotDePasse
           id="mot-de-passe"
-          type="password"
+          valeur={motDePasse}
+          onChange={setMotDePasse}
           autoComplete="current-password"
-          value={motDePasse}
-          onChange={(e) => setMotDePasse(e.target.value)}
           required
         />
 

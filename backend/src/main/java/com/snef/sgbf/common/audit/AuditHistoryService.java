@@ -2,6 +2,7 @@ package com.snef.sgbf.common.audit;
 
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.common.pdf.HtmlUtils;
+import com.snef.sgbf.common.pdf.PdfBranding;
 import com.snef.sgbf.common.pdf.PdfRenderer;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
@@ -41,13 +42,15 @@ public class AuditHistoryService {
     private final FiphVersionRepository fiphVersionRepository;
     private final FiphService fiphService;
     private final PdfRenderer pdfRenderer;
+    private final PdfBranding pdfBranding;
 
     public AuditHistoryService(EvenementAuditRepository evenementAuditRepository, FiphVersionRepository fiphVersionRepository,
-                                FiphService fiphService, PdfRenderer pdfRenderer) {
+                                FiphService fiphService, PdfRenderer pdfRenderer, PdfBranding pdfBranding) {
         this.evenementAuditRepository = evenementAuditRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.fiphService = fiphService;
         this.pdfRenderer = pdfRenderer;
+        this.pdfBranding = pdfBranding;
     }
 
     /**
@@ -107,15 +110,10 @@ public class AuditHistoryService {
         String xhtml = """
                 <html xmlns="http://www.w3.org/1999/xhtml">
                 <head><style>
-                    body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #1a1a1a; }
-                    h1 { font-size: 15px; margin-bottom: 2px; }
-                    .sous-titre { color: #555; margin-bottom: 16px; }
-                    table { width: 100%%; border-collapse: collapse; }
-                    td, th { border: 1px solid #ccc; padding: 4px 6px; text-align: left; }
-                    th { background-color: #f0f0f0; font-weight: bold; }
+                    %s
                 </style></head>
                 <body>
-                    <h1>SNEF Cameroun SA &#8212; Journal d'audit FIPH</h1>
+                    %s
                     <div class="sous-titre">Agent %s (matricule %s) &#8212; Semaine %d de %d</div>
                     <table>
                         <tr><th>Date</th><th>Entite</th><th>Action</th><th>Utilisateur</th><th>Statut avant</th><th>Statut apres</th></tr>
@@ -123,7 +121,8 @@ public class AuditHistoryService {
                     </table>
                 </body>
                 </html>
-                """.formatted(HtmlUtils.echapper(fiph.getAgent().getPrenom()) + " " + HtmlUtils.echapper(fiph.getAgent().getNom()),
+                """.formatted(pdfBranding.css(), pdfBranding.entete("JOURNAL D'AUDIT FIPH"),
+                HtmlUtils.echapper(fiph.getAgent().getPrenom()) + " " + HtmlUtils.echapper(fiph.getAgent().getNom()),
                 HtmlUtils.echapper(fiph.getAgent().getMatricule()), fiph.getNumeroSemaine(), fiph.getAnnee(), lignes);
 
         byte[] contenu = pdfRenderer.rendre(xhtml);

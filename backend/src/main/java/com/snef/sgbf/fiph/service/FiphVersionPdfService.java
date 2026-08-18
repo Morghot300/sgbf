@@ -7,6 +7,7 @@ import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.common.pdf.HtmlUtils;
+import com.snef.sgbf.common.pdf.PdfBranding;
 import com.snef.sgbf.common.pdf.PdfRenderer;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
@@ -37,6 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
 @org.springframework.stereotype.Service
 public class FiphVersionPdfService {
 
+    // NOTE (bug corrige le 2026-08-18, voir Javadoc equivalente dans
+    // BonSortiePdfService pour le detail complet) : genererPdf() ecrit un
+    // evenement d'audit (RG-DOC-005) en plus de lire la version - jamais
+    // @Transactional(readOnly = true) sur cette methode, sous peine de faire
+    // echouer cette ecriture ("Connection is read-only").
+
     private static final DateTimeFormatter FORMAT_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter FORMAT_DATE_HEURE = DateTimeFormatter.ofPattern("dd/MM/yyyy 'a' HH:mm");
 
@@ -45,20 +52,22 @@ public class FiphVersionPdfService {
     private final ValidationRepository validationRepository;
     private final FiphService fiphService;
     private final PdfRenderer pdfRenderer;
+    private final PdfBranding pdfBranding;
     private final AuditService auditService;
 
     public FiphVersionPdfService(FiphVersionRepository fiphVersionRepository, PointageRepository pointageRepository,
                                   ValidationRepository validationRepository, FiphService fiphService,
-                                  PdfRenderer pdfRenderer, AuditService auditService) {
+                                  PdfRenderer pdfRenderer, PdfBranding pdfBranding, AuditService auditService) {
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
         this.validationRepository = validationRepository;
         this.fiphService = fiphService;
         this.pdfRenderer = pdfRenderer;
+        this.pdfBranding = pdfBranding;
         this.auditService = auditService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public DocumentPdf genererPdf(Long fiphVersionId, Utilisateur auteur) {
         FIPHVersion version = fiphVersionRepository.findById(fiphVersionId)
                 .orElseThrow(() -> ResourceNotFoundException.of("FIPHVersion", fiphVersionId));
@@ -109,28 +118,20 @@ public class FiphVersionPdfService {
         return """
                 <html xmlns="http://www.w3.org/1999/xhtml">
                 <head><style>
-                    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
-                    h1 { font-size: 16px; margin-bottom: 2px; }
-                    .sous-titre { color: #555; margin-bottom: 16px; }
-                    table { width: 100%%; border-collapse: collapse; margin-bottom: 14px; }
-                    td, th { border: 1px solid #ccc; padding: 5px 8px; text-align: left; vertical-align: top; }
-                    th { background-color: #f0f0f0; font-weight: bold; }
-                    .cle { width: 32%%; }
-                    .statut { font-weight: bold; color: #1a6e1a; }
+                    %s
                     .empreinte { font-family: monospace; font-size: 9px; word-break: break-all; }
-                    .pied { margin-top: 18px; font-size: 9px; color: #777; }
                 </style></head>
                 <body>
-                    <h1>SNEF Cameroun SA &#8212; Fiche Individuelle de Pointage Hebdomadaire</h1>
+                    %s
                     <div class="sous-titre">Version n&#176; %d</div>
                     <table>
-                        <tr><th class="cle">Agent</th><td>%s %s (matricule %s)</td></tr>
-                        <tr><th class="cle">Service</th><td>%s</td></tr>
-                        <tr><th class="cle">Periode</th><td>Semaine %d de %d &#8212; du %s au %s</td></tr>
-                        <tr><th class="cle">Signature de l'emetteur</th><td>%s</td></tr>
-                        <tr><th class="cle">Total heures normales / heures supplementaires</th><td>%s HN / %s HS</td></tr>
-                        <tr><th class="cle">Statut final</th><td class="statut">%s</td></tr>
-                        <tr><th class="cle">Empreinte d'integrite (SHA-256)</th><td class="empreinte">%s</td></tr>
+                        <tr><th class="fiche-champ">Agent</th><td>%s %s (matricule %s)</td></tr>
+                        <tr><th class="fiche-champ">Service</th><td>%s</td></tr>
+                        <tr><th class="fiche-champ">Periode</th><td>Semaine %d de %d &#8212; du %s au %s</td></tr>
+                        <tr><th class="fiche-champ">Signature de l'emetteur</th><td>%s</td></tr>
+                        <tr><th class="fiche-champ">Total heures normales / heures supplementaires</th><td>%s HN / %s HS</td></tr>
+                        <tr><th class="fiche-champ">Statut final</th><td><span class="badge badge-succes">%s</span></td></tr>
+                        <tr><th class="fiche-champ">Empreinte d'integrite (SHA-256)</th><td class="empreinte">%s</td></tr>
                     </table>
                     <table>
                         <tr><th>Jour</th><th>Date</th><th>Heures normales</th><th>Heures sup.</th><th>Code mission / service</th></tr>
@@ -145,6 +146,8 @@ public class FiphVersionPdfService {
                 </body>
                 </html>
                 """.formatted(
+                pdfBranding.css(),
+                pdfBranding.entete("FICHE INDIVIDUELLE DE POINTAGE HEBDOMADAIRE"),
                 version.getNumeroVersion(),
                 esc(agent.getPrenom()), esc(agent.getNom()), esc(agent.getMatricule()),
                 esc(fiph.getService().getLibelle()),

@@ -43,11 +43,26 @@ export const httpClient = axios.create({
   withCredentials: true,
 });
 
+/**
+ * Chemins qui ne doivent JAMAIS recevoir l'en-tete Authorization : `/auth/login`
+ * (aucun jeton n'existe encore a cet instant) et `/auth/refresh` (s'appuie sur
+ * le cookie de rafraichissement, pas sur le jeton d'acces courant, potentiellement
+ * deja expire - c'est justement pourquoi on l'appelle).
+ *
+ * Bug corrige ici (2026-08-18) : l'ancienne condition excluait tout chemin
+ * commencant par "/auth/", ce qui empechait a tort l'envoi du jeton sur
+ * `/auth/me` (l'appel echouait donc systematiquement en 403 juste apres une
+ * connexion reussie - jamais repere plus tot faute d'avoir pu mener un test
+ * de connexion interactif complet dans un navigateur) et sur `/auth/logout`
+ * (qui ne pouvait alors jamais identifier l'utilisateur a deconnecter cote
+ * serveur, silencieusement).
+ */
+const CHEMINS_SANS_JETON = ["/auth/login", "/auth/refresh"];
+
 // Attache automatiquement l'en-tete Authorization sur chaque requete sortante,
-// sauf sur les routes d'authentification elles-memes (qui n'en ont pas besoin
-// et pour lesquelles il n'y a, de toute facon, pas encore de jeton lors du login).
+// sauf sur les deux routes ci-dessus qui n'en ont pas besoin.
 httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  if (jetonAccesCourant && !config.url?.startsWith("/auth/")) {
+  if (jetonAccesCourant && !CHEMINS_SANS_JETON.some((chemin) => config.url?.startsWith(chemin))) {
     config.headers.Authorization = `Bearer ${jetonAccesCourant}`;
   }
   return config;

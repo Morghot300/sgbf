@@ -38,10 +38,35 @@ export async function retirerPersonneABord(bonSortiePrincipalId: number, associa
   return (await httpClient.delete<BonSortiePersonneDto>(`/bons-sortie/${bonSortiePrincipalId}/personnes-a-bord/${associationId}`)).data;
 }
 
-/** Ouvre un blob PDF dans un nouvel onglet - utilitaire partage avec le module FIPH. */
+/**
+ * Ouvre un blob PDF dans un nouvel onglet et declenche directement la
+ * boite de dialogue d'impression du navigateur - utilitaire partage avec le
+ * module FIPH. L'utilisateur y choisit lui-meme la destination (fichier PDF
+ * sur le poste, ou une imprimante reseau, l'imprimante par defaut etant
+ * deja preselectionnee) : c'est le comportement natif du navigateur, pas
+ * une fonctionnalite reimplementee ici.
+ *
+ * Pas de `noopener` : contrairement a un lien externe, ce contenu est
+ * genere par notre propre backend (jamais une URL tierce) - `noopener`
+ * empecherait de garder une reference vers la fenetre et donc d'y
+ * declencher l'impression.
+ */
 export function ouvrirBlobPdf(blob: Blob): void {
   const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
-  window.open(url, "_blank", "noopener,noreferrer");
+  const fenetre = window.open(url, "_blank");
+  if (fenetre) {
+    // Delai pragmatique : le lecteur PDF integre du navigateur a besoin d'un
+    // court instant pour s'initialiser avant de pouvoir repondre a print().
+    // Sans effet bloquant si le navigateur restreint cet appel : l'utilisateur
+    // garde de toute facon acces au bouton d'impression du lecteur PDF lui-meme.
+    setTimeout(() => {
+      try {
+        fenetre.print();
+      } catch {
+        // Restriction navigateur sur l'appel programmatique - non bloquant.
+      }
+    }, 800);
+  }
   // Liberation differee : le temps que l'onglet/le lecteur PDF ait charge le contenu.
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

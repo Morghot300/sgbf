@@ -98,6 +98,21 @@ label {
   color: var(--texte-secondaire);
 }
 
+/* Case "Afficher le mot de passe" (components/ChampMotDePasse.tsx) - libelle normal,
+   pas en gras/majuscule comme les labels de champ, pour rester visuellement secondaire. */
+.case-a-cocher {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 400;
+  text-transform: none;
+  margin-top: -0.4rem;
+}
+.case-a-cocher input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+}
+
 input, select, textarea {
   padding: 0.5rem;
   border: 1px solid var(--bordure-defaut);

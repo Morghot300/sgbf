@@ -7,6 +7,7 @@ import {
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerServices } from "../../api/referentielApi";
 import AdminNav from "../../components/AdminNav";
+import { ChampMotDePasse } from "../../components/ChampMotDePasse";
 import { EtatAsync } from "../../components/EtatAsync";
 import {
   LIBELLES_ROLE, ROLES_PERIMETRE_GLOBAL, type CodeRoleMetier, type StatutCompte,
@@ -92,8 +93,15 @@ export default function AdminUtilisateursPage() {
           <input id="identifiant" value={nouveau.identifiant} onChange={(e) => setNouveau({ ...nouveau, identifiant: e.target.value })} required maxLength={60} />
           <label htmlFor="email">E-mail</label>
           <input id="email" type="email" value={nouveau.email} onChange={(e) => setNouveau({ ...nouveau, email: e.target.value })} required maxLength={150} />
-          <label htmlFor="motDePasse">Mot de passe initial (12 caractères minimum)</label>
-          <input id="motDePasse" type="password" value={nouveau.motDePasse} onChange={(e) => setNouveau({ ...nouveau, motDePasse: e.target.value })} required minLength={12} />
+          <ChampMotDePasse
+            id="motDePasse"
+            libelle="Mot de passe initial (12 caractères minimum)"
+            valeur={nouveau.motDePasse}
+            onChange={(v) => setNouveau({ ...nouveau, motDePasse: v })}
+            autoComplete="new-password"
+            required
+            minLength={12}
+          />
           <label htmlFor="serviceId">Service (facultatif)</label>
           <select id="serviceId" value={nouveau.serviceId} onChange={(e) => setNouveau({ ...nouveau, serviceId: e.target.value })}>
             <option value="">— Non renseigné —</option>
