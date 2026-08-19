@@ -2,6 +2,14 @@
 
 > S'adresse à tout agent émetteur, Chargé d'Affaires ou personne habilitée. Le contrôle réel des droits reste toujours effectué par le serveur : un bouton visible ne garantit jamais qu'une action réussira si vous n'y êtes pas habilité.
 
+## Filtrer et retrouver un bon de sortie (évolution du 2026-08-18)
+
+**Accès** — Menu **Bons de sortie**, barre de filtres en haut de la liste.
+
+**Étapes** — Combinez librement : **date exacte**, ou une **période** (champs **Du** / **Au**), le **statut** (Brouillon, Visé, Validé), et le **service**. Les critères actifs se cumulent (ex. Service = Littoral **et** Statut = Validé **et** période du 01/08/2026 au 18/08/2026 ne retourne que les bons remplissant simultanément les trois conditions). Le bouton **Réinitialiser les filtres** efface tous les critères d'un coup.
+
+**Résultat attendu** — La liste ne montre que les bons de sortie correspondant à tous les critères sélectionnés, parmi ceux déjà visibles selon votre périmètre (un filtre ne peut jamais faire apparaître un document hors de votre périmètre).
+
 ## Créer un bon de sortie
 
 **Objectif** — Déclarer une sortie de véhicule (Omnium service, personnel ou taxi).
@@ -9,7 +17,7 @@
 **Accès** — Menu **Bons de sortie** → bouton **Nouveau bon de sortie**.
 
 **Étapes**
-1. Choisissez le **moyen utilisé** (Omnium service / véhicule personnel / taxi).
+1. Choisissez le **moyen utilisé** (Omnium service / véhicule personnel / taxi / **autre**). Si vous choisissez **Autre**, un champ **Préciser le véhicule** apparaît et devient obligatoire (ex. « Véhicule de location ») — impossible de valider le formulaire sans le renseigner.
 2. Sélectionnez un **véhicule** dans la liste si disponible, ou renseignez son **immatriculation (LT)** manuellement.
 3. Renseignez le **kilométrage**, la **date** et l'**heure de sortie**, la **destination**, le **code affaire**, et le **motif** de la sortie.
 4. Cliquez sur **Créer le bon de sortie**.

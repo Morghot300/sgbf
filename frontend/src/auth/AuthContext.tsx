@@ -69,8 +69,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Miroir cote frontend de la hierarchie de roles Spring Security
+  // (SecurityConfig.roleHierarchy, evolution du 2026-08-18) : le Super
+  // Administrateur herite de tout ce que voit un Administrateur - un simple
+  // ".includes(role)" ne le saurait pas, puisque son jeton ne porte QUE
+  // "SUPER_ADMINISTRATEUR", jamais "ADMINISTRATEUR" en plus. Purement une
+  // question d'affichage (confort d'usage) : le backend reste, dans tous
+  // les cas, la seule source de verite reelle sur les droits.
   const aLeRole = useCallback(
-    (role: string) => utilisateur?.rolesActifs.includes(role) ?? false,
+    (role: string) => {
+      if (utilisateur?.rolesActifs.includes(role)) {
+        return true;
+      }
+      if (role === "ADMINISTRATEUR" && utilisateur?.rolesActifs.includes("SUPER_ADMINISTRATEUR")) {
+        return true;
+      }
+      return false;
+    },
     [utilisateur],
   );
 

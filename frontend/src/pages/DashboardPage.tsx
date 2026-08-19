@@ -15,8 +15,8 @@ import { LIBELLES_STATUT_FIPH, NIVEAU_VALIDATION_ATTENDU } from "../types/fiph";
  */
 export default function DashboardPage() {
   const { utilisateur } = useAuth();
-  const bonsSortie = useQuery({ queryKey: ["bons-sortie"], queryFn: listerBonsSortie });
-  const fiphs = useQuery({ queryKey: ["fiph"], queryFn: listerFiph });
+  const bonsSortie = useQuery({ queryKey: ["bons-sortie"], queryFn: () => listerBonsSortie() });
+  const fiphs = useQuery({ queryKey: ["fiph"], queryFn: () => listerFiph() });
 
   const brouillons = bonsSortie.data?.filter((bs) => bs.statut === "BROUILLON").length ?? 0;
   const enAttenteVisa = bonsSortie.data?.filter((bs) => bs.statut === "VISE").length ?? 0;

@@ -49,8 +49,9 @@ public class AgentController {
     }
 
     @GetMapping("/recherche")
-    public List<AgentDto> rechercher(@RequestParam String terme) {
-        return agentService.rechercherParNomOuPrenom(terme);
+    public List<AgentDto> rechercher(@RequestParam(required = false) String terme,
+                                      @RequestParam(required = false) Long serviceId) {
+        return agentService.rechercherParNomOuPrenom(terme, serviceId);
     }
 
     @PostMapping

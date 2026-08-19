@@ -1,6 +1,7 @@
 package com.snef.sgbf.bonsortie.service;
 
 import com.snef.sgbf.bonsortie.entity.BonSortie;
+import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
 import com.snef.sgbf.bonsortie.entity.StatutBonSortie;
 import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
@@ -96,6 +97,9 @@ public class BonSortiePdfService {
                 : "Non resolue";
         String vehicule = bs.getVehicule() != null ? esc(bs.getVehicule().getImmatriculation()) : "Non renseigne";
         String lt = bs.getLt() != null && !bs.getLt().isBlank() ? esc(bs.getLt()) : "Non renseigne";
+        String moyenUtilise = esc(bs.getMoyenUtilise().name())
+                + (bs.getMoyenUtilise() == MoyenUtilise.AUTRE && bs.getPrecisionVehicule() != null
+                        ? " (" + esc(bs.getPrecisionVehicule()) + ")" : "");
         String heureRetour = bs.getHeureRetour() != null ? bs.getHeureRetour().format(FORMAT_HEURE) : "Non renseignee";
         String dateValidation = bs.getDateValidation() != null ? bs.getDateValidation().format(FORMAT_DATE_HEURE) : "-";
         String validateur = bs.getValideParCA() != null ? esc(bs.getValideParCA().getIdentifiant()) : "-";
@@ -111,6 +115,7 @@ public class BonSortiePdfService {
                     <div class="sous-titre">Reference n&#176; %d</div>
                     <table>
                         <tr><th class="fiche-champ">Agent</th><td>%s %s (matricule %s)</td></tr>
+                        <tr><th class="fiche-champ">Moyen utilise</th><td>%s</td></tr>
                         <tr><th class="fiche-champ">Vehicule / immatriculation (LT)</th><td>%s / %s</td></tr>
                         <tr><th class="fiche-champ">Motif</th><td>%s</td></tr>
                         <tr><th class="fiche-champ">Destination</th><td>%s</td></tr>
@@ -131,6 +136,7 @@ public class BonSortiePdfService {
                 pdfBranding.entete("BON DE SORTIE"),
                 bs.getId(),
                 esc(agent.getPrenom()), esc(agent.getNom()), esc(agent.getMatricule()),
+                moyenUtilise,
                 vehicule, lt,
                 esc(bs.getMotifSortie()),
                 esc(bs.getLieu()),

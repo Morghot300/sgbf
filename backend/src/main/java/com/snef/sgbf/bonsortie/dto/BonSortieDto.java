@@ -18,6 +18,7 @@ public record BonSortieDto(
         Long affectationMissionId,
         String missionCodeHN,
         MoyenUtilise moyenUtilise,
+        String precisionVehicule,
         String lt,
         Integer kilometrage,
         LocalDate dateSortie,

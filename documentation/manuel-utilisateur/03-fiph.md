@@ -4,6 +4,14 @@
 >
 > **Évolution du 2026-08-18** — depuis une FIPH générée automatiquement à la validation d'un bon de sortie, l'agent titulaire n'a plus besoin de signer sa fiche une seconde fois : son visa est considéré comme déjà acquis (il a déjà visé son bon de sortie avant que le Chargé d'Affaires ne le valide). Le circuit démarre donc directement au Chargé d'Affaires / à la personne habilitée. Voir le chapitre dédié « Évolution du workflow FIPH » pour le détail complet.
 
+## Filtrer et retrouver une FIPH (évolution du 2026-08-18)
+
+**Accès** — Menu **FIPH**, barre de filtres en haut de la liste.
+
+**Étapes** — Combinez librement : **date exacte** (une FIPH est retenue dès que sa semaine couvre cette date), une **période** (**Du** / **Au**), le **statut** de la version courante, et le **service**. Le bouton **Réinitialiser les filtres** efface tous les critères.
+
+**Résultat attendu** — La liste ne montre que les FIPH correspondant à tous les critères sélectionnés, toujours parmi celles déjà visibles selon votre périmètre. Le filtrage est réalisé côté serveur.
+
 ## Consulter une FIPH
 
 **Accès** — Menu **FIPH**, liste des fiches visibles selon votre périmètre. Cliquez sur une ligne pour ouvrir le détail.

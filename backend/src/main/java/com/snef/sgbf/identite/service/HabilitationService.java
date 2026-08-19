@@ -4,6 +4,7 @@ import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.BusinessRuleViolationException;
+import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.identite.dto.CreerHabilitationRequest;
 import com.snef.sgbf.identite.dto.HabilitationDto;
@@ -84,6 +85,7 @@ public class HabilitationService {
 
         validerCoherencePerimetre(code, requete.serviceId());
         validerExclusiviteRh(beneficiaire.getId(), code);
+        validerAttributionSuperAdministrateur(code, auteur);
 
         Service service = null;
         if (requete.serviceId() != null) {
@@ -110,11 +112,42 @@ public class HabilitationService {
     public void retirer(Long habilitationId, Utilisateur auteur) {
         Habilitation habilitation = habilitationRepository.findById(habilitationId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Habilitation", habilitationId));
+        // Symetrique de validerAttributionSuperAdministrateur : un Administrateur
+        // standard ne doit pas non plus pouvoir DESACTIVER la supervision d'un
+        // Super Administrateur (retrait de privilege = meme surface de risque
+        // que son attribution).
+        if (CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(habilitation.getRoleMetier().getCode())) {
+            validerAttributionSuperAdministrateur(CodeRoleMetier.SUPER_ADMINISTRATEUR, auteur);
+        }
         habilitation.setActif(false);
         habilitation.setDateFin(LocalDate.now());
         habilitationRepository.save(habilitation);
         auditService.enregistrer(EntiteAuditable.HABILITATION, habilitation.getId(), auteur,
                 TypeActionAudit.RETRAIT_HABILITATION, true, false, null, null);
+    }
+
+    /**
+     * Protection contre l'escalade de privileges (evolution du 2026-08-18,
+     * section 12 de la mission "Super Administrateur") : seul un titulaire
+     * DEJA actif de l'habilitation SUPER_ADMINISTRATEUR peut en attribuer une
+     * nouvelle - a un tiers, ou (a fortiori) a lui-meme. Un Administrateur
+     * standard, meme habilite a gerer les habilitations en general
+     * ({@code @PreAuthorize("hasRole('ADMINISTRATEUR')")} au niveau du
+     * controleur), ne franchit jamais cette barriere supplementaire, verifiee
+     * ici en base de donnees plutot que sur le seul jeton JWT presente par
+     * l'appelant - impossible a contourner par un appel direct a l'API.
+     */
+    private void validerAttributionSuperAdministrateur(CodeRoleMetier codeDemande, Utilisateur auteur) {
+        if (codeDemande != CodeRoleMetier.SUPER_ADMINISTRATEUR) {
+            return;
+        }
+        boolean auteurEstDejaSuperAdministrateur = habilitationRepository
+                .findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+                .anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
+        if (!auteurEstDejaSuperAdministrateur) {
+            throw new ForbiddenOperationException(
+                    "Seul un Super Administrateur deja habilite peut attribuer le role Super Administrateur.");
+        }
     }
 
     /** Un role a perimetre global n'a jamais de service ; tout autre role en exige toujours un. */

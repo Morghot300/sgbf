@@ -3,22 +3,67 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { creerFiphManuelle, listerFiph } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
+import { listerServices } from "../../api/referentielApi";
 import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutFiph } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
-import { LIBELLES_STATUT_FIPH } from "../../types/fiph";
+import { LIBELLES_STATUT_FIPH, type StatutFiphVersion } from "../../types/fiph";
 
+const STATUTS = Object.keys(LIBELLES_STATUT_FIPH) as StatutFiphVersion[];
+
+/**
+ * Liste des FIPH visibles (perimetre applique cote serveur), avec filtres
+ * combinables date/periode/statut/service (evolution du 2026-08-18) - le
+ * filtrage est realise cote backend, pas en chargeant tout puis en filtrant
+ * en React.
+ */
 export default function FiphListePage() {
-  const requete = useQuery({ queryKey: ["fiph"], queryFn: listerFiph });
+  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+  const services = useQuery({ queryKey: ["services"], queryFn: listerServices });
+  const requete = useQuery({
+    queryKey: ["fiph", filtres],
+    queryFn: () => listerFiph({
+      date: filtres.date || undefined,
+      dateDebut: filtres.dateDebut || undefined,
+      dateFin: filtres.dateFin || undefined,
+      statut: filtres.statut || undefined,
+      serviceId: filtres.serviceId ? Number(filtres.serviceId) : undefined,
+    }),
+  });
   const { aLeRole } = useAuth();
+
+  function reinitialiserFiltres() {
+    setFiltres({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+  }
 
   return (
     <div>
       <h1>FIPH — Fiches Individuelles de Pointage Hebdomadaire</h1>
+
+      <section className="barre-filtres">
+        <label htmlFor="filtreDateFiph">Date exacte</label>
+        <input id="filtreDateFiph" type="date" value={filtres.date} onChange={(e) => setFiltres({ ...filtres, date: e.target.value, dateDebut: "", dateFin: "" })} />
+        <label htmlFor="filtreDateDebutFiph">Du</label>
+        <input id="filtreDateDebutFiph" type="date" value={filtres.dateDebut} onChange={(e) => setFiltres({ ...filtres, dateDebut: e.target.value, date: "" })} />
+        <label htmlFor="filtreDateFinFiph">Au</label>
+        <input id="filtreDateFinFiph" type="date" value={filtres.dateFin} onChange={(e) => setFiltres({ ...filtres, dateFin: e.target.value, date: "" })} />
+        <label htmlFor="filtreStatutFiph">Statut</label>
+        <select id="filtreStatutFiph" value={filtres.statut} onChange={(e) => setFiltres({ ...filtres, statut: e.target.value })}>
+          <option value="">— Tous —</option>
+          {STATUTS.map((s) => <option key={s} value={s}>{LIBELLES_STATUT_FIPH[s]}</option>)}
+        </select>
+        <label htmlFor="filtreServiceFiph">Service</label>
+        <select id="filtreServiceFiph" value={filtres.serviceId} onChange={(e) => setFiltres({ ...filtres, serviceId: e.target.value })}>
+          <option value="">— Tous —</option>
+          {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
+        </select>
+        <button type="button" onClick={reinitialiserFiltres}>Réinitialiser les filtres</button>
+      </section>
+
       <EtatAsync chargement={requete.isLoading} erreur={requete.error} donnees={requete.data}>
         {(liste) => {
           if (liste.length === 0) {
-            return <p>Aucune FIPH visible pour le moment.</p>;
+            return <p>Aucune FIPH ne correspond à ces critères.</p>;
           }
           const triees = [...liste].sort((a, b) => (b.annee - a.annee) || (b.numeroSemaine - a.numeroSemaine));
           return (

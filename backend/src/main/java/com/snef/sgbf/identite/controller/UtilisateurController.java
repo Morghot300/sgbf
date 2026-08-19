@@ -1,6 +1,10 @@
 package com.snef.sgbf.identite.controller;
 
 import com.snef.sgbf.identite.dto.CreerUtilisateurRequest;
+import com.snef.sgbf.identite.dto.ModifierEmailRequest;
+import com.snef.sgbf.identite.dto.ModifierIdentifiantRequest;
+import com.snef.sgbf.identite.dto.ModifierServiceRequest;
+import com.snef.sgbf.identite.dto.ReinitialiserMotDePasseRequest;
 import com.snef.sgbf.identite.dto.UtilisateurDto;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.service.UtilisateurService;
@@ -17,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -38,9 +43,20 @@ public class UtilisateurController {
         this.utilisateurService = utilisateurService;
     }
 
+    /**
+     * Liste des comptes, avec recherche/filtrage optionnel combinable
+     * (evolution du 2026-08-18, section 4) - voir Javadoc de
+     * {@code UtilisateurService.rechercher}.
+     */
     @GetMapping
-    public List<UtilisateurDto> lister() {
-        return utilisateurService.listerTous();
+    public List<UtilisateurDto> lister(@RequestParam(required = false) String terme,
+                                        @RequestParam(required = false) Long serviceId,
+                                        @RequestParam(required = false) String role,
+                                        @RequestParam(required = false) StatutCompte statut) {
+        if (terme == null && serviceId == null && role == null && statut == null) {
+            return utilisateurService.listerTous();
+        }
+        return utilisateurService.rechercher(terme, serviceId, role, statut);
     }
 
     @GetMapping("/{id}")
@@ -60,6 +76,38 @@ public class UtilisateurController {
                                                @AuthenticationPrincipal CustomUserDetails principal) {
         utilisateurService.changerStatut(id, statut, principal.getUtilisateur());
         return ResponseEntity.noContent().build();
+    }
+
+    /** Correction du login de connexion (erreur de saisie, changement administratif - section 7-8 de l'evolution du 2026-08-18). */
+    @PutMapping("/{id}/identifiant")
+    public UtilisateurDto modifierIdentifiant(@PathVariable Long id, @Valid @RequestBody ModifierIdentifiantRequest requete,
+                                               @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.modifierIdentifiant(id, requete, principal.getUtilisateur());
+    }
+
+    /** Correction de l'adresse e-mail (section 7-8 de l'evolution du 2026-08-18). */
+    @PutMapping("/{id}/email")
+    public UtilisateurDto modifierEmail(@PathVariable Long id, @Valid @RequestBody ModifierEmailRequest requete,
+                                         @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.modifierEmail(id, requete, principal.getUtilisateur());
+    }
+
+    /** Correction du service de rattachement (section 7 de l'evolution du 2026-08-18). */
+    @PutMapping("/{id}/service")
+    public UtilisateurDto modifierService(@PathVariable Long id, @RequestBody ModifierServiceRequest requete,
+                                           @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.modifierService(id, requete.serviceId(), principal.getUtilisateur());
+    }
+
+    /**
+     * Reinitialisation du mot de passe d'un compte (section 7 de l'evolution
+     * du 2026-08-18) - jamais renvoye ni journalise en clair, voir Javadoc de
+     * {@link com.snef.sgbf.identite.service.UtilisateurService#reinitialiserMotDePasse}.
+     */
+    @PutMapping("/{id}/mot-de-passe")
+    public UtilisateurDto reinitialiserMotDePasse(@PathVariable Long id, @Valid @RequestBody ReinitialiserMotDePasseRequest requete,
+                                                   @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.reinitialiserMotDePasse(id, requete, principal.getUtilisateur());
     }
 
 }

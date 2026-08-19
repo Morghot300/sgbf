@@ -232,6 +232,16 @@ public class FiphVersionService {
         verifierRoleNiveau(auteur, version, niveau);
         verifierSeparationResponsabilites(version, auteur);
         verifierSequencementNiveau(version, niveau);
+        if (niveau == 2) {
+            // RG-FIPH-025 : verifiee ici (plutot qu'uniquement a la signature,
+            // comme avant l'evolution du workflow du 2026-08-18) car le
+            // Charge d'Affaires/la personne habilitee est desormais le
+            // premier acteur humain a s'engager sur une FIPH issue d'un bon
+            // de sortie (visa de l'agent titulaire acquis d'office, sans
+            // controle manuel de sa part). Reste egalement executee dans
+            // signer() pour une FIPH MANUELLE, ou elle demeure pertinente.
+            controlerCoherenceAffectations(version);
+        }
 
         if (requete.decision() != DecisionValidation.VALIDEE
                 && (requete.commentaire() == null || requete.commentaire().isBlank())) {
@@ -336,7 +346,7 @@ public class FiphVersionService {
                 throw new BusinessRuleViolationException("RG-FIPH-025",
                         "Incoherence detectee : la ligne du " + pointage.getDatePointage()
                                 + " ne correspond plus a une affectation active de l'agent. "
-                                + "Une personne habilitee doit corriger cette ligne avant signature.");
+                                + "Une personne habilitee doit corriger cette ligne avant de poursuivre.");
             }
         }
     }

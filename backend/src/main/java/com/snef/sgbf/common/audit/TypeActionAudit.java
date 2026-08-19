@@ -24,6 +24,12 @@ public enum TypeActionAudit {
     ATTRIBUTION_HABILITATION,
     MODIFICATION_HABILITATION,
     RETRAIT_HABILITATION,
+    /** Correction du login de connexion par l'Administrateur (evolution du 2026-08-18, section 9). */
+    MODIFICATION_IDENTIFIANT,
+    /** Correction de l'adresse e-mail par l'Administrateur (evolution du 2026-08-18, section 9). */
+    MODIFICATION_EMAIL,
+    /** Jamais accompagnee du mot de passe lui-meme, ni en clair ni hashe (evolution du 2026-08-18, section 9). */
+    REINITIALISATION_MOT_DE_PASSE,
 
     // --- Missions et affectations (RG-MIS-008) ---
     AFFECTATION,

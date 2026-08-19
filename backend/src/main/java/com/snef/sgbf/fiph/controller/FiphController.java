@@ -2,12 +2,16 @@ package com.snef.sgbf.fiph.controller;
 
 import com.snef.sgbf.fiph.dto.CreerFiphManuelleRequest;
 import com.snef.sgbf.fiph.dto.FiphDto;
+import com.snef.sgbf.fiph.entity.StatutFiphVersion;
 import com.snef.sgbf.fiph.service.FiphService;
 import com.snef.sgbf.security.CustomUserDetails;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -34,9 +39,15 @@ public class FiphController {
         this.fiphService = fiphService;
     }
 
+    /** Filtres optionnels combinables (evolution du 2026-08-18, section 2) - voir Javadoc de {@code FiphService.listerVisibles}. */
     @GetMapping
-    public List<FiphDto> lister(@AuthenticationPrincipal CustomUserDetails principal) {
-        return fiphService.listerVisibles(principal.getUtilisateur());
+    public List<FiphDto> lister(@AuthenticationPrincipal CustomUserDetails principal,
+                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate date,
+                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateDebut,
+                                 @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateFin,
+                                 @RequestParam(required = false) @Nullable StatutFiphVersion statut,
+                                 @RequestParam(required = false) @Nullable Long serviceId) {
+        return fiphService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId);
     }
 
     @GetMapping("/{id}")

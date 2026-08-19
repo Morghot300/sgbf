@@ -83,12 +83,31 @@ public class FiphService {
         return fiphMapper.toDto(fiph);
     }
 
+    /**
+     * Liste des FIPH visibles, avec filtres optionnels combinables
+     * (evolution du 2026-08-18, section 2) : date exacte, periode (une FIPH
+     * est retenue des lors que sa periode hebdomadaire chevauche l'intervalle
+     * demande), statut de la version courante, service. Toujours appliques
+     * APRES le filtrage de perimetre (RG-SEC-002).
+     */
     @Transactional(readOnly = true)
-    public List<FiphDto> listerVisibles(Utilisateur courant) {
+    public List<FiphDto> listerVisibles(Utilisateur courant, java.time.LocalDate date, java.time.LocalDate dateDebut,
+                                         java.time.LocalDate dateFin, StatutFiphVersion statut, Long serviceId) {
+        return entitesVisibles(courant).stream()
+                .filter(f -> date == null || !date.isBefore(f.getDateDebutPeriode()) && !date.isAfter(f.getDateFinPeriode()))
+                .filter(f -> dateDebut == null || !f.getDateFinPeriode().isBefore(dateDebut))
+                .filter(f -> dateFin == null || !f.getDateDebutPeriode().isAfter(dateFin))
+                .filter(f -> statut == null || statut == f.getStatut())
+                .filter(f -> serviceId == null || serviceId.equals(f.getService().getId()))
+                .map(fiphMapper::toDto)
+                .toList();
+    }
+
+    private List<FIPH> entitesVisibles(Utilisateur courant) {
         List<Habilitation> habilitations = habilitationRepository.findByUtilisateur_IdAndActifTrue(courant.getId());
         boolean visionGlobale = habilitations.stream().anyMatch(h -> estRoleVisionGlobale(h.getRoleMetier().getCode()));
         if (visionGlobale) {
-            return fiphRepository.findAll().stream().map(fiphMapper::toDto).toList();
+            return fiphRepository.findAll();
         }
 
         var servicesGeres = habilitations.stream()
@@ -100,7 +119,6 @@ public class FiphService {
         return fiphRepository.findAll().stream()
                 .filter(f -> servicesGeres.contains(f.getService().getId())
                         || (f.getAgent().getUtilisateur() != null && f.getAgent().getUtilisateur().getId().equals(courant.getId())))
-                .map(fiphMapper::toDto)
                 .toList();
     }
 
@@ -365,7 +383,8 @@ public class FiphService {
     private boolean estRoleVisionGlobale(String code) {
         return CodeRoleMetier.RH.name().equals(code)
                 || CodeRoleMetier.DIRECTION.name().equals(code)
-                || CodeRoleMetier.ADMINISTRATEUR.name().equals(code);
+                || CodeRoleMetier.ADMINISTRATEUR.name().equals(code)
+                || CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(code);
     }
 
     boolean estRoleGestionnaire(String code) {

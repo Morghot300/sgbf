@@ -5,7 +5,7 @@
  * correspondants ne doivent etre proposes dans l'interface qu'a ce role.
  */
 
-/** Les 7 roles metier stables (referentiel/entity/CodeRoleMetier.java). */
+/** Les 8 roles metier stables (referentiel/entity/CodeRoleMetier.java). */
 export type CodeRoleMetier =
   | "AGENT"
   | "CHARGE_AFFAIRES"
@@ -13,7 +13,8 @@ export type CodeRoleMetier =
   | "RESPONSABLE_ACTIVITE"
   | "DIRECTION"
   | "RH"
-  | "ADMINISTRATEUR";
+  | "ADMINISTRATEUR"
+  | "SUPER_ADMINISTRATEUR";
 
 export type StatutCompte = "ACTIF" | "VERROUILLE" | "DESACTIVE";
 
@@ -75,7 +76,7 @@ export interface CreerHabilitationRequest {
 }
 
 /** Roles a perimetre global (RG-HAB-005) : aucun service a demander a la creation d'habilitation. */
-export const ROLES_PERIMETRE_GLOBAL: ReadonlySet<CodeRoleMetier> = new Set(["RH", "ADMINISTRATEUR"]);
+export const ROLES_PERIMETRE_GLOBAL: ReadonlySet<CodeRoleMetier> = new Set(["RH", "ADMINISTRATEUR", "SUPER_ADMINISTRATEUR"]);
 
 export const LIBELLES_ROLE: Record<CodeRoleMetier, string> = {
   AGENT: "Agent",
@@ -85,4 +86,5 @@ export const LIBELLES_ROLE: Record<CodeRoleMetier, string> = {
   DIRECTION: "Direction",
   RH: "Ressources Humaines",
   ADMINISTRATEUR: "Administrateur",
+  SUPER_ADMINISTRATEUR: "Super Administrateur",
 };

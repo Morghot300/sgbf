@@ -59,7 +59,7 @@ export default function BonSortieDetailPage() {
               <tbody>
                 <tr><th>Statut</th><td><BadgeStatutBonSortie statut={bs.statut} libelle={LIBELLES_STATUT_BON_SORTIE[bs.statut]} /></td></tr>
                 <tr><th>Agent</th><td>{bs.agentNomComplet} ({bs.agentMatricule})</td></tr>
-                <tr><th>Moyen utilisé</th><td>{LIBELLES_MOYEN_UTILISE[bs.moyenUtilise]}{bs.vehiculeImmatriculation ? ` — ${bs.vehiculeImmatriculation}` : ""}{bs.lt ? ` (LT ${bs.lt})` : ""}</td></tr>
+                <tr><th>Moyen utilisé</th><td>{LIBELLES_MOYEN_UTILISE[bs.moyenUtilise]}{bs.precisionVehicule ? ` — ${bs.precisionVehicule}` : ""}{bs.vehiculeImmatriculation ? ` — ${bs.vehiculeImmatriculation}` : ""}{bs.lt ? ` (LT ${bs.lt})` : ""}</td></tr>
                 <tr><th>Destination</th><td>{bs.lieu}</td></tr>
                 <tr><th>Motif</th><td>{bs.motifSortie}</td></tr>
                 <tr><th>Date / heure de sortie</th><td>{bs.dateSortie} à {bs.heureSortie}</td></tr>

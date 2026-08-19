@@ -5,6 +5,9 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.expression.method.DefaultMethodSecurityExpressionHandler;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -86,6 +89,37 @@ public class SecurityConfig {
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
         return config.getAuthenticationManager();
+    }
+
+    /**
+     * Hierarchie de roles (evolution du 2026-08-18, section 11 de la mission
+     * "Super Administrateur") : SUPER_ADMINISTRATEUR herite automatiquement
+     * de tous les droits accordes a ADMINISTRATEUR par {@code @PreAuthorize}
+     * sur l'ensemble des controleurs, sans avoir a dupliquer
+     * {@code hasRole('ADMINISTRATEUR')} en {@code hasAnyRole(...)} partout -
+     * c'est le backend (Spring Security), et non un simple affichage
+     * conditionnel cote React, qui applique cette hierarchie. Beans statiques
+     * a dessein : {@code @EnableMethodSecurity} instancie certains
+     * post-processeurs de securite tres tot dans le cycle de vie du contexte,
+     * avant que les beans non-statiques ne soient disponibles.
+     *
+     * <p>Cette hierarchie ne s'applique qu'aux controles Spring Security
+     * ({@code @PreAuthorize("hasRole(...)")}) - les controles de perimetre
+     * "vision globale" ecrits a la main (ex. {@code FiphService.estRoleVisionGlobale})
+     * comparent directement le code de role et doivent donc lister
+     * SUPER_ADMINISTRATEUR explicitement, ce qui est fait a chaque endroit
+     * pertinent.
+     */
+    @Bean
+    static RoleHierarchy roleHierarchy() {
+        return RoleHierarchyImpl.fromHierarchy("ROLE_SUPER_ADMINISTRATEUR > ROLE_ADMINISTRATEUR");
+    }
+
+    @Bean
+    static DefaultMethodSecurityExpressionHandler methodSecurityExpressionHandler(RoleHierarchy roleHierarchy) {
+        DefaultMethodSecurityExpressionHandler handler = new DefaultMethodSecurityExpressionHandler();
+        handler.setRoleHierarchy(roleHierarchy);
+        return handler;
     }
 
     private CorsConfigurationSource corsConfigurationSource() {

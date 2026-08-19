@@ -92,6 +92,21 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   margin: 0.5rem 0;
 }
 
+/* Barre de filtres combinables (Bons de sortie, FIPH, Comptes - évolution du 2026-08-18). */
+.barre-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--fond-secondaire, #F7F8F9);
+  border-radius: var(--rayon-defaut);
+}
+.barre-filtres label {
+  margin-bottom: 0;
+}
+
 label {
   font-weight: 600;
   font-size: var(--taille-petite);

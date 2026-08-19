@@ -9,6 +9,12 @@ import type {
 export async function listerUtilisateurs(): Promise<UtilisateurDto[]> {
   return (await httpClient.get<UtilisateurDto[]>("/utilisateurs")).data;
 }
+/** Recherche/filtrage combinable (identifiant, e-mail, nom d'agent lié, service, rôle, statut) - évolution du 2026-08-18. */
+export async function rechercherUtilisateurs(filtres: {
+  terme?: string; serviceId?: number; role?: string; statut?: StatutCompte;
+}): Promise<UtilisateurDto[]> {
+  return (await httpClient.get<UtilisateurDto[]>("/utilisateurs", { params: filtres })).data;
+}
 export async function obtenirUtilisateur(id: number): Promise<UtilisateurDto> {
   return (await httpClient.get<UtilisateurDto>(`/utilisateurs/${id}`)).data;
 }
@@ -18,12 +24,24 @@ export async function creerUtilisateur(requete: CreerUtilisateurRequest): Promis
 export async function changerStatutCompte(id: number, statut: StatutCompte): Promise<void> {
   await httpClient.put(`/utilisateurs/${id}/statut/${statut}`);
 }
+export async function modifierIdentifiant(id: number, identifiant: string): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/identifiant`, { identifiant })).data;
+}
+export async function modifierEmail(id: number, email: string): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/email`, { email })).data;
+}
+export async function modifierServiceUtilisateur(id: number, serviceId: number | null): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/service`, { serviceId })).data;
+}
+export async function reinitialiserMotDePasse(id: number, nouveauMotDePasse: string): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/mot-de-passe`, { nouveauMotDePasse })).data;
+}
 
 export async function listerAgents(): Promise<AgentDto[]> {
   return (await httpClient.get<AgentDto[]>("/agents")).data;
 }
-export async function rechercherAgents(terme: string): Promise<AgentDto[]> {
-  return (await httpClient.get<AgentDto[]>("/agents/recherche", { params: { terme } })).data;
+export async function rechercherAgents(terme: string, serviceId?: number): Promise<AgentDto[]> {
+  return (await httpClient.get<AgentDto[]>("/agents/recherche", { params: { terme, serviceId } })).data;
 }
 export async function creerAgent(requete: CreerAgentRequest): Promise<AgentDto> {
   return (await httpClient.post<AgentDto>("/agents", requete)).data;

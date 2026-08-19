@@ -1,7 +1,7 @@
 /** Types miroir des DTO du module Bon de sortie (backend/.../bonsortie/*). */
 
 export type StatutBonSortie = "BROUILLON" | "VISE" | "VALIDE";
-export type MoyenUtilise = "OMNIUM_SERVICE" | "PERSONNEL" | "TAXI";
+export type MoyenUtilise = "OMNIUM_SERVICE" | "PERSONNEL" | "TAXI" | "AUTRE";
 export type OrigineBonSortie = "PRINCIPALE" | "PERSONNE_A_BORD";
 export type StatutAssociationPersonne = "ACTIVE" | "RETIREE";
 
@@ -15,6 +15,7 @@ export interface BonSortieDto {
   affectationMissionId: number | null;
   missionCodeHN: string | null;
   moyenUtilise: MoyenUtilise;
+  precisionVehicule: string | null;
   lt: string | null;
   kilometrage: number;
   dateSortie: string;
@@ -36,6 +37,7 @@ export interface BonSortieDto {
 export interface CreerBonSortieRequest {
   vehiculeId: number | null;
   moyenUtilise: MoyenUtilise;
+  precisionVehicule: string | null;
   lt: string | null;
   kilometrage: number;
   dateSortie: string;
@@ -76,4 +78,5 @@ export const LIBELLES_MOYEN_UTILISE: Record<MoyenUtilise, string> = {
   OMNIUM_SERVICE: "Omnium service",
   PERSONNEL: "Véhicule personnel",
   TAXI: "Taxi",
+  AUTRE: "Autre",
 };

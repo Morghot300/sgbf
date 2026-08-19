@@ -3,18 +3,22 @@ package com.snef.sgbf.bonsortie.controller;
 import com.snef.sgbf.bonsortie.dto.BonSortieDto;
 import com.snef.sgbf.bonsortie.dto.CreerBonSortieRequest;
 import com.snef.sgbf.bonsortie.dto.ModifierRetourRequest;
+import com.snef.sgbf.bonsortie.entity.StatutBonSortie;
 import com.snef.sgbf.bonsortie.service.BonSortiePdfService;
 import com.snef.sgbf.bonsortie.service.BonSortieService;
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -45,9 +50,24 @@ public class BonSortieController {
         this.bonSortiePdfService = bonSortiePdfService;
     }
 
+    /**
+     * Liste des bons de sortie visibles, avec filtres optionnels combinables
+     * (section 1 de l'evolution du 2026-08-18) : {@code date} (jour exact),
+     * {@code dateDebut}/{@code dateFin} (periode, bornes incluses),
+     * {@code statut} (parmi les statuts reellement definis - BROUILLON, VISE,
+     * VALIDE) et {@code serviceId}. Toujours appliques APRES le filtrage de
+     * perimetre (RG-SEC-002) : un filtre ne peut jamais elargir ce qu'un
+     * utilisateur est habilite a voir, seulement restreindre l'affichage
+     * parmi ce qui lui est deja visible.
+     */
     @GetMapping
-    public List<BonSortieDto> lister(@AuthenticationPrincipal CustomUserDetails principal) {
-        return bonSortieService.listerVisibles(principal.getUtilisateur());
+    public List<BonSortieDto> lister(@AuthenticationPrincipal CustomUserDetails principal,
+                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate date,
+                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateDebut,
+                                      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateFin,
+                                      @RequestParam(required = false) @Nullable StatutBonSortie statut,
+                                      @RequestParam(required = false) @Nullable Long serviceId) {
+        return bonSortieService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId);
     }
 
     @GetMapping("/{id}")

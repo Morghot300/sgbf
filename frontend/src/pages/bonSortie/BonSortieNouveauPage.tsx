@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { creerBonSortie } from "../../api/bonSortieApi";
@@ -15,7 +15,8 @@ import { LIBELLES_MOYEN_UTILISE, type MoyenUtilise } from "../../types/bonSortie
  * voir Javadoc de `BonSortieController`).
  */
 const schema = z.object({
-  moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI"]),
+  moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI", "AUTRE"]),
+  precisionVehicule: z.string().max(200).optional(),
   vehiculeId: z.string().optional(),
   lt: z.string().max(20).optional(),
   kilometrage: z.coerce.number().int().min(0, "Le kilométrage doit être positif ou nul."),
@@ -24,7 +25,10 @@ const schema = z.object({
   lieu: z.string().min(1, "La destination est obligatoire.").max(150),
   codeAffaireSaisi: z.string().min(1, "Le code affaire est obligatoire.").max(30),
   motifSortie: z.string().min(1, "Le motif est obligatoire.").max(500),
-});
+}).refine(
+  (valeurs) => valeurs.moyenUtilise !== "AUTRE" || !!valeurs.precisionVehicule?.trim(),
+  { message: "Veuillez préciser le véhicule utilisé.", path: ["precisionVehicule"] },
+);
 type Formulaire = z.infer<typeof schema>;
 
 export default function BonSortieNouveauPage() {
@@ -32,15 +36,17 @@ export default function BonSortieNouveauPage() {
   const queryClient = useQueryClient();
   const vehicules = useQuery({ queryKey: ["vehicules"], queryFn: listerVehicules });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<Formulaire>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<Formulaire>({
     resolver: zodResolver(schema),
     defaultValues: { moyenUtilise: "OMNIUM_SERVICE", kilometrage: 0 },
   });
+  const moyenUtiliseChoisi = useWatch({ control, name: "moyenUtilise" });
 
   const creation = useMutation({
     mutationFn: (valeurs: Formulaire) => creerBonSortie({
       vehiculeId: valeurs.vehiculeId ? Number(valeurs.vehiculeId) : null,
       moyenUtilise: valeurs.moyenUtilise,
+      precisionVehicule: valeurs.moyenUtilise === "AUTRE" ? (valeurs.precisionVehicule?.trim() || null) : null,
       lt: valeurs.lt || null,
       kilometrage: valeurs.kilometrage,
       dateSortie: valeurs.dateSortie,
@@ -65,6 +71,14 @@ export default function BonSortieNouveauPage() {
             <option key={m} value={m}>{LIBELLES_MOYEN_UTILISE[m]}</option>
           ))}
         </select>
+
+        {moyenUtiliseChoisi === "AUTRE" && (
+          <>
+            <label htmlFor="precisionVehicule">Préciser le véhicule</label>
+            <input id="precisionVehicule" type="text" maxLength={200} {...register("precisionVehicule")} />
+            {errors.precisionVehicule && <p role="alert">{errors.precisionVehicule.message}</p>}
+          </>
+        )}
 
         <label htmlFor="vehiculeId">Véhicule (facultatif)</label>
         <select id="vehiculeId" {...register("vehiculeId")}>

@@ -4,8 +4,16 @@ import type {
   ModifierRetourRequest,
 } from "../types/bonSortie";
 
-export async function listerBonsSortie(): Promise<BonSortieDto[]> {
-  return (await httpClient.get<BonSortieDto[]>("/bons-sortie")).data;
+export interface FiltresBonSortie {
+  date?: string;
+  dateDebut?: string;
+  dateFin?: string;
+  statut?: string;
+  serviceId?: number;
+}
+/** Filtres combinables (date exacte, période, statut, service) - évolution du 2026-08-18. */
+export async function listerBonsSortie(filtres: FiltresBonSortie = {}): Promise<BonSortieDto[]> {
+  return (await httpClient.get<BonSortieDto[]>("/bons-sortie", { params: filtres })).data;
 }
 export async function obtenirBonSortie(id: number): Promise<BonSortieDto> {
   return (await httpClient.get<BonSortieDto>(`/bons-sortie/${id}`)).data;

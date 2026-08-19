@@ -5,6 +5,7 @@ import com.snef.sgbf.bonsortie.dto.CreerBonSortieRequest;
 import com.snef.sgbf.bonsortie.dto.ModifierRetourRequest;
 import com.snef.sgbf.bonsortie.entity.BonSortie;
 import com.snef.sgbf.bonsortie.entity.OrigineBonSortie;
+import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
 import com.snef.sgbf.bonsortie.entity.StatutBonSortie;
 import com.snef.sgbf.bonsortie.mapper.BonSortieMapper;
 import com.snef.sgbf.bonsortie.repository.BonSortiePersonneRepository;
@@ -25,6 +26,7 @@ import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import com.snef.sgbf.referentiel.repository.VehiculeRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -104,20 +106,38 @@ public class BonSortieService {
     }
 
     /**
-     * Liste des bons de sortie visibles par l'utilisateur courant : tous
-     * pour la RH/Direction/Administrateur (lecture globale), ceux du
-     * perimetre de service pour un Charge d'Affaires/personne habilitee, les
-     * siens propres pour un simple agent (section 14). Filtrage effectue en
-     * memoire pour l'instant (volumetrie de developpement) - a revoir avec
-     * une specification JPA si le volume de production l'exige.
+     * Liste des bons de sortie visibles par l'utilisateur courant, avec
+     * filtres optionnels combinables (evolution du 2026-08-18, section 1) :
+     * date exacte, periode (bornes incluses), statut, service. Un filtre ne
+     * peut jamais elargir la visibilite : tous sont appliques APRES le
+     * filtrage de perimetre (RG-SEC-002), jamais a sa place.
+     *
+     * <p>Perimetre : tous les bons pour la RH/Direction/Administrateur/Super
+     * Administrateur (lecture globale), ceux du perimetre de service pour un
+     * Charge d'Affaires/personne habilitee, les siens propres pour un simple
+     * agent (section 14). Filtrage effectue en memoire pour l'instant
+     * (volumetrie de developpement) - a revoir avec une specification JPA si
+     * le volume de production l'exige.
      */
     @Transactional(readOnly = true)
-    public List<BonSortieDto> listerVisibles(Utilisateur courant) {
+    public List<BonSortieDto> listerVisibles(Utilisateur courant, LocalDate date, LocalDate dateDebut, LocalDate dateFin,
+                                              StatutBonSortie statut, Long serviceId) {
+        return entitesVisibles(courant).stream()
+                .filter(bs -> date == null || date.equals(bs.getDateSortie()))
+                .filter(bs -> dateDebut == null || !bs.getDateSortie().isBefore(dateDebut))
+                .filter(bs -> dateFin == null || !bs.getDateSortie().isAfter(dateFin))
+                .filter(bs -> statut == null || statut == bs.getStatut())
+                .filter(bs -> serviceId == null || serviceId.equals(bs.getAgent().getService().getId()))
+                .map(bonSortieMapper::toDto)
+                .toList();
+    }
+
+    private List<BonSortie> entitesVisibles(Utilisateur courant) {
         List<Habilitation> habilitations = habilitationRepository.findByUtilisateur_IdAndActifTrue(courant.getId());
 
         boolean visionGlobale = habilitations.stream().anyMatch(h -> estRoleVisionGlobale(h.getRoleMetier().getCode()));
         if (visionGlobale) {
-            return bonSortieRepository.findAll().stream().map(bonSortieMapper::toDto).toList();
+            return bonSortieRepository.findAll();
         }
 
         Set<Long> servicesGeres = habilitations.stream()
@@ -129,7 +149,6 @@ public class BonSortieService {
         return bonSortieRepository.findAll().stream()
                 .filter(bs -> servicesGeres.contains(bs.getAgent().getService().getId())
                         || (bs.getAgent().getUtilisateur() != null && bs.getAgent().getUtilisateur().getId().equals(courant.getId())))
-                .map(bonSortieMapper::toDto)
                 .toList();
     }
 
@@ -138,6 +157,7 @@ public class BonSortieService {
         Agent agentEmetteur = agentRepository.findByUtilisateur_Id(auteur.getId())
                 .orElseThrow(() -> new BusinessRuleViolationException("section-10",
                         "Aucun agent du referentiel RH n'est associe a ce compte : impossible de creer un bon de sortie."));
+        verifierPrecisionVehicule(requete.moyenUtilise(), requete.precisionVehicule());
 
         BonSortie bonSortie = new BonSortie();
         bonSortie.setAgent(agentEmetteur);
@@ -146,6 +166,7 @@ public class BonSortieService {
                     .orElseThrow(() -> ResourceNotFoundException.of("Vehicule", requete.vehiculeId())));
         }
         bonSortie.setMoyenUtilise(requete.moyenUtilise());
+        bonSortie.setPrecisionVehicule(requete.moyenUtilise() == MoyenUtilise.AUTRE ? requete.precisionVehicule() : null);
         bonSortie.setLt(requete.lt());
         bonSortie.setKilometrage(requete.kilometrage());
         bonSortie.setDateSortie(requete.dateSortie());
@@ -275,10 +296,24 @@ public class BonSortieService {
         }
     }
 
+    /**
+     * Evolution du 2026-08-18 : lorsque le moyen utilise est {@code AUTRE},
+     * la precision devient obligatoire (formulaire papier historique et
+     * frontend ne suffisent jamais a eux seuls - le backend reste la source
+     * de verite, comme pour toute regle de validation de cette application).
+     */
+    private void verifierPrecisionVehicule(MoyenUtilise moyenUtilise, String precisionVehicule) {
+        if (moyenUtilise == MoyenUtilise.AUTRE && (precisionVehicule == null || precisionVehicule.isBlank())) {
+            throw new BusinessRuleViolationException("RG-BS-VEHICULE",
+                    "Veuillez preciser le vehicule utilise lorsque le moyen selectionne est \"Autre\".");
+        }
+    }
+
     private boolean estRoleVisionGlobale(String code) {
         return CodeRoleMetier.RH.name().equals(code)
                 || CodeRoleMetier.DIRECTION.name().equals(code)
-                || CodeRoleMetier.ADMINISTRATEUR.name().equals(code);
+                || CodeRoleMetier.ADMINISTRATEUR.name().equals(code)
+                || CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(code);
     }
 
     private boolean estRoleGestionnaire(String code) {

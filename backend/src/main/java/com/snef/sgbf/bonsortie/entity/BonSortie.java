@@ -72,6 +72,10 @@ public class BonSortie {
     @Column(name = "moyen_utilise", nullable = false, length = 20)
     private MoyenUtilise moyenUtilise;
 
+    /** Obligatoire uniquement lorsque {@link #moyenUtilise} vaut {@link MoyenUtilise#AUTRE} (controle applicatif + CHECK en base). */
+    @Column(name = "precision_vehicule", length = 200)
+    private String precisionVehicule;
+
     /** Immatriculation saisie (RG-BS-006) - facultative (point I.4 de l'analyse fonctionnelle). */
     @Column(name = "lt", length = 20)
     private String lt;

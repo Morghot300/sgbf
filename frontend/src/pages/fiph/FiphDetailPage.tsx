@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { historiqueAuditFiph, telechargerAuditCsv, telechargerAuditPdf } from "../../api/auditApi";
 import {
-  completerPointage, creerNouvelleVersionFiph, listerValidations, obtenirFiph, obtenirFiphVersion,
+  completerPointage, creerNouvelleVersionFiph, listerValidations, listerVersionsFiph, obtenirFiph, obtenirFiphVersion,
   ouvrirPdfFiphVersion, signerFiph, soumettreFiph, validerFiph,
 } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
@@ -52,12 +52,17 @@ export default function FiphDetailPage() {
     queryKey: ["fiph-audit", fiphId],
     queryFn: () => historiqueAuditFiph(fiphId),
   });
+  const versions = useQuery({
+    queryKey: ["fiph-toutes-versions", fiphId],
+    queryFn: () => listerVersionsFiph(fiphId),
+  });
 
   function invalider() {
     void queryClient.invalidateQueries({ queryKey: ["fiph-detail", fiphId] });
     void queryClient.invalidateQueries({ queryKey: ["fiph-version", versionId] });
     void queryClient.invalidateQueries({ queryKey: ["fiph-validations", versionId] });
     void queryClient.invalidateQueries({ queryKey: ["fiph-audit", fiphId] });
+    void queryClient.invalidateQueries({ queryKey: ["fiph-toutes-versions", fiphId] });
     void queryClient.invalidateQueries({ queryKey: ["fiph"] });
   }
   function gererErreur(e: unknown, messageParDefaut: string) {
@@ -208,6 +213,32 @@ export default function FiphDetailPage() {
                 </button>
               </section>
             )}
+
+            <EtatAsync chargement={versions.isLoading} erreur={versions.error} donnees={versions.data}>
+              {(liste) => liste.length > 1 && (
+                <section>
+                  <h3>Historique des versions</h3>
+                  <p className="note">
+                    Cette FIPH a fait l'objet d'au moins une correction post-validation (RG-VER-001 à 007) : chaque version
+                    précédente reste consultable et intacte, avec sa propre empreinte d'intégrité.
+                  </p>
+                  <table className="tableau tableau--compact">
+                    <thead><tr><th>Version</th><th>Statut</th><th>Créée le</th><th>Motif</th><th>Empreinte</th></tr></thead>
+                    <tbody>
+                      {liste.map((vers) => (
+                        <tr key={vers.id} style={vers.id === v.id ? { fontWeight: 600 } : undefined}>
+                          <td>{vers.numeroVersion}{vers.id === v.id ? " (courante)" : ""}</td>
+                          <td><BadgeStatutFiph statut={vers.statutVersion} libelle={LIBELLES_STATUT_FIPH[vers.statutVersion]} /></td>
+                          <td>{vers.dateCreation}</td>
+                          <td>{vers.motifModification ?? "—"}</td>
+                          <td>{vers.empreinteIntegrite ? `${vers.empreinteIntegrite.slice(0, 12)}…` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              )}
+            </EtatAsync>
 
             <EtatAsync chargement={validations.isLoading} erreur={validations.error} donnees={validations.data}>
               {(liste) => liste.length > 0 && (

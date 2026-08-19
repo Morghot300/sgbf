@@ -17,7 +17,7 @@ Sauf mention contraire, chaque endpoint exige un jeton d'accès valide (`Authori
 
 | Méthode | Chemin | Rôle | Description |
 |---|---|---|---|
-| GET | `/` | authentifié | Liste des bons de sortie visibles (périmètre appliqué en service) |
+| GET | `/?date=&dateDebut=&dateFin=&statut=&serviceId=` | authentifié | Liste des bons de sortie visibles (périmètre appliqué en service), avec filtres optionnels combinables (évolution du 2026-08-18) appliqués côté serveur, toujours après le filtrage de périmètre |
 | GET | `/{id}` | authentifié | Détail (anti-IDOR : périmètre vérifié) |
 | GET | `/{id}/pdf` | authentifié | PDF — uniquement si statut `VALIDE` (RG-DOC-001) |
 | POST | `/` | authentifié | Création (libre-service, agent = utilisateur courant) |
@@ -37,7 +37,7 @@ Sauf mention contraire, chaque endpoint exige un jeton d'accès valide (`Authori
 
 | Méthode | Chemin | Rôle | Description |
 |---|---|---|---|
-| GET | `/` | authentifié | Liste des FIPH visibles (périmètre) |
+| GET | `/?date=&dateDebut=&dateFin=&statut=&serviceId=` | authentifié | Liste des FIPH visibles (périmètre), avec les mêmes filtres optionnels combinables que les bons de sortie (évolution du 2026-08-18) |
 | GET | `/{id}` | authentifié | Détail (anti-IDOR) |
 | POST | `/manuelle` | `CHARGE_AFFAIRES`, `PERSONNE_HABILITEE` | Création manuelle (Code Service, RG-FIPH-004) |
 
@@ -76,13 +76,20 @@ Sauf mention contraire, chaque endpoint exige un jeton d'accès valide (`Authori
 
 ## Identité et habilitations
 
+> `SUPER_ADMINISTRATEUR` hérite automatiquement de tous les endpoints listés `ADMINISTRATEUR` ci-dessous, via une hiérarchie de rôles Spring Security (`SecurityConfig.roleHierarchy`, `ROLE_SUPER_ADMINISTRATEUR > ROLE_ADMINISTRATEUR`) — jamais un simple contournement du contrôle de rôle par le frontend.
+
 | Méthode | Chemin | Rôle | Description |
 |---|---|---|---|
-| GET/POST | `/api/agents`, `/api/agents/recherche?terme=` | authentifié (lecture), `ADMINISTRATEUR` (écriture) | Référentiel RH des agents |
+| GET/POST | `/api/agents`, `/api/agents/recherche?terme=&serviceId=` | authentifié (lecture), `ADMINISTRATEUR` (écriture) | Référentiel RH des agents ; recherche par nom/prénom (insensible à la casse) et/ou service (évolution du 2026-08-18) — `serviceId` obligatoire côté backend à la création (`CreerAgentRequest`) |
 | PUT | `/api/agents/{id}/utilisateur/{utilisateurId}` | `ADMINISTRATEUR` | Rattache un compte à un agent |
-| GET/POST | `/api/utilisateurs` | `ADMINISTRATEUR` (contrôleur entier) | Comptes applicatifs |
-| PUT | `/api/utilisateurs/{id}/statut/{statut}` | `ADMINISTRATEUR` | Change le statut (ACTIF/VERROUILLE/DESACTIVE) |
-| GET/POST/DELETE | `/api/habilitations/**` | `ADMINISTRATEUR` (contrôleur entier) | Attribution/retrait d'habilitations (RG-HAB-001 à 006) |
+| GET | `/api/utilisateurs?terme=&serviceId=&role=&statut=` | `ADMINISTRATEUR` | Liste/recherche des comptes, filtres combinables (évolution du 2026-08-18) |
+| POST | `/api/utilisateurs` | `ADMINISTRATEUR` | Création (service optionnel — obligatoire uniquement pour les rôles non globaux, appliqué à l'attribution d'habilitation) |
+| PUT | `/api/utilisateurs/{id}/statut/{statut}` | `ADMINISTRATEUR` | Change le statut (ACTIF/VERROUILLE/DESACTIVE) — révoque aussi les jetons de rafraîchissement actifs si le nouveau statut n'est pas ACTIF |
+| PUT | `/api/utilisateurs/{id}/identifiant` | `ADMINISTRATEUR` | Corrige le login (unicité revalidée) — évolution du 2026-08-18 |
+| PUT | `/api/utilisateurs/{id}/email` | `ADMINISTRATEUR` | Corrige l'e-mail (unicité + format revalidés) — évolution du 2026-08-18 |
+| PUT | `/api/utilisateurs/{id}/service` | `ADMINISTRATEUR` | Corrige le service de rattachement (`serviceId` nullable) — évolution du 2026-08-18 |
+| PUT | `/api/utilisateurs/{id}/mot-de-passe` | `ADMINISTRATEUR` | Réinitialise le mot de passe (hashé, jamais journalisé en clair, révoque les jetons de rafraîchissement actifs) — évolution du 2026-08-18 |
+| GET/POST/DELETE | `/api/habilitations/**` | `ADMINISTRATEUR` (contrôleur entier) | Attribution/retrait d'habilitations (RG-HAB-001 à 006). Attribuer ou retirer `SUPER_ADMINISTRATEUR` exige en plus que l'appelant détienne déjà cette habilitation (protection anti-escalade, évolution du 2026-08-18) |
 
 ## Référentiels — `/api/referentiels`
 

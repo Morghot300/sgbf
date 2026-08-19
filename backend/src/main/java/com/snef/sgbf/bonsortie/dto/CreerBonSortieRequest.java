@@ -23,6 +23,12 @@ public record CreerBonSortieRequest(
         @NotNull(message = "Le moyen utilise est obligatoire.")
         MoyenUtilise moyenUtilise,
 
+        // Obligatoire uniquement si moyenUtilise == AUTRE - controle explicite
+        // en service (BonSortieService.creer), pas via une annotation Bean
+        // Validation seule (validation conditionnelle inter-champs).
+        @Size(max = 200, message = "La precision du vehicule ne peut pas depasser 200 caracteres.")
+        String precisionVehicule,
+
         @Size(max = 20)
         String lt,
 

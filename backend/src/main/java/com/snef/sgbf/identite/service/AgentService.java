@@ -60,11 +60,19 @@ public class AgentService {
      * Recherche d'aide a la saisie par nom/prenom (autocompletion frontend
      * uniquement) - voir l'avertissement dans
      * {@link com.snef.sgbf.identite.repository.AgentRepository#findByNomContainingIgnoreCaseOrPrenomContainingIgnoreCase}.
+     * {@code serviceId} est un filtre optionnel supplementaire (evolution du
+     * 2026-08-18, section 3) - {@code terme} peut alors etre vide pour
+     * lister uniquement les agents d'un service.
      */
     @Transactional(readOnly = true)
-    public List<AgentDto> rechercherParNomOuPrenom(String terme) {
-        return agentRepository.findByNomContainingIgnoreCaseOrPrenomContainingIgnoreCase(terme, terme)
-                .stream().map(agentMapper::toDto).toList();
+    public List<AgentDto> rechercherParNomOuPrenom(String terme, Long serviceId) {
+        var resultats = (terme == null || terme.isBlank())
+                ? agentRepository.findAll()
+                : agentRepository.findByNomContainingIgnoreCaseOrPrenomContainingIgnoreCase(terme, terme);
+        return resultats.stream()
+                .filter(a -> serviceId == null || serviceId.equals(a.getService().getId()))
+                .map(agentMapper::toDto)
+                .toList();
     }
 
     public AgentDto creer(CreerAgentRequest requete, Utilisateur auteur) {

@@ -5,8 +5,16 @@ import type {
   FiphDto, FiphVersionDto, ValiderFiphRequest, ValidationDto,
 } from "../types/fiph";
 
-export async function listerFiph(): Promise<FiphDto[]> {
-  return (await httpClient.get<FiphDto[]>("/fiph")).data;
+export interface FiltresFiph {
+  date?: string;
+  dateDebut?: string;
+  dateFin?: string;
+  statut?: string;
+  serviceId?: number;
+}
+/** Filtres combinables (date exacte, période, statut, service) - évolution du 2026-08-18. */
+export async function listerFiph(filtres: FiltresFiph = {}): Promise<FiphDto[]> {
+  return (await httpClient.get<FiphDto[]>("/fiph", { params: filtres })).data;
 }
 export async function obtenirFiph(id: number): Promise<FiphDto> {
   return (await httpClient.get<FiphDto>(`/fiph/${id}`)).data;
