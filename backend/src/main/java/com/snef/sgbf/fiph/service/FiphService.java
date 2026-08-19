@@ -27,6 +27,7 @@ import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
+import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -61,11 +62,12 @@ public class FiphService {
     private final SignatureRepository signatureRepository;
     private final FiphMapper fiphMapper;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public FiphService(FiphRepository fiphRepository, FiphVersionRepository fiphVersionRepository,
                         PointageRepository pointageRepository, AgentRepository agentRepository,
                         HabilitationRepository habilitationRepository, SignatureRepository signatureRepository,
-                        FiphMapper fiphMapper, AuditService auditService) {
+                        FiphMapper fiphMapper, AuditService auditService, NotificationService notificationService) {
         this.fiphRepository = fiphRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
@@ -74,6 +76,7 @@ public class FiphService {
         this.signatureRepository = signatureRepository;
         this.fiphMapper = fiphMapper;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -110,8 +113,15 @@ public class FiphService {
             return fiphRepository.findAll();
         }
 
+        // estRoleServiceFiph (Charge d'Affaires, Personne habilitee, Responsable d'Activite) et non
+        // estRoleGestionnaire (Charge d'Affaires, Personne habilitee uniquement, reserve a la GESTION du
+        // pointage - creation/modification, voir verifierPerimetreGestionnaire) : le Responsable d'Activite ne
+        // gere pas le pointage mais doit voir la liste des FIPH de son service au meme titre qu'il peut deja en
+        // consulter une individuellement (verifierPerimetreLecture) - incoherence entre ces deux methodes
+        // identifiee et corrigee le 2026-08-19 (une Responsable d'Activite ne voyait auparavant, dans cette
+        // liste, que les FIPH dont elle etait elle-meme l'agent titulaire, jamais celles de son service).
         var servicesGeres = habilitations.stream()
-                .filter(h -> estRoleGestionnaire(h.getRoleMetier().getCode()))
+                .filter(h -> estRoleServiceFiph(h.getRoleMetier().getCode()))
                 .map(h -> h.getService() != null ? h.getService().getId() : null)
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
@@ -226,27 +236,37 @@ public class FiphService {
     /**
      * Cree la FIPH et sa version initiale.
      *
-     * <p><strong>Visa automatique de l'agent titulaire (evolution du
-     * workflow FIPH, 2026-08-18)</strong> - pour une origine
-     * {@link OrigineFiph#BON_SORTIE} uniquement : la precreation decoule
-     * elle-meme de la validation d'un bon de sortie que l'agent a deja visee
-     * (niveau 1) avant que le Charge d'Affaires ne le valide (niveau 2) - cet
-     * agent est donc considere comme ayant deja accompli sa part du
-     * processus, et il ne doit plus lui etre demande de signer une seconde
-     * fois sa FIPH. La version initiale est donc creee directement au statut
-     * {@link StatutFiphVersion#SIGNEE}, avec une {@link Signature}
-     * enregistree automatiquement (type {@link TypeSignature#VISA_APPLICATIF}),
-     * plutot qu'au statut {@code BROUILLON} en attente d'un appel explicite a
-     * {@code FiphVersionService.signer()}. Le circuit de validation demarre
-     * donc directement au Charge d'Affaires / a la personne habilitee
-     * (niveau 2, voir {@code FiphVersionService.valider}), sans etape de
-     * signature ni de soumission bloquante.
-     *
-     * <p>Pour une origine {@link OrigineFiph#MANUELLE} (Code Service), rien
-     * ne change : il n'existe alors aucun bon de sortie deja visee par
-     * l'agent dont deduire un visa automatique, la version reste creee au
-     * statut {@code BROUILLON} et l'agent titulaire doit encore la signer
-     * lui-meme via {@code FiphVersionService.signer()}.
+     * <p><strong>Visa automatique du createur (evolution du workflow FIPH,
+     * 2026-08-18, etendue le 2026-08-19)</strong> - dans les deux origines,
+     * le circuit de validation demarre directement au niveau 2 (Charge
+     * d'Affaires / personne habilitee), sans etape de signature ni de
+     * soumission bloquante prealable, la version initiale etant creee
+     * directement au statut {@link StatutFiphVersion#SIGNEE} avec une
+     * {@link Signature} automatique (type {@link TypeSignature#VISA_APPLICATIF}) :
+     * <ul>
+     *   <li>{@link OrigineFiph#BON_SORTIE} : la precreation decoule elle-meme
+     *       de la validation d'un bon de sortie que l'AGENT a deja vise
+     *       (niveau 1) avant que le Charge d'Affaires ne le valide (niveau
+     *       2) - l'agent est donc considere avoir deja accompli sa part du
+     *       processus, sans qu'il lui soit demande de signer une seconde
+     *       fois ;</li>
+     *   <li>{@link OrigineFiph#MANUELLE} (Code Service) : le CREATEUR est
+     *       toujours un Charge d'Affaires ou une Personne habilitee du
+     *       service de l'agent (seuls habilites a appeler {@link #creerManuelle},
+     *       via {@link #verifierPerimetreGestionnaire}) - jamais l'agent lui-meme.
+     *       Avant l'evolution du 2026-08-19, la version restait creee au
+     *       statut {@code BROUILLON} en attendant que l'agent titulaire la
+     *       signe lui-meme via {@code FiphVersionService.signer()} - or
+     *       {@code signer()} est strictement reservee au titulaire du compte
+     *       lie a l'agent (voir sa Javadoc), et un Agent enregistre sans
+     *       compte applicatif (cas courant, voir Javadoc de {@link Agent})
+     *       ne peut alors JAMAIS signer : la FIPH restait bloquee
+     *       indefiniment au statut BROUILLON - anomalie reelle identifiee et
+     *       corrigee ici, en meme temps que la demande explicite de la
+     *       mission ("la FIPH ne doit plus attendre inutilement la
+     *       validation de l'agent qui l'a creee") : le visa initial est
+     *       desormais celui du CREATEUR (le CA/PH), pas celui de l'agent.</li>
+     * </ul>
      */
     private FIPH creerFiphEtVersionInitiale(Agent agent, OrigineFiph origine, BonSortie bonSortieDeclencheur,
                                              LocalDate lundiDeLaSemaine, Utilisateur auteur) {
@@ -263,8 +283,7 @@ public class FiphService {
         fiph.setNumeroSemaine(lundiDeLaSemaine.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
         fiph.setDateDebutPeriode(lundiDeLaSemaine);
         fiph.setDateFinPeriode(lundiDeLaSemaine.with(DayOfWeek.SUNDAY));
-        StatutFiphVersion statutInitial = origine == OrigineFiph.BON_SORTIE
-                ? StatutFiphVersion.SIGNEE : StatutFiphVersion.BROUILLON;
+        StatutFiphVersion statutInitial = StatutFiphVersion.SIGNEE;
         fiph.setStatut(statutInitial);
         fiph = fiphRepository.save(fiph);
 
@@ -273,13 +292,13 @@ public class FiphService {
         version.setNumeroVersion(1);
         version.setCreePar(auteur);
         version.setStatutVersion(statutInitial);
-        if (origine == OrigineFiph.BON_SORTIE) {
-            Signature visaAutomatique = signatureRepository.save(new Signature(TypeSignature.VISA_APPLICATIF,
-                    "auto:agent:" + agent.getId() + ":bon-sortie:"
-                            + (bonSortieDeclencheur != null ? bonSortieDeclencheur.getId() : "n/a"),
-                    null));
-            version.setSignatureEmetteur(visaAutomatique);
-        }
+        Signature visaAutomatique = signatureRepository.save(new Signature(TypeSignature.VISA_APPLICATIF,
+                origine == OrigineFiph.BON_SORTIE
+                        ? "auto:agent:" + agent.getId() + ":bon-sortie:"
+                                + (bonSortieDeclencheur != null ? bonSortieDeclencheur.getId() : "n/a")
+                        : "auto:createur:" + auteur.getId() + ":fiph-manuelle",
+                null));
+        version.setSignatureEmetteur(visaAutomatique);
         version = fiphVersionRepository.save(version);
 
         fiph.setVersionCourante(version);
@@ -288,17 +307,24 @@ public class FiphService {
         auditService.enregistrer(EntiteAuditable.FIPH, fiph.getId(), auteur,
                 origine == OrigineFiph.BON_SORTIE ? TypeActionAudit.FIPH_AUTO_GENEREE : TypeActionAudit.CREATION,
                 null, fiphMapper.toDto(fiph), null, statutInitial.name());
-        if (origine == OrigineFiph.BON_SORTIE) {
-            // Trace separement le visa automatique de l'agent (RG-FIPH-017 :
-            // toute action doit rester individuellement identifiable dans
-            // l'historique, meme lorsqu'elle est acquise d'office plutot que
-            // saisie manuellement).
-            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur, TypeActionAudit.SIGNATURE,
-                    StatutFiphVersion.BROUILLON.name(),
-                    "Visa automatique de l'agent titulaire " + agent.getMatricule()
-                            + " (deja acquis via le visa du bon de sortie declencheur)",
-                    StatutFiphVersion.BROUILLON.name(), StatutFiphVersion.SIGNEE.name());
-        }
+        // Trace separement le visa automatique (RG-FIPH-017 : toute action
+        // doit rester individuellement identifiable dans l'historique, meme
+        // lorsqu'elle est acquise d'office plutot que saisie manuellement).
+        auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur, TypeActionAudit.SIGNATURE,
+                StatutFiphVersion.BROUILLON.name(),
+                origine == OrigineFiph.BON_SORTIE
+                        ? "Visa automatique de l'agent titulaire " + agent.getMatricule()
+                                + " (deja acquis via le visa du bon de sortie declencheur)"
+                        : "Visa automatique du createur " + auteur.getIdentifiant()
+                                + " (FIPH manuelle creee pour le compte de l'agent " + agent.getMatricule() + ")",
+                StatutFiphVersion.BROUILLON.name(), StatutFiphVersion.SIGNEE.name());
+        // Le visa etant deja acquis, la FIPH est immediatement prete pour le
+        // niveau 2 (Charge d'Affaires/personne habilitee) - notification
+        // declenchee uniquement ici, jamais avant (evolution du 2026-08-19,
+        // section 5 : "la notification ne doit jamais etre envoyee avant que
+        // l'etape precedente soit reellement validee").
+        notificationService.notifierNiveau2(fiph.getId(), version.getId(), fiph.getService().getId(),
+                "FIPH #" + fiph.getId(), auteur);
         return fiph;
     }
 
@@ -390,6 +416,19 @@ public class FiphService {
     boolean estRoleGestionnaire(String code) {
         return CodeRoleMetier.CHARGE_AFFAIRES.name().equals(code)
                 || CodeRoleMetier.PERSONNE_HABILITEE.name().equals(code);
+    }
+
+    /**
+     * Plus large que {@link #estRoleGestionnaire} : tout role qui intervient
+     * sur le circuit de validation d'une FIPH pour son service (Charge
+     * d'Affaires, Personne habilitee, Responsable d'Activite), utilise
+     * uniquement pour determiner quelles FIPH apparaissent dans la LISTE
+     * ({@link #entitesVisibles}) - jamais pour autoriser une ecriture
+     * (creation/modification du pointage), qui reste reservee a
+     * {@link #estRoleGestionnaire}.
+     */
+    private boolean estRoleServiceFiph(String code) {
+        return estRoleGestionnaire(code) || CodeRoleMetier.RESPONSABLE_ACTIVITE.name().equals(code);
     }
 
     /** RG-HAB-003 / RG-FIPH-010 : creation/modification bornee au perimetre (service) de l'habilitation active. */

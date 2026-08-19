@@ -94,6 +94,13 @@ export interface ValidationDto {
   commentaire: string | null;
   statutAvant: string;
   statutApres: string;
+  /** Vrai si cette decision provient d'une prise en main exceptionnelle du Super Administrateur (evolution du 2026-08-19), jamais une validation normale. */
+  priseEnMainSuperAdmin: boolean;
+}
+
+/** Justification obligatoire d'une prise en main exceptionnelle par le Super Administrateur (evolution du 2026-08-19). */
+export interface PriseEnMainSuperAdminRequest {
+  commentaire: string;
 }
 
 export const LIBELLES_STATUT_FIPH: Record<StatutFiphVersion, string> = {

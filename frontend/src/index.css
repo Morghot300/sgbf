@@ -137,6 +137,19 @@ label {
   margin: 0.75rem 0;
 }
 
+/* Section d'action exceptionnelle (ex. prise en main Super Administrateur, evolution du 2026-08-19) -
+   se distingue volontairement des sections normales pour signaler un contournement du circuit habituel. */
+.panneau-alerte {
+  border: 1px solid var(--statut-attente-texte);
+  background: var(--statut-attente-fond);
+  border-radius: var(--rayon-defaut);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+.panneau-alerte h3 {
+  margin-top: 0;
+}
+
 input, select, textarea {
   padding: 0.5rem;
   border: 1px solid var(--bordure-defaut);
@@ -215,6 +228,14 @@ button:disabled {
   background: var(--surface-entete);
   border-bottom: 1px solid var(--bordure-defaut);
   flex-wrap: wrap;
+  /* Ancre le panneau du centre de notifications (voir .notification-centre__panneau) : positionne par
+     rapport a la largeur de TOUTE la barre d'en-tete plutot que du seul bouton-cloche, qui peut se
+     retrouver pres du bord gauche quand l'en-tete passe a la ligne (largeur intermediaire, avant meme le
+     point de rupture mobile a 640px) - sans quoi le panneau, ancre a droite d'un conteneur etroit et
+     lui-meme proche du bord gauche, se retrouvait rendu hors ecran (coordonnee x negative, bug reproduit et
+     corrige le 2026-08-19 via une verification visuelle reelle dans le navigateur).
+  */
+  position: relative;
 }
 
 .app-header__marque {
@@ -267,6 +288,102 @@ button:disabled {
 .app-header__utilisateur button {
   padding: 0.4rem 0.75rem;
   font-size: var(--taille-petite);
+}
+
+/* ==========================================================================
+ * Centre de notifications (evolution du 2026-08-19)
+ * ========================================================================== */
+.notification-centre {
+  /* Le panneau deroulant (.notification-centre__panneau) est positionne en absolu par rapport a
+     .app-header (voir plus haut), pas a ce conteneur - ce dernier n'a donc pas besoin de son propre
+     contexte de positionnement. */
+  display: inline-flex;
+}
+.notification-centre__cloche {
+  position: relative;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.notification-centre__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--statut-danger-fond);
+  color: var(--statut-danger-texte);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notification-centre__panneau {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  /* Plafonne a la largeur de viewport disponible (moins une marge) sur les tres petits ecrans (360px,
+     critere d'acceptation 6) - jamais de debordement horizontal de page. */
+  width: min(360px, calc(100vw - 2rem));
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure-defaut);
+  border-radius: var(--rayon-defaut);
+  box-shadow: var(--ombre-carte);
+  padding: 0.75rem;
+  z-index: 20;
+}
+.notification-centre__panneau h3 {
+  margin: 0 0 0.5rem;
+  font-size: var(--taille-h3);
+}
+.notification-centre__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.notification-centre__item {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-page);
+  border: 1px solid var(--bordure-defaut);
+  border-radius: var(--rayon-defaut);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.notification-centre__item:hover {
+  background: var(--surface-survol);
+}
+.notification-centre__item--non-lue {
+  border-left: 3px solid var(--brand-2-text);
+  font-weight: 600;
+}
+.notification-centre__titre {
+  font-size: var(--taille-petite);
+  color: var(--texte-principal);
+}
+.notification-centre__message {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--texte-secondaire);
+}
+.notification-centre__date {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--texte-secondaire);
 }
 
 .app-content {

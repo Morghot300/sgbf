@@ -78,6 +78,9 @@ export interface CreerHabilitationRequest {
 /** Roles a perimetre global (RG-HAB-005) : aucun service a demander a la creation d'habilitation. */
 export const ROLES_PERIMETRE_GLOBAL: ReadonlySet<CodeRoleMetier> = new Set(["RH", "ADMINISTRATEUR", "SUPER_ADMINISTRATEUR"]);
 
+/** Roles pour lesquels un même utilisateur ne peut détenir qu'une seule habilitation active à la fois (évolution du 2026-08-19) - voir CodeRoleMetier#estServiceExclusif côté backend, seule source de vérité réelle. */
+export const ROLES_SERVICE_EXCLUSIF: ReadonlySet<CodeRoleMetier> = new Set(["CHARGE_AFFAIRES", "PERSONNE_HABILITEE", "RESPONSABLE_ACTIVITE"]);
+
 export const LIBELLES_ROLE: Record<CodeRoleMetier, string> = {
   AGENT: "Agent",
   CHARGE_AFFAIRES: "Chargé d'Affaires",

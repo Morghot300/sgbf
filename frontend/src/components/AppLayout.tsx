@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import logoSnef from "../assets/brand/logo_snef.png";
+import NotificationCenter from "./NotificationCenter";
 
 /**
  * Ossature commune a tout ecran authentifie : en-tete (organisation,
@@ -32,6 +33,7 @@ export default function AppLayout() {
           {aLeRole("ADMINISTRATEUR") && <NavLink to="/administration">Administration</NavLink>}
         </nav>
         <div className="app-header__utilisateur">
+          <NotificationCenter />
           <span>
             {utilisateur?.identifiant}
             {utilisateur?.serviceLibelle ? ` — ${utilisateur.serviceLibelle}` : ""}

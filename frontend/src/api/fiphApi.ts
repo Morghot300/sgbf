@@ -2,7 +2,7 @@ import { ouvrirBlobPdf } from "./bonSortieApi";
 import { httpClient } from "./httpClient";
 import type {
   CompleterPointageRequest, CreerFiphManuelleRequest, CreerNouvelleVersionRequest,
-  FiphDto, FiphVersionDto, ValiderFiphRequest, ValidationDto,
+  FiphDto, FiphVersionDto, PriseEnMainSuperAdminRequest, ValiderFiphRequest, ValidationDto,
 } from "../types/fiph";
 
 export interface FiltresFiph {
@@ -46,6 +46,10 @@ export async function validerFiph(fiphVersionId: number, niveau: number, requete
 }
 export async function creerNouvelleVersionFiph(fiphId: number, requete: CreerNouvelleVersionRequest): Promise<FiphVersionDto> {
   return (await httpClient.post<FiphVersionDto>(`/fiph-versions/fiph/${fiphId}/nouvelle-version`, requete)).data;
+}
+/** Prise en main exceptionnelle (evolution du 2026-08-19) - reservee au Super Administrateur, revalide en base cote serveur quel que soit le role affiche cote client. */
+export async function priseEnMainSuperAdminFiph(fiphVersionId: number, requete: PriseEnMainSuperAdminRequest): Promise<FiphVersionDto> {
+  return (await httpClient.post<FiphVersionDto>(`/fiph-versions/${fiphVersionId}/prise-en-main-super-admin`, requete)).data;
 }
 /** Ouvre le PDF de la FIPH (RG-DOC-003 : disponible uniquement une fois VALIDEE_DEFINITIVEMENT). */
 export async function ouvrirPdfFiphVersion(fiphVersionId: number): Promise<void> {

@@ -1,5 +1,6 @@
 package com.snef.sgbf.identite.controller;
 
+import com.snef.sgbf.identite.dto.ChangerServiceHabilitationRequest;
 import com.snef.sgbf.identite.dto.CreerHabilitationRequest;
 import com.snef.sgbf.identite.dto.HabilitationDto;
 import com.snef.sgbf.identite.service.HabilitationService;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,8 +40,9 @@ public class HabilitationController {
     }
 
     @GetMapping("/utilisateur/{utilisateurId}")
-    public List<HabilitationDto> listerPourUtilisateur(@PathVariable Long utilisateurId) {
-        return habilitationService.listerPourUtilisateur(utilisateurId);
+    public List<HabilitationDto> listerPourUtilisateur(@PathVariable Long utilisateurId,
+                                                         @AuthenticationPrincipal CustomUserDetails principal) {
+        return habilitationService.listerPourUtilisateur(utilisateurId, principal.getUtilisateur());
     }
 
     @PostMapping
@@ -53,5 +56,16 @@ public class HabilitationController {
     public ResponseEntity<Void> retirer(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
         habilitationService.retirer(id, principal.getUtilisateur());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Reaffectation vers un autre service (evolution du 2026-08-19, section
+     * 10) - action dediee et tracee en un seul evenement d'audit, a utiliser
+     * a la place d'un retrait suivi d'une nouvelle attribution.
+     */
+    @PutMapping("/{id}/service")
+    public HabilitationDto changerService(@PathVariable Long id, @Valid @RequestBody ChangerServiceHabilitationRequest requete,
+                                           @AuthenticationPrincipal CustomUserDetails principal) {
+        return habilitationService.changerServiceHabilitation(id, requete.nouveauServiceId(), principal.getUtilisateur());
     }
 }

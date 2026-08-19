@@ -12,6 +12,7 @@ public record ValidationDto(
         LocalDateTime dateValidation,
         String commentaire,
         String statutAvant,
-        String statutApres
+        String statutApres,
+        boolean priseEnMainSuperAdmin
 ) {
 }

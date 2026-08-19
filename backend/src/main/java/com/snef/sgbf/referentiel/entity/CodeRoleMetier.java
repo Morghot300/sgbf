@@ -44,7 +44,28 @@ public enum CodeRoleMetier {
      */
     private static final Set<CodeRoleMetier> ROLES_PERIMETRE_GLOBAL = EnumSet.of(RH, ADMINISTRATEUR, SUPER_ADMINISTRATEUR);
 
+    /**
+     * Roles pour lesquels un meme utilisateur ne peut jamais detenir deux
+     * habilitations actives simultanees sur deux services differents
+     * (evolution du 2026-08-19, "un acteur metier appartient a un seul
+     * service") : Charge d'Affaires, Personne habilitee, Responsable
+     * d'Activite. Volontairement EXCLU : DIRECTION reste multi-service /
+     * transverse par construction (le document source demande explicitement
+     * de ne pas lui imposer artificiellement une restriction par service -
+     * voir aussi {@code FiphService#estRoleVisionGlobale}, qui traite deja
+     * DIRECTION comme a vision globale en lecture). AGENT est deja garanti
+     * a un seul service par {@code Agent.service} (colonne NOT NULL), sans
+     * passer par ce mecanisme d'habilitation.
+     */
+    private static final Set<CodeRoleMetier> ROLES_SERVICE_EXCLUSIF =
+            EnumSet.of(CHARGE_AFFAIRES, PERSONNE_HABILITEE, RESPONSABLE_ACTIVITE);
+
     public boolean estPerimetreGlobal() {
         return ROLES_PERIMETRE_GLOBAL.contains(this);
+    }
+
+    /** Vrai si ce role ne peut etre detenu, activement, que sur un seul service a la fois pour un meme utilisateur. */
+    public boolean estServiceExclusif() {
+        return ROLES_SERVICE_EXCLUSIF.contains(this);
     }
 }

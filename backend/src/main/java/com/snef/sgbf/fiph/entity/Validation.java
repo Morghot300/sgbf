@@ -71,9 +71,28 @@ public class Validation {
     @Column(name = "statut_apres", length = 30)
     private String statutApres;
 
+    /**
+     * TRUE uniquement pour une decision prise au titre de la prise en main
+     * exceptionnelle du Super Administrateur (evolution du 2026-08-19,
+     * section 12-16) - jamais pour une validation normale d'un acteur
+     * metier, meme si cet acteur est lui-meme titulaire du role Super
+     * Administrateur (une validation normale de niveau reste normale). Le
+     * systeme distingue ainsi clairement les deux dans tout affichage ou
+     * export d'historique.
+     */
+    @Column(name = "prise_en_main_super_admin", nullable = false)
+    private boolean priseEnMainSuperAdmin = false;
+
     public Validation(FIPHVersion fiphVersion, Utilisateur utilisateur, int niveauValidation,
                        DecisionValidation decision, String commentaire, Signature signature,
                        String statutAvant, String statutApres) {
+        this(fiphVersion, utilisateur, niveauValidation, decision, commentaire, signature,
+                statutAvant, statutApres, false);
+    }
+
+    public Validation(FIPHVersion fiphVersion, Utilisateur utilisateur, int niveauValidation,
+                       DecisionValidation decision, String commentaire, Signature signature,
+                       String statutAvant, String statutApres, boolean priseEnMainSuperAdmin) {
         this.fiphVersion = fiphVersion;
         this.utilisateur = utilisateur;
         this.niveauValidation = niveauValidation;
@@ -82,5 +101,6 @@ public class Validation {
         this.signature = signature;
         this.statutAvant = statutAvant;
         this.statutApres = statutApres;
+        this.priseEnMainSuperAdmin = priseEnMainSuperAdmin;
     }
 }

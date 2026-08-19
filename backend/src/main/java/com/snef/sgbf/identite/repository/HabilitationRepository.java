@@ -39,4 +39,13 @@ public interface HabilitationRepository extends JpaRepository<Habilitation, Long
      * {@code ApplicationRunner} n'ouvre pas de session Hibernate a lui seul).
      */
     boolean existsByActifTrueAndRoleMetier_Code(String roleMetierCode);
+
+    /**
+     * Titulaires actifs d'un role sur un service donne - utilise pour
+     * resoudre les destinataires d'une notification (evolution du
+     * 2026-08-19, section 5-6) : tous les Charges d'Affaires/personnes
+     * habilitees, Responsables d'activite ou Direction de ce service,
+     * chacun recevant sa propre notification individuelle.
+     */
+    List<Habilitation> findByRoleMetier_CodeAndService_IdAndActifTrue(String roleMetierCode, Long serviceId);
 }

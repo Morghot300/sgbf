@@ -4,6 +4,7 @@ import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.fiph.dto.CompleterPointageRequest;
 import com.snef.sgbf.fiph.dto.CreerNouvelleVersionRequest;
 import com.snef.sgbf.fiph.dto.FiphVersionDto;
+import com.snef.sgbf.fiph.dto.PriseEnMainSuperAdminRequest;
 import com.snef.sgbf.fiph.dto.ValidationDto;
 import com.snef.sgbf.fiph.dto.ValiderFiphRequest;
 import com.snef.sgbf.fiph.service.FiphVersionPdfService;
@@ -103,6 +104,20 @@ public class FiphVersionController {
                                    @Valid @RequestBody ValiderFiphRequest requete,
                                    HttpServletRequest request, @AuthenticationPrincipal CustomUserDetails principal) {
         return fiphVersionService.valider(id, niveau, requete, request.getRemoteAddr(), principal.getUtilisateur());
+    }
+
+    /**
+     * Prise en main exceptionnelle par le Super Administrateur (evolution du
+     * 2026-08-19, section 11-16) - reservee exclusivement a ce role, jamais
+     * accessible a un Administrateur standard meme via un appel direct a
+     * l'API (verification en base, en plus de cette annotation, dans
+     * {@code FiphVersionService.priseEnMainSuperAdministrateur}).
+     */
+    @PostMapping("/{id}/prise-en-main-super-admin")
+    @PreAuthorize("hasRole('SUPER_ADMINISTRATEUR')")
+    public FiphVersionDto priseEnMainSuperAdmin(@PathVariable Long id, @Valid @RequestBody PriseEnMainSuperAdminRequest requete,
+                                                 HttpServletRequest request, @AuthenticationPrincipal CustomUserDetails principal) {
+        return fiphVersionService.priseEnMainSuperAdministrateur(id, requete, request.getRemoteAddr(), principal.getUtilisateur());
     }
 
     /** RG-VER-001 a 007 : nouvelle version a partir d'une FIPH deja validee definitivement. */

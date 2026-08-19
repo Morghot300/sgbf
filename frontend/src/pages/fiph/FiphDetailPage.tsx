@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { historiqueAuditFiph, telechargerAuditCsv, telechargerAuditPdf } from "../../api/auditApi";
 import {
   completerPointage, creerNouvelleVersionFiph, listerValidations, listerVersionsFiph, obtenirFiph, obtenirFiphVersion,
-  ouvrirPdfFiphVersion, signerFiph, soumettreFiph, validerFiph,
+  ouvrirPdfFiphVersion, priseEnMainSuperAdminFiph, signerFiph, soumettreFiph, validerFiph,
 } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { EtatAsync } from "../../components/EtatAsync";
@@ -33,6 +33,7 @@ export default function FiphDetailPage() {
   const [erreurAction, setErreurAction] = useState<string | null>(null);
   const [motifNouvelleVersion, setMotifNouvelleVersion] = useState("");
   const [commentaireDecision, setCommentaireDecision] = useState("");
+  const [commentairePriseEnMain, setCommentairePriseEnMain] = useState("");
   const [pointagesModifies, setPointagesModifies] = useState<Record<number, { heuresNormales: string; heuresSup: string }>>({});
 
   const fiph = useQuery({ queryKey: ["fiph-detail", fiphId], queryFn: () => obtenirFiph(fiphId) });
@@ -100,7 +101,17 @@ export default function FiphDetailPage() {
     onSuccess: () => { setMotifNouvelleVersion(""); invalider(); },
     onError: (e) => gererErreur(e, "Impossible de créer une nouvelle version."),
   });
+  const priseEnMain = useMutation({
+    mutationFn: () => priseEnMainSuperAdminFiph(versionId as number, { commentaire: commentairePriseEnMain }),
+    onSuccess: () => { setCommentairePriseEnMain(""); invalider(); },
+    onError: (e) => gererErreur(e, "Impossible d'effectuer la prise en main exceptionnelle de cette FIPH."),
+  });
 
+  // Role litteral, jamais herite via la hierarchie Spring Security (voir Javadoc de aLeRole) : contrairement a
+  // aLeRole("ADMINISTRATEUR"), qui accepte aussi un Super Administrateur par confort d'affichage, la prise en
+  // main exceptionnelle est une fonctionnalite strictement reservee au Super Administrateur (evolution du
+  // 2026-08-19, section 15) - jamais accessible a un Administrateur standard, meme via ce meme ecran.
+  const estSuperAdministrateur = aLeRole("SUPER_ADMINISTRATEUR");
   const peutCompleter = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE");
   const niveauAttendu = version.data ? NIVEAU_VALIDATION_ATTENDU[version.data.statutVersion] : undefined;
   const roleRequisParNiveau: Record<number, string> = { 2: "CHARGE_AFFAIRES", 3: "RESPONSABLE_ACTIVITE", 4: "DIRECTION" };
@@ -203,6 +214,33 @@ export default function FiphDetailPage() {
               </section>
             )}
 
+            {estSuperAdministrateur && v.statutVersion !== "VALIDEE_DEFINITIVEMENT" && (
+              <section className="panneau-alerte">
+                <h3>Prise en main exceptionnelle (Super Administrateur)</h3>
+                <p className="note">
+                  Fait progresser cette FIPH jusqu'à « Validée définitivement » en franchissant les niveaux de
+                  validation restants, hors du circuit normal. Chaque étape franchie de cette façon reste tracée
+                  distinctement d'une validation normale (voir la colonne « Type » du tableau des validations
+                  ci-dessous) et journalisée dans l'audit — cette possibilité n'efface jamais la traçabilité du
+                  processus normal.
+                </p>
+                <label htmlFor="commentairePriseEnMain">Justification (obligatoire, ex. « Responsable indisponible — continuité du processus de validation »)</label>
+                <textarea
+                  id="commentairePriseEnMain"
+                  maxLength={500}
+                  value={commentairePriseEnMain}
+                  onChange={(e) => setCommentairePriseEnMain(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => priseEnMain.mutate()}
+                  disabled={priseEnMain.isPending || !commentairePriseEnMain.trim()}
+                >
+                  {priseEnMain.isPending ? "Prise en main..." : "Prendre en main et valider jusqu'au bout"}
+                </button>
+              </section>
+            )}
+
             {v.statutVersion === "VALIDEE_DEFINITIVEMENT" && peutCompleter && (
               <section>
                 <h3>Créer une nouvelle version (correction post-validation)</h3>
@@ -245,12 +283,17 @@ export default function FiphDetailPage() {
                 <section>
                   <h3>Validations</h3>
                   <table className="tableau">
-                    <thead><tr><th>Niveau</th><th>Validateur</th><th>Décision</th><th>Date</th><th>Commentaire</th></tr></thead>
+                    <thead><tr><th>Niveau</th><th>Validateur</th><th>Type</th><th>Décision</th><th>Date</th><th>Commentaire</th></tr></thead>
                     <tbody>
                       {liste.map((val) => (
                         <tr key={val.id}>
                           <td>{val.niveauValidation}</td>
                           <td>{val.utilisateurIdentifiant}</td>
+                          <td>
+                            {val.priseEnMainSuperAdmin
+                              ? <span className="badge badge--attente">Prise en main Super Admin</span>
+                              : "Normale"}
+                          </td>
                           <td>{val.decision}</td>
                           <td>{val.dateValidation}</td>
                           <td>{val.commentaire ?? "—"}</td>

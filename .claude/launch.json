@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\Utilisateur\\Documents\\FIPH\\frontend && set PATH=C:\\Users\\Utilisateur\\AppData\\Local\\nvm\\v22.14.0;%PATH% && npm run dev"],
+      "port": 5173
+    }
+  ]
+}

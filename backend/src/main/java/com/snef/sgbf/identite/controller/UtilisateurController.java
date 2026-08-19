@@ -52,16 +52,17 @@ public class UtilisateurController {
     public List<UtilisateurDto> lister(@RequestParam(required = false) String terme,
                                         @RequestParam(required = false) Long serviceId,
                                         @RequestParam(required = false) String role,
-                                        @RequestParam(required = false) StatutCompte statut) {
+                                        @RequestParam(required = false) StatutCompte statut,
+                                        @AuthenticationPrincipal CustomUserDetails principal) {
         if (terme == null && serviceId == null && role == null && statut == null) {
-            return utilisateurService.listerTous();
+            return utilisateurService.listerTous(principal.getUtilisateur());
         }
-        return utilisateurService.rechercher(terme, serviceId, role, statut);
+        return utilisateurService.rechercher(terme, serviceId, role, statut, principal.getUtilisateur());
     }
 
     @GetMapping("/{id}")
-    public UtilisateurDto obtenir(@PathVariable Long id) {
-        return utilisateurService.obtenirParId(id);
+    public UtilisateurDto obtenir(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.obtenirParId(id, principal.getUtilisateur());
     }
 
     @PostMapping

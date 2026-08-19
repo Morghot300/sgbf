@@ -59,3 +59,7 @@ export async function attribuerHabilitation(requete: CreerHabilitationRequest): 
 export async function retirerHabilitation(id: number): Promise<void> {
   await httpClient.delete(`/habilitations/${id}`);
 }
+/** Reaffectation vers un autre service (évolution du 2026-08-19) - action dédiée et tracée, à utiliser plutôt qu'un retrait suivi d'une nouvelle attribution. */
+export async function changerServiceHabilitation(id: number, nouveauServiceId: number): Promise<HabilitationDto> {
+  return (await httpClient.put<HabilitationDto>(`/habilitations/${id}/service`, { nouveauServiceId })).data;
+}

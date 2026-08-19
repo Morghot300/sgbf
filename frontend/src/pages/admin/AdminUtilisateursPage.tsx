@@ -1,17 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import {
-  attribuerHabilitation, changerStatutCompte, creerUtilisateur, listerHabilitationsUtilisateur,
+  attribuerHabilitation, changerServiceHabilitation, changerStatutCompte, creerUtilisateur, listerHabilitationsUtilisateur,
   modifierEmail, modifierIdentifiant, modifierServiceUtilisateur, reinitialiserMotDePasse,
   rechercherUtilisateurs, retirerHabilitation,
 } from "../../api/identiteApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerServices } from "../../api/referentielApi";
+import { useAuth } from "../../auth/AuthContext";
 import AdminNav from "../../components/AdminNav";
 import { ChampMotDePasse } from "../../components/ChampMotDePasse";
 import { EtatAsync } from "../../components/EtatAsync";
 import {
-  LIBELLES_ROLE, ROLES_PERIMETRE_GLOBAL, type CodeRoleMetier, type StatutCompte,
+  LIBELLES_ROLE, ROLES_PERIMETRE_GLOBAL, ROLES_SERVICE_EXCLUSIF, type CodeRoleMetier, type HabilitationDto, type StatutCompte,
 } from "../../types/identite";
 
 const ROLES: CodeRoleMetier[] = ["AGENT", "CHARGE_AFFAIRES", "PERSONNE_HABILITEE", "RESPONSABLE_ACTIVITE", "DIRECTION", "RH", "ADMINISTRATEUR", "SUPER_ADMINISTRATEUR"];
@@ -20,6 +21,12 @@ const STATUTS: StatutCompte[] = ["ACTIF", "VERROUILLE", "DESACTIVE"];
 /** Gestion des comptes applicatifs et de leurs habilitations (RG-HAB-001 à 006) - reservee a l'Administrateur. */
 export default function AdminUtilisateursPage() {
   const queryClient = useQueryClient();
+  const { aLeRole } = useAuth();
+  // Un Administrateur standard ne doit jamais se voir proposer SUPER_ADMINISTRATEUR comme cible de filtre ou
+  // de role a attribuer (evolution du 2026-08-19, section 1) - purement un confort d'affichage, le backend
+  // bloque de toute facon toute tentative reelle (voir HabilitationService.validerAttributionSuperAdministrateur
+  // et UtilisateurService.verifierAccesCompteCible), mais l'interface ne doit meme pas laisser deviner l'option.
+  const rolesSelectionnables = aLeRole("SUPER_ADMINISTRATEUR") ? ROLES : ROLES.filter((r) => r !== "SUPER_ADMINISTRATEUR");
   const services = useQuery({ queryKey: ["services"], queryFn: listerServices });
   const [filtres, setFiltres] = useState({ terme: "", serviceId: "", role: "", statut: "" });
   const utilisateurs = useQuery({
@@ -76,7 +83,7 @@ export default function AdminUtilisateursPage() {
         <label htmlFor="filtreRole">Rôle</label>
         <select id="filtreRole" value={filtres.role} onChange={(e) => setFiltres({ ...filtres, role: e.target.value })}>
           <option value="">— Tous —</option>
-          {ROLES.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
+          {rolesSelectionnables.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
         </select>
         <label htmlFor="filtreStatut">Statut</label>
         <select id="filtreStatut" value={filtres.statut} onChange={(e) => setFiltres({ ...filtres, statut: e.target.value })}>
@@ -117,7 +124,7 @@ export default function AdminUtilisateursPage() {
                   {utilisateurOuvert === u.id && (
                     <tr>
                       <td colSpan={6}>
-                        <PanneauHabilitations utilisateurId={u.id} services={services.data ?? []} onErreur={setErreur} />
+                        <PanneauHabilitations utilisateurId={u.id} services={services.data ?? []} roles={rolesSelectionnables} onErreur={setErreur} />
                       </td>
                     </tr>
                   )}
@@ -243,9 +250,10 @@ function PanneauModificationCompte({ utilisateur, services, onErreur, onSucces }
   );
 }
 
-function PanneauHabilitations({ utilisateurId, services, onErreur }: {
+function PanneauHabilitations({ utilisateurId, services, roles, onErreur }: {
   utilisateurId: number;
   services: { id: number; libelle: string }[];
+  roles: CodeRoleMetier[];
   onErreur: (message: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -271,6 +279,11 @@ function PanneauHabilitations({ utilisateurId, services, onErreur }: {
     onSuccess: invalider,
     onError: (e) => onErreur(extraireMessageErreur(e, "Impossible de retirer cette habilitation.")),
   });
+  const changementService = useMutation({
+    mutationFn: ({ id, nouveauServiceId }: { id: number; nouveauServiceId: number }) => changerServiceHabilitation(id, nouveauServiceId),
+    onSuccess: invalider,
+    onError: (e) => onErreur(extraireMessageErreur(e, "Impossible de changer le service de cette habilitation.")),
+  });
 
   const perimetreGlobal = ROLES_PERIMETRE_GLOBAL.has(nouvelleHabilitation.role);
 
@@ -279,7 +292,7 @@ function PanneauHabilitations({ utilisateurId, services, onErreur }: {
       <EtatAsync chargement={habilitations.isLoading} erreur={habilitations.error} donnees={habilitations.data}>
         {(liste) => (
           <table className="tableau tableau--compact">
-            <thead><tr><th>Rôle</th><th>Service</th><th>Actif</th><th></th></tr></thead>
+            <thead><tr><th>Rôle</th><th>Service</th><th>Actif</th><th></th><th></th></tr></thead>
             <tbody>
               {liste.map((h) => (
                 <tr key={h.id}>
@@ -287,6 +300,16 @@ function PanneauHabilitations({ utilisateurId, services, onErreur }: {
                   <td>{h.serviceLibelle ?? "Global"}</td>
                   <td>{h.actif ? "Oui" : "Non"}</td>
                   <td>{h.actif && <button type="button" onClick={() => retrait.mutate(h.id)}>Retirer</button>}</td>
+                  <td>
+                    {h.actif && ROLES_SERVICE_EXCLUSIF.has(h.roleMetierCode) && (
+                      <CelluleChangerService
+                        habilitation={h}
+                        services={services}
+                        enCours={changementService.isPending}
+                        onValider={(nouveauServiceId) => changementService.mutate({ id: h.id, nouveauServiceId })}
+                      />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -295,7 +318,7 @@ function PanneauHabilitations({ utilisateurId, services, onErreur }: {
       </EtatAsync>
       <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); attribution.mutate(); }}>
         <select value={nouvelleHabilitation.role} onChange={(e) => setNouvelleHabilitation({ ...nouvelleHabilitation, role: e.target.value as CodeRoleMetier })}>
-          {ROLES.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
+          {roles.map((r) => <option key={r} value={r}>{LIBELLES_ROLE[r]}</option>)}
         </select>
         {!perimetreGlobal && (
           <select value={nouvelleHabilitation.serviceId} onChange={(e) => setNouvelleHabilitation({ ...nouvelleHabilitation, serviceId: e.target.value })} required>
@@ -306,5 +329,39 @@ function PanneauHabilitations({ utilisateurId, services, onErreur }: {
         <button type="submit" disabled={attribution.isPending || (!perimetreGlobal && !nouvelleHabilitation.serviceId)}>Attribuer</button>
       </form>
     </div>
+  );
+}
+
+/**
+ * Reaffectation d'une habilitation Charge d'Affaires / Personne habilitée /
+ * Responsable d'activité vers un autre service, en une seule action tracée
+ * (évolution du 2026-08-19, section 10) - remplace le retrait suivi d'une
+ * nouvelle attribution, qui rendrait la reaffectation moins explicite dans
+ * l'historique d'audit et laisserait, entre les deux appels, un instant sans
+ * aucune habilitation active pour ce rôle.
+ */
+function CelluleChangerService({ habilitation, services, enCours, onValider }: {
+  habilitation: HabilitationDto;
+  services: { id: number; libelle: string }[];
+  enCours: boolean;
+  onValider: (nouveauServiceId: number) => void;
+}) {
+  const [nouveauServiceId, setNouveauServiceId] = useState("");
+  const autresServices = services.filter((s) => s.id !== habilitation.serviceId);
+
+  return (
+    <span className="formulaire-ligne">
+      <select value={nouveauServiceId} onChange={(e) => setNouveauServiceId(e.target.value)}>
+        <option value="">— Changer de service —</option>
+        {autresServices.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
+      </select>
+      <button
+        type="button"
+        disabled={enCours || !nouveauServiceId}
+        onClick={() => onValider(Number(nouveauServiceId))}
+      >
+        Changer
+      </button>
+    </span>
   );
 }

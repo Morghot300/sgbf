@@ -4,6 +4,7 @@ import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.ConflictException;
+import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.identite.dto.CreerUtilisateurRequest;
 import com.snef.sgbf.identite.dto.ModifierEmailRequest;
@@ -16,6 +17,7 @@ import com.snef.sgbf.identite.mapper.UtilisateurMapper;
 import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
+import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
 import com.snef.sgbf.security.RefreshTokenService;
@@ -31,9 +33,22 @@ import org.springframework.transaction.annotation.Transactional;
  * clair au-dela de cette couche service : ils sont hashes immediatement via
  * {@link PasswordEncoder} (BCrypt, voir {@code security.PasswordConfig}) et
  * le hash seul est persiste.
+ *
+ * <p><strong>Hierarchie Administrateur / Super Administrateur</strong>
+ * (evolution du 2026-08-19, section 1-4) : un Administrateur standard ne
+ * doit jamais voir, consulter, ni modifier un compte Super Administrateur -
+ * {@link #verifierAccesCompteCible} applique cette regle a CHAQUE point
+ * d'entree touchant un compte precis (lecture comme ecriture), et
+ * {@link #filtrerSelonAppelant} l'applique aux listes/recherches. Un Super
+ * Administrateur, lui, voit tout sans restriction supplementaire.
  */
+// noRollbackFor : les methodes guardees par verifierAccesCompteCible journalisent une tentative refusee
+// (ACCES_REFUSE) PUIS levent ForbiddenOperationException dans la MEME transaction - sans cette regle, le
+// rollback declenche par cette exception annulerait aussi l'ecriture d'audit qui doit pourtant survivre (voir
+// Javadoc de verifierAccesCompteCible). Sans risque ici : aucune de ces methodes n'effectue de mutation AVANT
+// cet appel de garde (verifie explicitement pour chacune - chargerUtilisateur puis garde, toujours en premier).
 @org.springframework.stereotype.Service
-@Transactional
+@Transactional(noRollbackFor = ForbiddenOperationException.class)
 public class UtilisateurService {
 
     private final UtilisateurRepository utilisateurRepository;
@@ -60,8 +75,11 @@ public class UtilisateurService {
     }
 
     @Transactional(readOnly = true)
-    public List<UtilisateurDto> listerTous() {
-        return utilisateurRepository.findAll().stream().map(utilisateurMapper::toDto).toList();
+    public List<UtilisateurDto> listerTous(Utilisateur appelant) {
+        return utilisateurRepository.findAll().stream()
+                .filter(u -> estVisibleParAppelant(u, appelant))
+                .map(utilisateurMapper::toDto)
+                .toList();
     }
 
     /**
@@ -72,11 +90,14 @@ public class UtilisateurService {
      * portant ce code (RG-HAB-001) ; {@code serviceId} sur le service de
      * rattachement du compte lui-meme (pas celui d'une habilitation, qui
      * peut differer selon le perimetre attribue) ; {@code statut} sur le
-     * statut du compte.
+     * statut du compte. Le compte Super Administrateur est systematiquement
+     * exclu du resultat pour un appelant qui ne l'est pas lui-meme (evolution
+     * du 2026-08-19, section 1).
      */
     @Transactional(readOnly = true)
-    public List<UtilisateurDto> rechercher(String terme, Long serviceId, String roleCode, StatutCompte statut) {
+    public List<UtilisateurDto> rechercher(String terme, Long serviceId, String roleCode, StatutCompte statut, Utilisateur appelant) {
         return utilisateurRepository.findAll().stream()
+                .filter(u -> estVisibleParAppelant(u, appelant))
                 .filter(u -> serviceId == null || (u.getService() != null && serviceId.equals(u.getService().getId())))
                 .filter(u -> statut == null || statut == u.getStatutCompte())
                 .filter(u -> roleCode == null || habilitationRepository.findByUtilisateur_IdAndActifTrue(u.getId()).stream()
@@ -97,9 +118,18 @@ public class UtilisateurService {
                 .orElse(false);
     }
 
-    @Transactional(readOnly = true)
-    public UtilisateurDto obtenirParId(Long id) {
-        return utilisateurMapper.toDto(chargerUtilisateur(id));
+    // Pas readOnly : un acces refuse a un compte Super Administrateur ecrit un
+    // evenement d'audit (ACCES_REFUSE) depuis cette meme methode - une
+    // transaction readOnly=true refuse cette ecriture au niveau JDBC/MySQL
+    // ("Connection is read-only"), ce qui transformerait un 403 legitime en
+    // 500 (bug reproduit et corrige le 2026-08-19). noRollbackFor repete ici
+    // (l'annotation de methode remplace entierement celle de la classe,
+    // jamais une fusion) - voir le commentaire sur la classe.
+    @Transactional(noRollbackFor = ForbiddenOperationException.class)
+    public UtilisateurDto obtenirParId(Long id, Utilisateur appelant) {
+        Utilisateur cible = chargerUtilisateur(id);
+        verifierAccesCompteCible(cible, appelant);
+        return utilisateurMapper.toDto(cible);
     }
 
     public UtilisateurDto creer(CreerUtilisateurRequest requete, Utilisateur auteur) {
@@ -133,6 +163,7 @@ public class UtilisateurService {
 
     public void changerStatut(Long id, StatutCompte nouveauStatut, Utilisateur auteur) {
         Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
         StatutCompte statutAvant = utilisateur.getStatutCompte();
         utilisateur.setStatutCompte(nouveauStatut);
         utilisateurRepository.save(utilisateur);
@@ -154,6 +185,7 @@ public class UtilisateurService {
      */
     public UtilisateurDto modifierIdentifiant(Long id, ModifierIdentifiantRequest requete, Utilisateur auteur) {
         Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
         String identifiantAvant = utilisateur.getIdentifiant();
         if (!requete.identifiant().equals(identifiantAvant) && utilisateurRepository.existsByIdentifiant(requete.identifiant())) {
             throw new ConflictException("L'identifiant " + requete.identifiant() + " est deja utilise.");
@@ -169,6 +201,7 @@ public class UtilisateurService {
     /** Correction de l'adresse e-mail (section 8 de la mission d'evolution du 2026-08-18). */
     public UtilisateurDto modifierEmail(Long id, ModifierEmailRequest requete, Utilisateur auteur) {
         Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
         String emailAvant = utilisateur.getEmail();
         if (!requete.email().equals(emailAvant) && utilisateurRepository.existsByEmail(requete.email())) {
             throw new ConflictException("L'adresse e-mail " + requete.email() + " est deja utilisee.");
@@ -193,6 +226,7 @@ public class UtilisateurService {
      */
     public UtilisateurDto reinitialiserMotDePasse(Long id, ReinitialiserMotDePasseRequest requete, Utilisateur auteur) {
         Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
         utilisateur.setMotDePasseHash(passwordEncoder.encode(requete.nouveauMotDePasse()));
         utilisateur = utilisateurRepository.save(utilisateur);
         refreshTokenService.revoquerTousPourUtilisateur(utilisateur.getId());
@@ -205,6 +239,7 @@ public class UtilisateurService {
     /** Correction du service de rattachement d'un compte (section 7-9 de la mission d'evolution du 2026-08-18). {@code serviceId} peut etre {@code null} (rattachement retire). */
     public UtilisateurDto modifierService(Long id, Long serviceId, Utilisateur auteur) {
         Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
         Long serviceAvantId = utilisateur.getService() != null ? utilisateur.getService().getId() : null;
         Service service = null;
         if (serviceId != null) {
@@ -217,6 +252,50 @@ public class UtilisateurService {
         auditService.enregistrer(EntiteAuditable.UTILISATEUR, utilisateur.getId(), auteur,
                 TypeActionAudit.MODIFICATION, serviceAvantId, serviceId, null, null);
         return utilisateurMapper.toDto(utilisateur);
+    }
+
+    // --- Hierarchie Administrateur / Super Administrateur (evolution du 2026-08-19) ---
+
+    private boolean estVisibleParAppelant(Utilisateur cible, Utilisateur appelant) {
+        return !estSuperAdministrateur(cible.getId()) || estSuperAdministrateur(appelant.getId());
+    }
+
+    /**
+     * Bloque tout acces (lecture ou ecriture) d'un Administrateur standard a
+     * un compte Super Administrateur - section 3 : "Toutes les tentatives
+     * doivent etre bloquees cote backend. Le fait qu'un bouton soit absent
+     * du frontend ne suffit pas." Le refus est indistinguable, cote message
+     * d'erreur, d'un identifiant inexistant plus loin dans la pile
+     * ({@link ResourceNotFoundException} n'est PAS utilisee ici a dessein :
+     * la ressource existe bel et bien, mais reste hors de portee) - le
+     * message reste neanmoins explicite en developpement/log serveur (voir
+     * {@code GlobalExceptionHandler.journaliserAccesRefuse}, section 26.4).
+     */
+    private void verifierAccesCompteCible(Utilisateur cible, Utilisateur appelant) {
+        if (!estVisibleParAppelant(cible, appelant)) {
+            // Toute tentative (consultation ou modification) d'un Administrateur
+            // standard sur le compte Super Administrateur est journalisee (section
+            // 4 de l'evolution du 2026-08-19), y compris quand elle provient d'un
+            // appel direct a l'API sans passer par une action visible du frontend.
+            // Cette ecriture reste dans la MEME transaction que l'exception levee
+            // juste apres (pas de Propagation.REQUIRES_NEW : sous
+            // @Transactional de test, une transaction imbriquee sur une autre
+            // connexion se bloquerait en attente d'un verrou InnoDB deja tenu
+            // par la transaction englobante non encore validee - reproduit et
+            // corrige le 2026-08-19) ; @Transactional(noRollbackFor =
+            // ForbiddenOperationException.class) sur la classe/la methode
+            // garantit qu'elle survit malgre le rollback declenche par cette
+            // meme exception.
+            auditService.enregistrerAction(EntiteAuditable.UTILISATEUR, cible.getId(), appelant,
+                    TypeActionAudit.ACCES_REFUSE);
+            throw new ForbiddenOperationException(
+                    "Ce compte n'est pas accessible depuis votre niveau d'habilitation.");
+        }
+    }
+
+    private boolean estSuperAdministrateur(Long utilisateurId) {
+        return habilitationRepository.findByUtilisateur_IdAndActifTrue(utilisateurId).stream()
+                .anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
     }
 
     private Utilisateur chargerUtilisateur(Long id) {

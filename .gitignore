@@ -28,4 +28,5 @@ Thumbs.db
 _extracted*.txt
 _mvn_debug.txt
 backend/_run*.log
+backend/backend_startup.log
 frontend/_vite.log

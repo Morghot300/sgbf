@@ -12,6 +12,7 @@ import com.snef.sgbf.fiph.dto.CompleterPointageRequest;
 import com.snef.sgbf.fiph.dto.CreerNouvelleVersionRequest;
 import com.snef.sgbf.fiph.dto.FiphVersionDto;
 import com.snef.sgbf.fiph.dto.PointageDto;
+import com.snef.sgbf.fiph.dto.PriseEnMainSuperAdminRequest;
 import com.snef.sgbf.fiph.dto.ValidationDto;
 import com.snef.sgbf.fiph.dto.ValiderFiphRequest;
 import com.snef.sgbf.fiph.entity.DecisionValidation;
@@ -34,6 +35,7 @@ import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.mission.service.AffectationMissionService;
+import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -51,10 +53,14 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>C'est ici, et uniquement ici, qu'est appliquee la separation des
  * responsabilites RG-HAB-004 : un utilisateur ne peut jamais valider, a un
- * niveau superieur, une version qu'il a lui-meme creee ou completee - verifie
- * en interrogeant le journal d'audit (seule source fiable de "qui a touche
- * cette version", puisque plusieurs personnes habilitees du meme perimetre
- * peuvent successivement completer un meme document).
+ * niveau superieur, une version dont il a lui-meme SAISI le contenu (pointage
+ * complete/modifie) - verifie en interrogeant le journal d'audit (seule
+ * source fiable de "qui a touche cette version", puisque plusieurs personnes
+ * habilitees du meme perimetre peuvent successivement completer un meme
+ * document). La CREATION seule d'une FIPH n'empeche plus son createur de la
+ * valider ensuite (evolution du 2026-08-19, voir Javadoc de
+ * {@link #verifierSeparationResponsabilites}) - seul le contenu saisi
+ * (pointage) reste bloquant.
  */
 @org.springframework.stereotype.Service
 @Transactional
@@ -74,6 +80,7 @@ public class FiphVersionService {
     private final PointageMapper pointageMapper;
     private final ValidationMapper validationMapper;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public FiphVersionService(FiphRepository fiphRepository, FiphVersionRepository fiphVersionRepository,
                                PointageRepository pointageRepository, ValidationRepository validationRepository,
@@ -81,7 +88,7 @@ public class FiphVersionService {
                                EvenementAuditRepository evenementAuditRepository,
                                AffectationMissionService affectationMissionService, FiphService fiphService,
                                PointageMapper pointageMapper, ValidationMapper validationMapper,
-                               AuditService auditService) {
+                               AuditService auditService, NotificationService notificationService) {
         this.fiphRepository = fiphRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
@@ -94,6 +101,7 @@ public class FiphVersionService {
         this.pointageMapper = pointageMapper;
         this.validationMapper = validationMapper;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -211,6 +219,14 @@ public class FiphVersionService {
         auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
                 TypeActionAudit.SOUMISSION, StatutFiphVersion.SIGNEE.name(), StatutFiphVersion.SOUMISE.name(),
                 StatutFiphVersion.SIGNEE.name(), StatutFiphVersion.SOUMISE.name());
+
+        // Pendant metier de la notification a l'entree du bon de sortie
+        // (FiphService#creerFiphEtVersionInitiale) pour une FIPH MANUELLE :
+        // la soumission est ici le premier moment ou elle est reellement
+        // prete pour le niveau 2 (evolution du 2026-08-19, section 5).
+        FIPH fiph = version.getFiph();
+        notificationService.notifierNiveau2(fiph.getId(), version.getId(), fiph.getService().getId(),
+                "FIPH #" + fiph.getId(), auteur);
         return versDto(chargerVersion(fiphVersionId));
     }
 
@@ -274,6 +290,98 @@ public class FiphVersionService {
         auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
                 TypeActionAudit.VALIDATION, statutAvant.name(), statutApres.name(),
                 statutAvant.name(), statutApres.name());
+
+        // Notification du niveau suivant (evolution du 2026-08-19, section 5) :
+        // uniquement apres une decision VALIDEE qui a reellement fait
+        // progresser le statut - jamais sur un rejet/retour pour correction,
+        // et jamais sur une seconde validation de niveau 2 deja atteint (le
+        // circuit n'a alors pas progresse, statutApres == statutAvant).
+        if (requete.decision() == DecisionValidation.VALIDEE && statutApres != statutAvant) {
+            FIPH fiph = version.getFiph();
+            String reference = "FIPH #" + fiph.getId();
+            switch (niveau) {
+                case 2 -> notificationService.notifierNiveau3(fiph.getId(), version.getId(), fiph.getService().getId(), reference, auteur);
+                case 3 -> notificationService.notifierNiveau4(fiph.getId(), version.getId(), fiph.getService().getId(), reference, auteur);
+                case 4 -> notificationService.notifierValidationFinale(fiph.getId(), version.getId(), reference,
+                        fiph.getAgent().getUtilisateur(), auteur);
+                default -> { }
+            }
+        }
+        return versDto(chargerVersion(fiphVersionId));
+    }
+
+    /**
+     * Prise en main exceptionnelle d'une FIPH par le Super Administrateur
+     * (evolution du 2026-08-19, section 11-16) : fait progresser une
+     * FIPHVersion, depuis quelque etat non-final qu'elle soit (brouillon,
+     * en attente d'un niveau quelconque, rejetee, en revision...), jusqu'a
+     * {@code VALIDEE_DEFINITIVEMENT} en une seule operation - "il doit
+     * pouvoir franchir les etapes du workflow uniquement en raison de ses
+     * privileges de Super Administrateur" (section 12).
+     *
+     * <p><strong>Bypass delibere et documente</strong> des controles normaux
+     * ({@link #verifierRoleNiveau}, {@link #verifierSeparationResponsabilites},
+     * {@link #verifierSequencementNiveau}, {@link #controlerCoherenceAffectations}) :
+     * c'est precisement l'objet de ce privilege exceptionnel, jamais
+     * accessible a un Administrateur standard (seul {@code @PreAuthorize}
+     * niveau controleur ET la verification en base ci-dessous, en defense
+     * en profondeur, y donnent acces). Chaque niveau restant genere neanmoins
+     * sa propre ligne {@link Validation}, marquee {@code priseEnMainSuperAdmin = true}
+     * pour rester distinguable a jamais d'une validation normale (section 13) -
+     * la tracabilite du processus normal n'est jamais effacee, uniquement
+     * completee.
+     *
+     * <p>Le commentaire de justification (section 14) est obligatoire et
+     * conserve sur CHAQUE ligne de validation generee, en plus de
+     * l'evenement d'audit consolide {@link TypeActionAudit#PRISE_EN_MAIN_SUPER_ADMIN}.
+     */
+    public FiphVersionDto priseEnMainSuperAdministrateur(Long fiphVersionId, PriseEnMainSuperAdminRequest requete,
+                                                          String adresseIp, Utilisateur superAdmin) {
+        boolean estReellementSuperAdmin = habilitationRepository.findByUtilisateur_IdAndActifTrue(superAdmin.getId()).stream()
+                .anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
+        if (!estReellementSuperAdmin) {
+            throw new ForbiddenOperationException(
+                    "La prise en main exceptionnelle d'une FIPH est reservee au Super Administrateur.");
+        }
+
+        FIPHVersion version = chargerVersion(fiphVersionId);
+        StatutFiphVersion statutInitial = version.getStatutVersion();
+        if (statutInitial == StatutFiphVersion.VALIDEE_DEFINITIVEMENT) {
+            throw new BusinessRuleViolationException("SUPER-ADMIN-PRISE-EN-MAIN",
+                    "Cette FIPH est deja validee definitivement : aucune prise en main n'est necessaire.");
+        }
+
+        int niveauDepart = switch (statutInitial) {
+            case VALIDEE_NIVEAU_2 -> 3;
+            case VALIDEE_NIVEAU_3 -> 4;
+            default -> 2; // brouillon, en complement, signee, soumise, rejetee, retour pour correction, annulee, en revision
+        };
+
+        StatutFiphVersion statutCourant = statutInitial;
+        for (int niveau = niveauDepart; niveau <= 4; niveau++) {
+            Signature signature = signatureRepository.save(
+                    new Signature(TypeSignature.VISA_APPLICATIF, "prise-en-main-super-admin:" + superAdmin.getId(), adresseIp));
+            StatutFiphVersion statutSuivant = switch (niveau) {
+                case 2 -> StatutFiphVersion.VALIDEE_NIVEAU_2;
+                case 3 -> StatutFiphVersion.VALIDEE_NIVEAU_3;
+                default -> StatutFiphVersion.VALIDEE_DEFINITIVEMENT;
+            };
+            validationRepository.save(new Validation(version, superAdmin, niveau, DecisionValidation.VALIDEE,
+                    requete.commentaire(), signature, statutCourant.name(), statutSuivant.name(), true));
+            statutCourant = statutSuivant;
+        }
+
+        version.setStatutVersion(statutCourant);
+        version.setEmpreinteIntegrite(calculerEmpreinte(version));
+        fiphVersionRepository.save(version);
+        majStatutFiph(version);
+
+        auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), superAdmin,
+                TypeActionAudit.PRISE_EN_MAIN_SUPER_ADMIN,
+                java.util.Map.of("etapeInitiale", statutInitial.name(), "commentaire", requete.commentaire()),
+                java.util.Map.of("etapeFinale", statutCourant.name(), "niveauxFranchis", niveauDepart + " a 4"),
+                statutInitial.name(), statutCourant.name());
+
         return versDto(chargerVersion(fiphVersionId));
     }
 
@@ -371,29 +479,35 @@ public class FiphVersionService {
     }
 
     /**
-     * RG-HAB-004 : un utilisateur ne peut jamais valider une version qu'il a
-     * lui-meme creee ou completee, meme en cumulant plusieurs habilitations -
-     * verifie via le journal d'audit, seule source exhaustive de "qui a agi
-     * sur cette version".
+     * RG-HAB-004 : un utilisateur ne peut jamais valider une version dont il
+     * a lui-meme SAISI le contenu (pointage complete/modifie), verifie via le
+     * journal d'audit (entree {@code FIPH_VERSION}), seule source exhaustive
+     * de "qui a agi sur cette version".
      *
-     * <p>Le controle sur {@link FIPHVersion#getCreePar()} n'est applique que
-     * pour une FIPH {@link OrigineFiph#MANUELLE} (creation deliberee, Code
-     * Service) : pour une origine {@link OrigineFiph#BON_SORTIE}, ce champ
-     * porte le Charge d'Affaires/la personne habilitee qui a valide le bon
-     * de sortie declencheur - une precreation automatique du systeme, non un
-     * choix de contenu de sa part - et le nouveau workflow FIPH
-     * (evolution du 2026-08-18) autorise explicitement ce meme Charge
-     * d'Affaires/cette meme personne habilitee a valider ensuite la FIPH au
-     * niveau 2. La protection reste entiere dans ce cas via le controle
-     * d'historique ci-dessous : un Charge d'Affaires qui a lui-meme complete
-     * le pointage (RG-FIPH-009/010) reste bloque pour la validation.
+     * <p><strong>Auto-validation de la creation elle-meme, autorisee
+     * (evolution du 2026-08-19, section 11 : "Auto-validation de sa propre
+     * FIPH")</strong> - jusqu'au 2026-08-18, un blocage supplementaire,
+     * specifique a {@link OrigineFiph#MANUELLE}, empechait aussi le
+     * CREATEUR de valider sa propre creation, meme s'il n'avait rien saisi
+     * de plus (aucun pointage complete). La mission du 2026-08-19 demande
+     * explicitement l'inverse : "Un Charge d'Affaires ou une Personne
+     * habilitee peut creer sa propre FIPH lorsqu'il y est autorise. Il peut
+     * ensuite la valider au niveau 2 UNIQUEMENT PARCE QU'IL DISPOSE DE
+     * L'HABILITATION CORRESPONDANTE SUR SON PROPRE SERVICE" - c'est-a-dire
+     * que la creation seule (acte administratif d'enregistrement, pas un
+     * choix de contenu) ne doit plus, a elle seule, faire obstacle. Ce
+     * blocage specifique a donc ete retire : seule la creation d'une FIPH
+     * {@code MANUELLE} elle-meme (action {@code CREATION}, journalisee sur
+     * l'entite {@code FIPH}, jamais sur {@code FIPH_VERSION}) echappe donc au
+     * controle d'historique ci-dessous, exactement comme le visa automatique
+     * (action {@code SIGNATURE}) en echappait deja pour une FIPH
+     * {@link OrigineFiph#BON_SORTIE} - les deux origines se comportent
+     * desormais de facon coherente sur ce point. Completer le pointage
+     * (RG-FIPH-009/010) reste, dans tous les cas, bloquant pour la
+     * validation : c'est ce controle d'historique qui protege reellement
+     * contre le conflit d'interet vise par RG-HAB-004.
      */
     private void verifierSeparationResponsabilites(FIPHVersion version, Utilisateur auteur) {
-        if (version.getFiph().getOrigine() == OrigineFiph.MANUELLE
-                && auteur.getId().equals(version.getCreePar().getId())) {
-            throw new ForbiddenOperationException(
-                    "Vous ne pouvez pas valider une FIPH que vous avez vous-meme creee (RG-HAB-004).");
-        }
         List<EvenementAudit> historique = evenementAuditRepository
                 .findByEntiteTypeAndEntiteIdOrderByDateActionAsc(EntiteAuditable.FIPH_VERSION, String.valueOf(version.getId()));
         boolean auteurADejaModifie = historique.stream()
@@ -407,24 +521,28 @@ public class FiphVersionService {
 
     /**
      * Etats depuis lesquels une validation de niveau 2 (Charge d'Affaires ou
-     * personne habilitee) peut etre engagee directement pour une FIPH
-     * {@link OrigineFiph#BON_SORTIE}, sans etape de signature ni de
-     * soumission bloquante prealable (evolution du workflow FIPH,
-     * 2026-08-18) : le visa de l'agent titulaire etant deja acquis d'office
-     * dans ce cas (voir {@code FiphService#creerFiphEtVersionInitiale}),
-     * {@code SIGNEE} est le point d'entree habituel ;
-     * {@code BROUILLON}/{@code EN_COMPLEMENT} restent egalement acceptes
-     * (ex. pointage complete puis valide sans etape de soumission separee) ;
-     * {@code SOUMISE} reste acceptee pour compatibilite avec un appel
-     * explicite a {@code soumettre()}, reste possible mais non obligatoire.
+     * personne habilitee) peut etre engagee directement, sans etape de
+     * signature ni de soumission bloquante prealable (evolution du workflow
+     * FIPH, 2026-08-18, etendue aux deux origines le 2026-08-19) : le visa
+     * (de l'agent titulaire pour {@link OrigineFiph#BON_SORTIE}, du createur
+     * CA/PH pour {@link OrigineFiph#MANUELLE}) etant desormais acquis
+     * d'office dans les deux cas (voir
+     * {@code FiphService#creerFiphEtVersionInitiale}), {@code SIGNEE} est
+     * dans les deux cas le point d'entree habituel ; {@code BROUILLON}/
+     * {@code EN_COMPLEMENT} restent egalement acceptes (ex. pointage
+     * complete puis valide sans etape de soumission separee) ; {@code SOUMISE}
+     * reste acceptee pour compatibilite avec un appel explicite a
+     * {@code soumettre()}, toujours possible mais jamais obligatoire.
      *
-     * <p>Pour une FIPH {@link OrigineFiph#MANUELLE}, ce raccourci ne
-     * s'applique pas : la signature explicite du titulaire (via
-     * {@code signer()}) puis la soumission (via {@code soumettre()}) restent
-     * un prealable obligatoire, comme avant cette evolution - seul
-     * {@code SOUMISE} y est accepte.
+     * <p>Avant le 2026-08-19, une FIPH {@link OrigineFiph#MANUELLE} restait
+     * soumise a un prealable different (signature explicite puis soumission
+     * obligatoires, seul {@code SOUMISE} accepte) - devenu incoherent une
+     * fois le visa automatique du createur applique des la creation (voir
+     * Javadoc de {@code FiphService#creerFiphEtVersionInitiale}) : les deux
+     * origines partagent maintenant exactement le meme ensemble d'etats
+     * eligibles.
      */
-    private static final Set<StatutFiphVersion> ETATS_ELIGIBLES_NIVEAU_2_BON_SORTIE = Set.of(
+    private static final Set<StatutFiphVersion> ETATS_ELIGIBLES_NIVEAU_2 = Set.of(
             StatutFiphVersion.BROUILLON, StatutFiphVersion.EN_COMPLEMENT,
             StatutFiphVersion.SIGNEE, StatutFiphVersion.SOUMISE);
 
@@ -434,9 +552,7 @@ public class FiphVersionService {
             // statut est deja VALIDEE_NIVEAU_2, reste acceptee (a titre
             // informatif) plutot que rejetee comme hors sequence.
             boolean secondeValidationNiveau2 = version.getStatutVersion() == StatutFiphVersion.VALIDEE_NIVEAU_2;
-            boolean eligible = version.getFiph().getOrigine() == OrigineFiph.BON_SORTIE
-                    ? ETATS_ELIGIBLES_NIVEAU_2_BON_SORTIE.contains(version.getStatutVersion())
-                    : version.getStatutVersion() == StatutFiphVersion.SOUMISE;
+            boolean eligible = ETATS_ELIGIBLES_NIVEAU_2.contains(version.getStatutVersion());
             if (!eligible && !secondeValidationNiveau2) {
                 throw new BusinessRuleViolationException("RG-FIPH-013",
                         "Cette FIPH n'est pas au statut requis pour une validation de niveau 2 "
