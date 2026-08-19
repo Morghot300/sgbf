@@ -3,6 +3,7 @@ package com.snef.sgbf.identite.controller;
 import com.snef.sgbf.identite.dto.CreerUtilisateurRequest;
 import com.snef.sgbf.identite.dto.ModifierEmailRequest;
 import com.snef.sgbf.identite.dto.ModifierIdentifiantRequest;
+import com.snef.sgbf.identite.dto.ModifierIdentiteRequest;
 import com.snef.sgbf.identite.dto.ModifierServiceRequest;
 import com.snef.sgbf.identite.dto.ReinitialiserMotDePasseRequest;
 import com.snef.sgbf.identite.dto.UtilisateurDto;
@@ -91,6 +92,24 @@ public class UtilisateurController {
     public UtilisateurDto modifierEmail(@PathVariable Long id, @Valid @RequestBody ModifierEmailRequest requete,
                                          @AuthenticationPrincipal CustomUserDetails principal) {
         return utilisateurService.modifierEmail(id, requete, principal.getUtilisateur());
+    }
+
+    /** Correction du nom/prenom/matricule d'une personne (evolution du 2026-08-19). */
+    @PutMapping("/{id}/identite")
+    public UtilisateurDto modifierIdentite(@PathVariable Long id, @Valid @RequestBody ModifierIdentiteRequest requete,
+                                            @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.modifierIdentite(id, requete, principal.getUtilisateur());
+    }
+
+    /**
+     * Ajoute un compte applicatif a une personne du referentiel qui n'en
+     * avait pas encore (evolution du 2026-08-19) - remplace l'ancien
+     * {@code PUT /api/agents/{id}/utilisateur/{utilisateurId}}.
+     */
+    @PutMapping("/{id}/compte")
+    public UtilisateurDto ajouterCompteApplicatif(@PathVariable Long id, @RequestBody CreerUtilisateurRequest requete,
+                                                   @AuthenticationPrincipal CustomUserDetails principal) {
+        return utilisateurService.ajouterCompteApplicatif(id, requete, principal.getUtilisateur());
     }
 
     /** Correction du service de rattachement (section 7 de l'evolution du 2026-08-18). */

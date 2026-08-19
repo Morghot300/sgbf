@@ -8,11 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.referentiel.entity.Chantier;
@@ -58,7 +56,6 @@ class MissionAffectationIT {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ChantierRepository chantierRepository;
     @Autowired private CodeHNRepository codeHNRepository;
-    @Autowired private AgentRepository agentRepository;
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private HabilitationRepository habilitationRepository;
     @Autowired private RoleMetierRepository roleMetierRepository;
@@ -70,7 +67,7 @@ class MissionAffectationIT {
     private Chantier chantier;
     private CodeHN codeMis001;
     private CodeHN codeMis002;
-    private Agent agent;
+    private Utilisateur agent;
     private Utilisateur ca;
     private Utilisateur caAutreService;
 
@@ -83,7 +80,7 @@ class MissionAffectationIT {
         codeMis001 = codeHNRepository.save(nouveauCodeHN("MIS001-" + suffixe, chantier));
         codeMis002 = codeHNRepository.save(nouveauCodeHN("MIS002-" + suffixe, chantier));
 
-        agent = agentRepository.save(nouvelAgent("MAT" + suffixe, "Test", "Agent", service));
+        agent = utilisateurRepository.save(nouvelAgent("MAT" + suffixe, "Test", "Agent", service));
         ca = creerUtilisateurAvecHabilitation("ca_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         caAutreService = creerUtilisateurAvecHabilitation("ca_autre_" + suffixe, autreService, CodeRoleMetier.CHARGE_AFFAIRES);
     }
@@ -302,8 +299,8 @@ class MissionAffectationIT {
         return codeHN;
     }
 
-    private Agent nouvelAgent(String matricule, String nom, String prenom, Service service) {
-        Agent agent = new Agent();
+    private Utilisateur nouvelAgent(String matricule, String nom, String prenom, Service service) {
+        Utilisateur agent = new Utilisateur();
         agent.setMatricule(matricule);
         agent.setNom(nom);
         agent.setPrenom(prenom);

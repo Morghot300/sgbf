@@ -31,7 +31,6 @@ import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.fiph.repository.SignatureRepository;
 import com.snef.sgbf.fiph.repository.ValidationRepository;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.mission.service.AffectationMissionService;
@@ -173,8 +172,8 @@ public class FiphVersionService {
      */
     public FiphVersionDto signer(Long fiphVersionId, String adresseIp, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
-        Agent titulaire = version.getFiph().getAgent();
-        boolean estTitulaire = titulaire.getUtilisateur() != null && titulaire.getUtilisateur().getId().equals(auteur.getId());
+        Utilisateur titulaire = version.getFiph().getAgent();
+        boolean estTitulaire = titulaire.getId().equals(auteur.getId());
         if (!estTitulaire) {
             throw new ForbiddenOperationException("Seul l'agent titulaire de la FIPH peut la signer.");
         }
@@ -303,7 +302,7 @@ public class FiphVersionService {
                 case 2 -> notificationService.notifierNiveau3(fiph.getId(), version.getId(), fiph.getService().getId(), reference, auteur);
                 case 3 -> notificationService.notifierNiveau4(fiph.getId(), version.getId(), fiph.getService().getId(), reference, auteur);
                 case 4 -> notificationService.notifierValidationFinale(fiph.getId(), version.getId(), reference,
-                        fiph.getAgent().getUtilisateur(), auteur);
+                        fiph.getAgent(), auteur);
                 default -> { }
             }
         }

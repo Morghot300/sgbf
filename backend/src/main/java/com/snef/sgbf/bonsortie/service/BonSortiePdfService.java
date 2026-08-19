@@ -10,7 +10,7 @@ import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.common.pdf.PdfBranding;
 import com.snef.sgbf.common.pdf.PdfRenderer;
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import java.time.format.DateTimeFormatter;
@@ -90,7 +90,7 @@ public class BonSortiePdfService {
     }
 
     private String construireXhtml(BonSortie bs) {
-        Agent agent = bs.getAgent();
+        Utilisateur agent = bs.getAgent();
         AffectationMission affectation = bs.getAffectationMission();
         String mission = affectation != null
                 ? esc(affectation.getMission().getCodeHN().getCode()) + " &#8212; " + esc(affectation.getMission().getChantier().getLibelle())

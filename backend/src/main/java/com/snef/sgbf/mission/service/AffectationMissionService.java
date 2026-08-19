@@ -7,11 +7,10 @@ import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ConflictException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.common.exception.ForbiddenOperationException;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
+import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import com.snef.sgbf.mission.dto.AffectationMissionDto;
 import com.snef.sgbf.mission.dto.AffecterAgentRequest;
@@ -53,7 +52,7 @@ public class AffectationMissionService {
     private static final String CODE_MOTIF_AUTRE = "AUTRE";
 
     private final AffectationMissionRepository affectationMissionRepository;
-    private final AgentRepository agentRepository;
+    private final UtilisateurRepository utilisateurRepository;
     private final MotifInterruptionMissionRepository motifInterruptionMissionRepository;
     private final HabilitationRepository habilitationRepository;
     private final MissionService missionService;
@@ -61,14 +60,14 @@ public class AffectationMissionService {
     private final AuditService auditService;
 
     public AffectationMissionService(AffectationMissionRepository affectationMissionRepository,
-                                      AgentRepository agentRepository,
+                                      UtilisateurRepository utilisateurRepository,
                                       MotifInterruptionMissionRepository motifInterruptionMissionRepository,
                                       HabilitationRepository habilitationRepository,
                                       MissionService missionService,
                                       AffectationMissionMapper affectationMissionMapper,
                                       AuditService auditService) {
         this.affectationMissionRepository = affectationMissionRepository;
-        this.agentRepository = agentRepository;
+        this.utilisateurRepository = utilisateurRepository;
         this.motifInterruptionMissionRepository = motifInterruptionMissionRepository;
         this.habilitationRepository = habilitationRepository;
         this.missionService = missionService;
@@ -103,8 +102,8 @@ public class AffectationMissionService {
      * d'utilisation "Affecter un agent a une mission", section 16).
      */
     public AffectationMissionDto affecter(AffecterAgentRequest requete, Utilisateur auteur) {
-        Agent agent = agentRepository.findById(requete.agentId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Agent", requete.agentId()));
+        Utilisateur agent = utilisateurRepository.findById(requete.agentId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
         Mission mission = missionService.chargerMission(requete.missionId());
 
         verifierPerimetre(auteur, agent);
@@ -218,7 +217,7 @@ public class AffectationMissionService {
      * d'affectation syntaxiquement valide mais hors perimetre produit un
      * refus d'acces (403), jamais un comportement silencieusement degrade.
      */
-    private void verifierPerimetre(Utilisateur auteur, Agent agent) {
+    private void verifierPerimetre(Utilisateur auteur, Utilisateur agent) {
         Long serviceAgentId = agent.getService().getId();
         boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
                 .anyMatch(h -> estRoleGestionnaire(h) && h.getService() != null

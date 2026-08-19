@@ -14,11 +14,9 @@ import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.EvenementAudit;
 import com.snef.sgbf.common.audit.EvenementAuditRepository;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
@@ -79,7 +77,6 @@ class EvolutionPerimetreServiceFiphIT {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ChantierRepository chantierRepository;
     @Autowired private CodeHNRepository codeHNRepository;
-    @Autowired private AgentRepository agentRepository;
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private HabilitationRepository habilitationRepository;
     @Autowired private RoleMetierRepository roleMetierRepository;
@@ -101,9 +98,9 @@ class EvolutionPerimetreServiceFiphIT {
     private Utilisateur phCentre;
     private Utilisateur raCentre;
 
-    private Agent agentLittoral1;
-    private Agent agentLittoral2;
-    private Agent agentCentre1;
+    private Utilisateur agentLittoral1;
+    private Utilisateur agentLittoral2;
+    private Utilisateur agentCentre1;
 
     @BeforeEach
     void construireJeuDeDonnees() {
@@ -122,9 +119,9 @@ class EvolutionPerimetreServiceFiphIT {
         phCentre = creerUtilisateurAvecHabilitation("ph_ctr_" + suffixe, centre, CodeRoleMetier.PERSONNE_HABILITEE);
         raCentre = creerUtilisateurAvecHabilitation("ra_ctr_" + suffixe, centre, CodeRoleMetier.RESPONSABLE_ACTIVITE);
 
-        agentLittoral1 = agentRepository.save(nouvelAgent("LIT1-" + court, "Ateba", "Alice", littoral));
-        agentLittoral2 = agentRepository.save(nouvelAgent("LIT2-" + court, "Bikoro", "Bruno", littoral));
-        agentCentre1 = agentRepository.save(nouvelAgent("CTR1-" + court, "Ekwalla", "Paul", centre));
+        agentLittoral1 = utilisateurRepository.save(nouvelAgent("LIT1-" + court, "Ateba", "Alice", littoral));
+        agentLittoral2 = utilisateurRepository.save(nouvelAgent("LIT2-" + court, "Bikoro", "Bruno", littoral));
+        agentCentre1 = utilisateurRepository.save(nouvelAgent("CTR1-" + court, "Ekwalla", "Paul", centre));
 
         Mission missionLittoral = nouvelleMission();
         affecterAgentAMission(agentLittoral1, missionLittoral, caLittoral);
@@ -386,10 +383,8 @@ class EvolutionPerimetreServiceFiphIT {
     /** Creation via bon de sortie (createur effectif = l'agent lui-meme, visa automatique acquis d'office). */
     @Test
     void creation_parAgentViaBonDeSortie_visaAutomatiqueEtStatutSignee() throws Exception {
-        Utilisateur agentUtilisateur = creerUtilisateur("agent_creation_" + suffixe, littoral);
-        Agent agent = agentRepository.save(nouvelAgent("CRE1-" + (suffixe % 100_000L), "Nouveau", "Agent", littoral));
-        agent.setUtilisateur(agentUtilisateur);
-        agentRepository.save(agent);
+        Utilisateur agent = creerPersonneAvecCompte("CRE1-" + (suffixe % 100_000L), "Nouveau", "Agent", "agent_creation_" + suffixe, littoral);
+        Utilisateur agentUtilisateur = agent;
         affecterAgentAMission(agent, nouvelleMission(), caLittoral);
 
         String tokenAgent = seConnecter(agentUtilisateur.getIdentifiant());
@@ -411,7 +406,7 @@ class EvolutionPerimetreServiceFiphIT {
     void creation_parChargeAffaires_visaAutomatiqueDuCreateurEtStatutSignee() throws Exception {
         // Agent SANS compte utilisateur (cas courant) : avant l'evolution du 2026-08-19, cette FIPH
         // serait restee bloquee a BROUILLON pour toujours (signer() exige un compte agent).
-        Agent agentSansCompte = agentRepository.save(nouvelAgent("CRE2-" + (suffixe % 100_000L), "SansCompte", "Test", littoral));
+        Utilisateur agentSansCompte = utilisateurRepository.save(nouvelAgent("CRE2-" + (suffixe % 100_000L), "SansCompte", "Test", littoral));
         String tokenCa = seConnecter(caLittoral.getIdentifiant());
 
         String reponse = mockMvc.perform(post("/api/fiph/manuelle")
@@ -446,7 +441,7 @@ class EvolutionPerimetreServiceFiphIT {
     /** Creation manuelle par la Personne habilitee : meme comportement que le Charge d'Affaires - createur = la personne habilitee, jamais l'agent. */
     @Test
     void creation_parPersonneHabilitee_visaAutomatiqueDuCreateur() throws Exception {
-        Agent agent = agentRepository.save(nouvelAgent("CRE3-" + (suffixe % 100_000L), "Test", "PH", littoral));
+        Utilisateur agent = utilisateurRepository.save(nouvelAgent("CRE3-" + (suffixe % 100_000L), "Test", "PH", littoral));
         String tokenPh = seConnecter(phLittoral.getIdentifiant());
 
         String reponse = mockMvc.perform(post("/api/fiph/manuelle")
@@ -511,7 +506,7 @@ class EvolutionPerimetreServiceFiphIT {
         return creerUtilisateurAvecHabilitation("dir_" + service.getCodeService() + "_" + suffixe, service, CodeRoleMetier.DIRECTION);
     }
 
-    private long creerFiphManuelle(Utilisateur createur, Agent agent) throws Exception {
+    private long creerFiphManuelle(Utilisateur createur, Utilisateur agent) throws Exception {
         String token = seConnecter(createur.getIdentifiant());
         String reponse = mockMvc.perform(post("/api/fiph/manuelle")
                         .header("Authorization", "Bearer " + token)
@@ -579,7 +574,7 @@ class EvolutionPerimetreServiceFiphIT {
         return bonSortieId;
     }
 
-    private void affecterAgentAMission(Agent agent, Mission mission, Utilisateur creePar) {
+    private void affecterAgentAMission(Utilisateur agent, Mission mission, Utilisateur creePar) {
         AffectationMission affectation = new AffectationMission();
         affectation.setAgent(agent);
         affectation.setMission(mission);
@@ -662,12 +657,23 @@ class EvolutionPerimetreServiceFiphIT {
         return codeHN;
     }
 
-    private Agent nouvelAgent(String matricule, String nom, String prenom, Service service) {
-        Agent agent = new Agent();
+    /** Personne du referentiel SANS compte applicatif (evolution du 2026-08-19, unification Agent/Utilisateur). */
+    private Utilisateur nouvelAgent(String matricule, String nom, String prenom, Service service) {
+        Utilisateur agent = new Utilisateur();
         agent.setMatricule(matricule);
         agent.setNom(nom);
         agent.setPrenom(prenom);
         agent.setService(service);
         return agent;
+    }
+
+    /** Personne avec compte applicatif ET identite RH complete en une seule creation. */
+    private Utilisateur creerPersonneAvecCompte(String matricule, String nom, String prenom, String identifiant, Service service) {
+        Utilisateur utilisateur = nouvelAgent(matricule, nom, prenom, service);
+        utilisateur.setIdentifiant(identifiant);
+        utilisateur.setEmail(identifiant + "@example.invalid");
+        utilisateur.setMotDePasseHash(passwordEncoder.encode(MOT_DE_PASSE));
+        utilisateur.setStatutCompte(StatutCompte.ACTIF);
+        return utilisateurRepository.save(utilisateur);
     }
 }

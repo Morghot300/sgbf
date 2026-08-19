@@ -1,7 +1,7 @@
 package com.snef.sgbf.fiph.entity;
 
 import com.snef.sgbf.bonsortie.entity.BonSortie;
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.referentiel.entity.Service;
 import jakarta.persistence.Column;
@@ -53,7 +53,11 @@ public class FIPH {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "agent_id", nullable = false)
-    private Agent agent;
+    // Type Utilisateur, nom de champ/colonne "agent" conserve deliberement (evolution du
+    // 2026-08-19, unification Agent/Utilisateur) : cette FIPH concerne la personne du
+    // personnel designee ici, qu'elle dispose ou non d'un compte applicatif -
+    // voir Utilisateur#possedeCompteApplicatif().
+    private Utilisateur agent;
 
     /** Copie a la creation (section 8) : Service auquel l'agent appartenait a cet instant, jamais resynchronise ensuite. */
     @ManyToOne(fetch = FetchType.EAGER)

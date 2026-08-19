@@ -154,6 +154,8 @@ class EvolutionSecuriteIT {
                         .header("Authorization", "Bearer " + tokenSuperAdmin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("nom", "ParSuper");
+                            put("prenom", "Cree");
                             put("identifiant", "cree_par_super_" + suffixe);
                             put("email", "cree.par.super." + suffixe + "@example.invalid");
                             put("motDePasse", "MotDePasseValide123");
@@ -175,7 +177,7 @@ class EvolutionSecuriteIT {
         // l'AOP de securite ne soit invoquee) - un corps vide renverrait 400
         // avant meme que l'autorisation ne soit verifiee, ce qui ne testerait
         // pas le bon controle.
-        mockMvc.perform(post("/api/agents")
+        mockMvc.perform(post("/api/utilisateurs")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
@@ -187,31 +189,39 @@ class EvolutionSecuriteIT {
                 .andExpect(status().isForbidden());
     }
 
-    /** Service obligatoire a la creation d'un agent - controle backend, pas seulement frontend (section 5). */
+    /**
+     * Creation d'une personne sans compte applicatif ni service : autorisee
+     * (evolution du 2026-08-19, le service n'est plus exige qu'au moment ou
+     * un role a perimetre non global lui est attribue - RG-HAB-001). Une
+     * fois cette meme personne cible d'une attribution CHARGE_AFFAIRES SANS
+     * service, en revanche, le controle backend existant (RG-HAB-001,
+     * {@code HabilitationService#validerCoherencePerimetre}) refuse toujours.
+     */
     @Test
-    void creationAgentSansServiceEstRefusee() throws Exception {
+    void creationSansServiceAutoriseeMaisHabilitationServiceScopeeSansServiceRefusee() throws Exception {
         String tokenAdmin1 = seConnecter(admin1.getIdentifiant());
-        mockMvc.perform(post("/api/agents")
+        String reponse = mockMvc.perform(post("/api/utilisateurs")
                         .header("Authorization", "Bearer " + tokenAdmin1)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
                             put("matricule", "SANSSVC" + (suffixe % 100_000L));
                             put("nom", "Test");
                             put("prenom", "SansService");
-                            put("serviceId", null);
                         }})))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long personneId = objectMapper.readTree(reponse).get("id").asLong();
 
-        mockMvc.perform(post("/api/agents")
+        mockMvc.perform(post("/api/habilitations")
                         .header("Authorization", "Bearer " + tokenAdmin1)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("matricule", "AVECSVC" + (suffixe % 100_000L));
-                            put("nom", "Test");
-                            put("prenom", "AvecService");
-                            put("serviceId", service.getId());
+                            put("utilisateurId", personneId);
+                            put("roleMetierCode", "CHARGE_AFFAIRES");
+                            put("serviceId", null);
+                            put("dateDebut", LocalDate.now().toString());
                         }})))
-                .andExpect(status().isCreated());
+                .andExpect(status().isUnprocessableEntity());
     }
 
     /**
@@ -221,10 +231,6 @@ class EvolutionSecuriteIT {
     @Test
     void vehiculeAutreExigeUnePrecisionCoteBackend() throws Exception {
         Utilisateur agentUtilisateur = creerUtilisateur("agent_vehicule_" + suffixe, service);
-        // Cet utilisateur n'a pas d'Agent RH associe : on s'attend a un refus
-        // en amont (section-10) pour AUTRE sans precision - la validation de
-        // precision doit intervenir AVANT la resolution de l'agent, donc peu
-        // importe ici : on verifie uniquement le message d'erreur renvoye.
         String token = seConnecter(agentUtilisateur.getIdentifiant());
 
         String reponseSansPrecision = mockMvc.perform(post("/api/bons-sortie")

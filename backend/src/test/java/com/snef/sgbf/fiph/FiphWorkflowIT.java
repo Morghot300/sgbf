@@ -10,11 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
@@ -73,7 +71,6 @@ class FiphWorkflowIT {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ChantierRepository chantierRepository;
     @Autowired private CodeHNRepository codeHNRepository;
-    @Autowired private AgentRepository agentRepository;
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private HabilitationRepository habilitationRepository;
     @Autowired private RoleMetierRepository roleMetierRepository;
@@ -85,7 +82,7 @@ class FiphWorkflowIT {
     private Service service;
     private Chantier chantier;
     private CodeHN codeHN;
-    private Agent emetteurAgent;
+    private Utilisateur emetteurAgent;
     private Utilisateur emetteurUtilisateur;
     private Utilisateur ca1;
     private Utilisateur ca2;
@@ -99,10 +96,8 @@ class FiphWorkflowIT {
         chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
         codeHN = codeHNRepository.save(nouveauCodeHN("MIS" + suffixe, chantier));
 
-        emetteurAgent = agentRepository.save(nouvelAgent("MAT" + suffixe, "Test", "Emetteur", service));
-        emetteurUtilisateur = creerUtilisateur("emetteur" + suffixe, service);
-        emetteurAgent.setUtilisateur(emetteurUtilisateur);
-        agentRepository.save(emetteurAgent);
+        emetteurAgent = creerPersonneAvecCompte("MAT" + suffixe, "Test", "Emetteur", "emetteur" + suffixe, service);
+        emetteurUtilisateur = emetteurAgent;
 
         ca1 = creerUtilisateurAvecHabilitation("ca1_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         ca2 = creerUtilisateurAvecHabilitation("ca2_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
@@ -138,10 +133,8 @@ class FiphWorkflowIT {
      */
     @Test
     void parcoursCompletFipheL99AvecVisaAutomatiqueEtCorrectionPostValidation() throws Exception {
-        Agent agentL99 = agentRepository.save(nouvelAgent("L99", "Ekwalla", "Paul", service));
-        Utilisateur utilisateurL99 = creerUtilisateur("agent_l99_" + suffixe, service);
-        agentL99.setUtilisateur(utilisateurL99);
-        agentRepository.save(agentL99);
+        Utilisateur agentL99 = creerPersonneAvecCompte("L99", "Ekwalla", "Paul", "agent_l99_" + suffixe, service);
+        Utilisateur utilisateurL99 = agentL99;
         affecterAgentAMission(agentL99, ca1);
 
         String tokenL99 = seConnecter(utilisateurL99.getIdentifiant());
@@ -430,7 +423,7 @@ class FiphWorkflowIT {
         throw new AssertionError("Aucune FIPH trouvee pour l'agent id=" + agentId);
     }
 
-    private void affecterAgentAMission(Agent agent, Utilisateur creePar) {
+    private void affecterAgentAMission(Utilisateur agent, Utilisateur creePar) {
         Mission mission = new Mission();
         mission.setCodeHN(codeHN);
         mission.setChantier(chantier);
@@ -511,12 +504,17 @@ class FiphWorkflowIT {
         return codeHN;
     }
 
-    private Agent nouvelAgent(String matricule, String nom, String prenom, Service service) {
-        Agent agent = new Agent();
-        agent.setMatricule(matricule);
-        agent.setNom(nom);
-        agent.setPrenom(prenom);
-        agent.setService(service);
-        return agent;
+    /** Personne avec compte applicatif ET identite RH complete en une seule creation (evolution du 2026-08-19, unification Agent/Utilisateur). */
+    private Utilisateur creerPersonneAvecCompte(String matricule, String nom, String prenom, String identifiant, Service service) {
+        Utilisateur utilisateur = new Utilisateur();
+        utilisateur.setMatricule(matricule);
+        utilisateur.setNom(nom);
+        utilisateur.setPrenom(prenom);
+        utilisateur.setIdentifiant(identifiant);
+        utilisateur.setEmail(identifiant + "@example.invalid");
+        utilisateur.setMotDePasseHash(passwordEncoder.encode(MOT_DE_PASSE));
+        utilisateur.setStatutCompte(StatutCompte.ACTIF);
+        utilisateur.setService(service);
+        return utilisateurRepository.save(utilisateur);
     }
 }

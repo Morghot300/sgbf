@@ -17,11 +17,10 @@ import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.service.FiphService;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
+import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
@@ -59,7 +58,7 @@ public class BonSortieService {
 
     private final BonSortieRepository bonSortieRepository;
     private final BonSortiePersonneRepository bonSortiePersonneRepository;
-    private final AgentRepository agentRepository;
+    private final UtilisateurRepository utilisateurRepository;
     private final VehiculeRepository vehiculeRepository;
     private final HabilitationRepository habilitationRepository;
     private final AffectationMissionService affectationMissionService;
@@ -70,7 +69,7 @@ public class BonSortieService {
 
     public BonSortieService(BonSortieRepository bonSortieRepository,
                              BonSortiePersonneRepository bonSortiePersonneRepository,
-                             AgentRepository agentRepository,
+                             UtilisateurRepository utilisateurRepository,
                              VehiculeRepository vehiculeRepository,
                              HabilitationRepository habilitationRepository,
                              AffectationMissionService affectationMissionService,
@@ -80,7 +79,7 @@ public class BonSortieService {
                              AuditService auditService) {
         this.bonSortieRepository = bonSortieRepository;
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
-        this.agentRepository = agentRepository;
+        this.utilisateurRepository = utilisateurRepository;
         this.vehiculeRepository = vehiculeRepository;
         this.habilitationRepository = habilitationRepository;
         this.affectationMissionService = affectationMissionService;
@@ -148,19 +147,26 @@ public class BonSortieService {
 
         return bonSortieRepository.findAll().stream()
                 .filter(bs -> servicesGeres.contains(bs.getAgent().getService().getId())
-                        || (bs.getAgent().getUtilisateur() != null && bs.getAgent().getUtilisateur().getId().equals(courant.getId())))
+                        || bs.getAgent().getId().equals(courant.getId()))
                 .toList();
     }
 
-    /** Cree le bon de sortie principal de l'utilisateur authentifie lui-meme (workflow §12.2, etape 1 - acteur "Agent"). */
+    /**
+     * Cree le bon de sortie principal (workflow §12.2, etape 1). Habituellement
+     * en libre-service (le titulaire est l'utilisateur authentifie lui-meme) ;
+     * peut aussi etre cree POUR LE COMPTE d'un tiers via {@code requete.agentId()}
+     * (evolution du 2026-08-19, section notee explicitement par la mission :
+     * "chacun cree son bon de sortie, cependant l'Administrateur, le Super
+     * Administrateur, le Charge d'Affaires et la Personne habilitee peuvent le
+     * faire pour quelqu'un d'autre s'il n'a pas acces a l'application") - voir
+     * {@link #resoudreTitulaire}.
+     */
     public BonSortieDto creer(CreerBonSortieRequest requete, Utilisateur auteur) {
-        Agent agentEmetteur = agentRepository.findByUtilisateur_Id(auteur.getId())
-                .orElseThrow(() -> new BusinessRuleViolationException("section-10",
-                        "Aucun agent du referentiel RH n'est associe a ce compte : impossible de creer un bon de sortie."));
+        Utilisateur titulaire = resoudreTitulaire(requete.agentId(), auteur);
         verifierPrecisionVehicule(requete.moyenUtilise(), requete.precisionVehicule());
 
         BonSortie bonSortie = new BonSortie();
-        bonSortie.setAgent(agentEmetteur);
+        bonSortie.setAgent(titulaire);
         if (requete.vehiculeId() != null) {
             bonSortie.setVehicule(vehiculeRepository.findById(requete.vehiculeId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Vehicule", requete.vehiculeId())));
@@ -174,13 +180,55 @@ public class BonSortieService {
         bonSortie.setLieu(requete.lieu());
         bonSortie.setCodeAffaireSaisi(requete.codeAffaireSaisi());
         bonSortie.setMotifSortie(requete.motifSortie());
-        bonSortie.setStatut(StatutBonSortie.BROUILLON);
         bonSortie.setOrigine(OrigineBonSortie.PRINCIPALE);
+        // Visa automatique du createur quand le titulaire n'a pas de compte applicatif
+        // (evolution du 2026-08-19) : sinon ce bon resterait bloque en BROUILLON pour
+        // toujours, "viser" etant strictement reserve au titulaire lui-meme (RG-BS-004),
+        // qui ne peut alors jamais se connecter pour le faire - meme correctif que celui
+        // deja applique a la creation manuelle d'une FIPH (voir FiphService#creerFiphEtVersionInitiale).
+        boolean visaAutomatique = !titulaire.possedeCompteApplicatif();
+        StatutBonSortie statutInitial = visaAutomatique ? StatutBonSortie.VISE : StatutBonSortie.BROUILLON;
+        bonSortie.setStatut(statutInitial);
+        if (visaAutomatique) {
+            bonSortie.setVisePar(auteur);
+            bonSortie.setDateVisa(LocalDateTime.now());
+        }
         bonSortie = bonSortieRepository.save(bonSortie);
 
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
-                TypeActionAudit.CREATION, null, bonSortieMapper.toDto(bonSortie), null, StatutBonSortie.BROUILLON.name());
+                TypeActionAudit.CREATION, null, bonSortieMapper.toDto(bonSortie), null, statutInitial.name());
+        if (visaAutomatique) {
+            auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur, TypeActionAudit.VISA,
+                    StatutBonSortie.BROUILLON.name(),
+                    "Visa automatique du createur " + auteur.getIdentifiant()
+                            + " (bon de sortie cree pour le compte de " + titulaire.getNomComplet()
+                            + ", sans acces applicatif)",
+                    StatutBonSortie.BROUILLON.name(), StatutBonSortie.VISE.name());
+        }
         return bonSortieMapper.toDto(bonSortie);
+    }
+
+    /**
+     * Resout le titulaire reel du bon de sortie a creer. {@code null} ou egal
+     * a l'auteur : creation en libre-service habituelle. Different de
+     * l'auteur : creation POUR LE COMPTE d'un tiers, reservee a
+     * l'Administrateur/Super Administrateur (portee globale) ou au Charge
+     * d'Affaires/personne habilitee du MEME service que le tiers (evolution
+     * du 2026-08-19).
+     */
+    private Utilisateur resoudreTitulaire(Long agentIdDemande, Utilisateur auteur) {
+        if (agentIdDemande == null || agentIdDemande.equals(auteur.getId())) {
+            return auteur;
+        }
+        Utilisateur cible = utilisateurRepository.findById(agentIdDemande)
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", agentIdDemande));
+        boolean auteurEstAdministrateur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+                .anyMatch(h -> CodeRoleMetier.ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode())
+                        || CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
+        if (!auteurEstAdministrateur) {
+            verifierPerimetreGestionnaire(auteur, cible);
+        }
+        return cible;
     }
 
     /** Renseigne l'heure de retour (verrouillage optimiste - RG-SEC-001). */
@@ -207,8 +255,7 @@ public class BonSortieService {
     /** Visa de l'agent (niveau 1, RG-BS-004) - strictement reserve au titulaire du bon de sortie. */
     public BonSortieDto viser(Long bonSortieId, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
-        boolean estTitulaire = bonSortie.getAgent().getUtilisateur() != null
-                && bonSortie.getAgent().getUtilisateur().getId().equals(auteur.getId());
+        boolean estTitulaire = bonSortie.getAgent().getId().equals(auteur.getId());
         if (!estTitulaire) {
             throw new ForbiddenOperationException("Seul l'agent titulaire du bon de sortie peut le viser.");
         }
@@ -322,7 +369,7 @@ public class BonSortieService {
     }
 
     /** RG-HAB-003 / RG-SEC-002 : seul un gestionnaire du service de l'agent peut valider son bon de sortie. */
-    private void verifierPerimetreGestionnaire(Utilisateur auteur, Agent agent) {
+    private void verifierPerimetreGestionnaire(Utilisateur auteur, Utilisateur agent) {
         Long serviceAgentId = agent.getService().getId();
         boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
                 .anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
@@ -340,8 +387,8 @@ public class BonSortieService {
      * personne habilitee"). Package-privee : reutilisee par
      * {@link BonSortiePersonneService}.
      */
-    void verifierAutoServiceOuGestionnaire(Utilisateur auteur, Agent agent) {
-        boolean estTitulaire = agent.getUtilisateur() != null && agent.getUtilisateur().getId().equals(auteur.getId());
+    void verifierAutoServiceOuGestionnaire(Utilisateur auteur, Utilisateur agent) {
+        boolean estTitulaire = agent.getId().equals(auteur.getId());
         if (estTitulaire) {
             return;
         }
@@ -355,8 +402,8 @@ public class BonSortieService {
      * appliquee ici a l'agent du bon de sortie plutot qu'a celui de la FIPH.
      */
     private void verifierPerimetreLecture(Utilisateur lecteur, BonSortie bonSortie) {
-        Agent agent = bonSortie.getAgent();
-        if (agent.getUtilisateur() != null && agent.getUtilisateur().getId().equals(lecteur.getId())) {
+        Utilisateur agent = bonSortie.getAgent();
+        if (agent.getId().equals(lecteur.getId())) {
             return;
         }
         Long serviceAgentId = agent.getService().getId();

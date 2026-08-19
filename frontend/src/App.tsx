@@ -11,7 +11,6 @@ import FiphListePage from "./pages/fiph/FiphListePage";
 import MissionDetailPage from "./pages/mission/MissionDetailPage";
 import MissionListePage from "./pages/mission/MissionListePage";
 import MissionNouvellePage from "./pages/mission/MissionNouvellePage";
-import AdminAgentsPage from "./pages/admin/AdminAgentsPage";
 import AdminReferentielsPage from "./pages/admin/AdminReferentielsPage";
 import AdminUtilisateursPage from "./pages/admin/AdminUtilisateursPage";
 import { ProtectedRoute, RouteAvecRole } from "./routes/ProtectedRoute";
@@ -53,10 +52,6 @@ export default function App() {
             <Route
               path="/administration"
               element={<RouteAvecRole role="ADMINISTRATEUR"><AdminUtilisateursPage /></RouteAvecRole>}
-            />
-            <Route
-              path="/administration/agents"
-              element={<RouteAvecRole role="ADMINISTRATEUR"><AdminAgentsPage /></RouteAvecRole>}
             />
             <Route
               path="/administration/referentiels"

@@ -10,11 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
@@ -69,7 +67,6 @@ class PersonneABordIT {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ChantierRepository chantierRepository;
     @Autowired private CodeHNRepository codeHNRepository;
-    @Autowired private AgentRepository agentRepository;
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private HabilitationRepository habilitationRepository;
     @Autowired private RoleMetierRepository roleMetierRepository;
@@ -81,8 +78,8 @@ class PersonneABordIT {
     private Service service;
     private Utilisateur emetteurUtilisateur;
     private Utilisateur ca;
-    private Agent personneA;
-    private Agent personneB;
+    private Utilisateur personneA;
+    private Utilisateur personneB;
 
     @BeforeEach
     void construireJeuDeDonnees() {
@@ -91,14 +88,12 @@ class PersonneABordIT {
         Chantier chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
         CodeHN codeHN = codeHNRepository.save(nouveauCodeHN("MIS" + suffixe, chantier));
 
-        Agent emetteurAgent = agentRepository.save(nouvelAgent("MAT" + suffixe, "Test", "Emetteur", service));
-        emetteurUtilisateur = creerUtilisateur("emetteur" + suffixe, service);
-        emetteurAgent.setUtilisateur(emetteurUtilisateur);
-        agentRepository.save(emetteurAgent);
+        emetteurUtilisateur = creerPersonneAvecCompte("MAT" + suffixe, "Test", "Emetteur", "emetteur" + suffixe, service);
+        Utilisateur emetteurAgent = emetteurUtilisateur;
 
         long court = suffixe % 100_000L;
-        personneA = agentRepository.save(nouvelAgent("PXA" + court, "Ateba", "Alice", service));
-        personneB = agentRepository.save(nouvelAgent("PXB" + court, "Bikoro", "Bruno", service));
+        personneA = utilisateurRepository.save(nouvelAgent("PXA" + court, "Ateba", "Alice", service));
+        personneB = utilisateurRepository.save(nouvelAgent("PXB" + court, "Bikoro", "Bruno", service));
 
         ca = creerUtilisateurAvecHabilitation("ca_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
 
@@ -120,7 +115,7 @@ class PersonneABordIT {
         affecterSurMission(personneB, mission);
     }
 
-    private void affecterSurMission(Agent agent, Mission mission) {
+    private void affecterSurMission(Utilisateur agent, Mission mission) {
         AffectationMission affectation = new AffectationMission();
         affectation.setAgent(agent);
         affectation.setMission(mission);
@@ -321,12 +316,23 @@ class PersonneABordIT {
         return codeHN;
     }
 
-    private Agent nouvelAgent(String matricule, String nom, String prenom, Service service) {
-        Agent agent = new Agent();
+    /** Personne du referentiel SANS compte applicatif (evolution du 2026-08-19, unification Agent/Utilisateur). */
+    private Utilisateur nouvelAgent(String matricule, String nom, String prenom, Service service) {
+        Utilisateur agent = new Utilisateur();
         agent.setMatricule(matricule);
         agent.setNom(nom);
         agent.setPrenom(prenom);
         agent.setService(service);
         return agent;
+    }
+
+    /** Personne avec compte applicatif ET identite RH complete en une seule creation. */
+    private Utilisateur creerPersonneAvecCompte(String matricule, String nom, String prenom, String identifiant, Service service) {
+        Utilisateur utilisateur = nouvelAgent(matricule, nom, prenom, service);
+        utilisateur.setIdentifiant(identifiant);
+        utilisateur.setEmail(identifiant + "@example.invalid");
+        utilisateur.setMotDePasseHash(passwordEncoder.encode(MOT_DE_PASSE));
+        utilisateur.setStatutCompte(StatutCompte.ACTIF);
+        return utilisateurRepository.save(utilisateur);
     }
 }

@@ -18,39 +18,47 @@ export type CodeRoleMetier =
 
 export type StatutCompte = "ACTIF" | "VERROUILLE" | "DESACTIVE";
 
+/**
+ * Une personne du personnel (evolution du 2026-08-19, "un utilisateur est
+ * obligatoirement un agent") - identite RH (matricule/nom/prenom) et,
+ * lorsqu'elle existe, identite de connexion (identifiant/email) dans une
+ * seule et meme ligne. `identifiant`/`email` sont `null` si cette personne
+ * ne dispose pas d'un compte applicatif (voir `possedeCompteApplicatif`).
+ */
 export interface UtilisateurDto {
   id: number;
-  identifiant: string;
-  email: string;
+  matricule: string | null;
+  nom: string | null;
+  prenom: string | null;
+  nomComplet: string | null;
+  identifiant: string | null;
+  email: string | null;
+  possedeCompteApplicatif: boolean;
   statutCompte: StatutCompte;
   serviceId: number | null;
   serviceLibelle: string | null;
 }
 
+/**
+ * `identifiant`/`email`/`motDePasse` forment un groupe : soit les trois sont
+ * fournis (compte applicatif immediat), soit aucun ne l'est (personne du
+ * referentiel sans acces direct - voir `AjouterCompteApplicatifRequest` pour
+ * lui en ajouter un plus tard).
+ */
 export interface CreerUtilisateurRequest {
-  identifiant: string;
-  email: string;
-  motDePasse: string;
+  nom: string;
+  prenom: string;
+  matricule: string | null;
+  identifiant: string | null;
+  email: string | null;
+  motDePasse: string | null;
   serviceId: number | null;
 }
 
-export interface AgentDto {
-  id: number;
-  matricule: string;
+export interface ModifierIdentiteRequest {
   nom: string;
   prenom: string;
-  nomComplet: string;
-  serviceId: number;
-  serviceLibelle: string;
-  actif: boolean;
-  possedeCompte: boolean;
-}
-
-export interface CreerAgentRequest {
-  matricule: string;
-  nom: string;
-  prenom: string;
-  serviceId: number;
+  matricule: string | null;
 }
 
 export interface HabilitationDto {

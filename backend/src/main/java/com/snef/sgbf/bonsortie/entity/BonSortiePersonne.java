@@ -1,6 +1,6 @@
 package com.snef.sgbf.bonsortie.entity;
 
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -49,7 +49,9 @@ public class BonSortiePersonne {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "agent_id", nullable = false)
-    private Agent agent;
+    // Type Utilisateur, nom de champ/colonne "agent" conserve deliberement (evolution du
+    // 2026-08-19, unification Agent/Utilisateur) - voir FIPH.agent pour la justification complete.
+    private Utilisateur agent;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "statut_association", nullable = false, length = 20)

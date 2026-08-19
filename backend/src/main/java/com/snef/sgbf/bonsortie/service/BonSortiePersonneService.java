@@ -15,9 +15,8 @@ import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ConflictException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
+import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,18 +34,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class BonSortiePersonneService {
 
     private final BonSortiePersonneRepository bonSortiePersonneRepository;
-    private final AgentRepository agentRepository;
+    private final UtilisateurRepository utilisateurRepository;
     private final BonSortieService bonSortieService;
     private final BonSortiePersonneMapper bonSortiePersonneMapper;
     private final AuditService auditService;
 
     public BonSortiePersonneService(BonSortiePersonneRepository bonSortiePersonneRepository,
-                                     AgentRepository agentRepository,
+                                     UtilisateurRepository utilisateurRepository,
                                      BonSortieService bonSortieService,
                                      BonSortiePersonneMapper bonSortiePersonneMapper,
                                      AuditService auditService) {
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
-        this.agentRepository = agentRepository;
+        this.utilisateurRepository = utilisateurRepository;
         this.bonSortieService = bonSortieService;
         this.bonSortiePersonneMapper = bonSortiePersonneMapper;
         this.auditService = auditService;
@@ -71,8 +70,8 @@ public class BonSortiePersonneService {
             throw new BusinessRuleViolationException("section-9.1",
                     "Seul un bon de sortie principal peut recevoir des personnes a bord.");
         }
-        Agent personneAgent = agentRepository.findById(requete.agentId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Agent", requete.agentId()));
+        Utilisateur personneAgent = utilisateurRepository.findById(requete.agentId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
 
         // RG-PAB-003 : verification applicative de preexistence, en complement
         // de la contrainte d'unicite en base (message d'erreur clair plutot

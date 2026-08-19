@@ -11,12 +11,19 @@ import java.time.LocalTime;
 /**
  * Donnees necessaires a la creation d'un bon de sortie (RG-BS-002 : champs
  * obligatoires "nom et prenom, moyen utilise, kilometrage, date et heure de
- * sortie, lieu, code affaire et motif de sortie"). L'agent titulaire n'est
- * pas un champ de cette requete : il est toujours resolu depuis
- * l'utilisateur authentifie (creation en libre-service, workflow §12.2
- * etape 1 - acteur "Agent").
+ * sortie, lieu, code affaire et motif de sortie").
+ *
+ * <p>{@link #agentId()} est optionnel (evolution du 2026-08-19) : {@code null}
+ * pour la creation en libre-service habituelle (le titulaire est alors
+ * l'utilisateur authentifie lui-meme, workflow §12.2 etape 1) ; renseigne
+ * pour creer POUR LE COMPTE d'un tiers - reserve a l'Administrateur, au
+ * Super Administrateur, au Charge d'Affaires ou a la personne habilitee du
+ * meme service que ce tiers (verifie en service, voir
+ * {@code BonSortieService#resoudreTitulaire}).
  */
 public record CreerBonSortieRequest(
+
+        Long agentId,
 
         Long vehiculeId,
 

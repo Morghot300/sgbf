@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import {
-  attribuerHabilitation, changerServiceHabilitation, changerStatutCompte, creerUtilisateur, listerHabilitationsUtilisateur,
-  modifierEmail, modifierIdentifiant, modifierServiceUtilisateur, reinitialiserMotDePasse,
-  rechercherUtilisateurs, retirerHabilitation,
+  ajouterCompteApplicatif, attribuerHabilitation, changerServiceHabilitation, changerStatutCompte, creerUtilisateur,
+  listerHabilitationsUtilisateur, modifierEmail, modifierIdentifiant, modifierIdentite, modifierServiceUtilisateur,
+  reinitialiserMotDePasse, rechercherUtilisateurs, retirerHabilitation,
 } from "../../api/identiteApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerServices } from "../../api/referentielApi";
@@ -12,7 +12,8 @@ import AdminNav from "../../components/AdminNav";
 import { ChampMotDePasse } from "../../components/ChampMotDePasse";
 import { EtatAsync } from "../../components/EtatAsync";
 import {
-  LIBELLES_ROLE, ROLES_PERIMETRE_GLOBAL, ROLES_SERVICE_EXCLUSIF, type CodeRoleMetier, type HabilitationDto, type StatutCompte,
+  LIBELLES_ROLE, ROLES_PERIMETRE_GLOBAL, ROLES_SERVICE_EXCLUSIF, type CodeRoleMetier, type HabilitationDto,
+  type StatutCompte, type UtilisateurDto,
 } from "../../types/identite";
 
 const ROLES: CodeRoleMetier[] = ["AGENT", "CHARGE_AFFAIRES", "PERSONNE_HABILITEE", "RESPONSABLE_ACTIVITE", "DIRECTION", "RH", "ADMINISTRATEUR", "SUPER_ADMINISTRATEUR"];
@@ -41,7 +42,10 @@ export default function AdminUtilisateursPage() {
   const [utilisateurOuvert, setUtilisateurOuvert] = useState<number | null>(null);
   const [modificationOuverte, setModificationOuverte] = useState<number | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [nouveau, setNouveau] = useState({ identifiant: "", email: "", motDePasse: "", serviceId: "" });
+  const [nouveau, setNouveau] = useState({
+    nom: "", prenom: "", matricule: "", avecCompte: true,
+    identifiant: "", email: "", motDePasse: "", serviceId: "",
+  });
 
   function reinitialiserFiltres() {
     setFiltres({ terme: "", serviceId: "", role: "", statut: "" });
@@ -49,14 +53,19 @@ export default function AdminUtilisateursPage() {
 
   const creation = useMutation({
     mutationFn: () => creerUtilisateur({
-      identifiant: nouveau.identifiant, email: nouveau.email, motDePasse: nouveau.motDePasse,
+      nom: nouveau.nom,
+      prenom: nouveau.prenom,
+      matricule: nouveau.matricule || null,
+      identifiant: nouveau.avecCompte ? nouveau.identifiant : null,
+      email: nouveau.avecCompte ? nouveau.email : null,
+      motDePasse: nouveau.avecCompte ? nouveau.motDePasse : null,
       serviceId: nouveau.serviceId ? Number(nouveau.serviceId) : null,
     }),
     onSuccess: () => {
-      setNouveau({ identifiant: "", email: "", motDePasse: "", serviceId: "" });
+      setNouveau({ nom: "", prenom: "", matricule: "", avecCompte: true, identifiant: "", email: "", motDePasse: "", serviceId: "" });
       void queryClient.invalidateQueries({ queryKey: ["utilisateurs"] });
     },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de créer ce compte.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de créer cette personne.")),
   });
 
   const changementStatut = useMutation({
@@ -69,7 +78,7 @@ export default function AdminUtilisateursPage() {
     <div>
       <h1>Administration</h1>
       <AdminNav />
-      <h2>Comptes et habilitations</h2>
+      <h2>Personnel et habilitations</h2>
       {erreur && <p role="alert">{erreur}</p>}
 
       <section className="barre-filtres">
@@ -96,14 +105,16 @@ export default function AdminUtilisateursPage() {
       <EtatAsync chargement={utilisateurs.isLoading} erreur={utilisateurs.error} donnees={utilisateurs.data}>
         {(liste) => (
           <table className="tableau">
-            <thead><tr><th>Identifiant</th><th>E-mail</th><th>Service</th><th>Statut</th><th></th><th></th></tr></thead>
+            <thead><tr><th>Nom complet</th><th>Matricule</th><th>Identifiant</th><th>E-mail</th><th>Service</th><th>Statut</th><th></th><th></th></tr></thead>
             <tbody>
-              {liste.length === 0 && <tr><td colSpan={6}>Aucun compte ne correspond à ces critères.</td></tr>}
+              {liste.length === 0 && <tr><td colSpan={8}>Aucune personne ne correspond à ces critères.</td></tr>}
               {liste.map((u) => (
                 <Fragment key={u.id}>
                   <tr>
-                    <td>{u.identifiant}</td>
-                    <td>{u.email}</td>
+                    <td>{u.nomComplet ?? "—"}</td>
+                    <td>{u.matricule ?? "—"}</td>
+                    <td>{u.identifiant ?? <em>Aucun compte</em>}</td>
+                    <td>{u.email ?? "—"}</td>
                     <td>{u.serviceLibelle ?? "—"}</td>
                     <td>
                       <select value={u.statutCompte} onChange={(e) => changementStatut.mutate({ id: u.id, statut: e.target.value as StatutCompte })}>
@@ -123,14 +134,14 @@ export default function AdminUtilisateursPage() {
                   </tr>
                   {utilisateurOuvert === u.id && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={8}>
                         <PanneauHabilitations utilisateurId={u.id} services={services.data ?? []} roles={rolesSelectionnables} onErreur={setErreur} />
                       </td>
                     </tr>
                   )}
                   {modificationOuverte === u.id && (
                     <tr>
-                      <td colSpan={6}>
+                      <td colSpan={8}>
                         <PanneauModificationCompte
                           utilisateur={u}
                           services={services.data ?? []}
@@ -148,27 +159,53 @@ export default function AdminUtilisateursPage() {
       </EtatAsync>
 
       <section>
-        <h2>Créer un compte</h2>
+        <h2>Créer une personne</h2>
+        <p>
+          Toute personne utilisant l'application est un membre du personnel rattaché à un service. Un compte
+          applicatif (identifiant/mot de passe) est optionnel : une personne sans accès direct au système peut
+          exister dans ce référentiel (son Bon de Sortie et sa FIPH sont alors gérés pour son compte par un tiers
+          habilité), et un compte pourra lui être ajouté plus tard.
+        </p>
         <form className="formulaire" onSubmit={(e) => { e.preventDefault(); creation.mutate(); }}>
-          <label htmlFor="identifiant">Identifiant</label>
-          <input id="identifiant" value={nouveau.identifiant} onChange={(e) => setNouveau({ ...nouveau, identifiant: e.target.value })} required maxLength={60} />
-          <label htmlFor="email">E-mail</label>
-          <input id="email" type="email" value={nouveau.email} onChange={(e) => setNouveau({ ...nouveau, email: e.target.value })} required maxLength={150} />
-          <ChampMotDePasse
-            id="motDePasse"
-            libelle="Mot de passe initial (12 caractères minimum)"
-            valeur={nouveau.motDePasse}
-            onChange={(v) => setNouveau({ ...nouveau, motDePasse: v })}
-            autoComplete="new-password"
-            required
-            minLength={12}
-          />
+          <label htmlFor="nom">Nom</label>
+          <input id="nom" value={nouveau.nom} onChange={(e) => setNouveau({ ...nouveau, nom: e.target.value })} required maxLength={100} />
+          <label htmlFor="prenom">Prénom</label>
+          <input id="prenom" value={nouveau.prenom} onChange={(e) => setNouveau({ ...nouveau, prenom: e.target.value })} required maxLength={100} />
+          <label htmlFor="matricule">Matricule (facultatif)</label>
+          <input id="matricule" value={nouveau.matricule} onChange={(e) => setNouveau({ ...nouveau, matricule: e.target.value })} maxLength={20} />
           <label htmlFor="serviceId">Service (facultatif)</label>
           <select id="serviceId" value={nouveau.serviceId} onChange={(e) => setNouveau({ ...nouveau, serviceId: e.target.value })}>
             <option value="">— Non renseigné —</option>
             {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
           </select>
-          <button type="submit" disabled={creation.isPending}>{creation.isPending ? "Création..." : "Créer le compte"}</button>
+
+          <label htmlFor="avecCompte">
+            <input
+              id="avecCompte"
+              type="checkbox"
+              checked={nouveau.avecCompte}
+              onChange={(e) => setNouveau({ ...nouveau, avecCompte: e.target.checked })}
+            />
+            {" "}Cette personne dispose d'un compte applicatif
+          </label>
+          {nouveau.avecCompte && (
+            <>
+              <label htmlFor="identifiant">Identifiant</label>
+              <input id="identifiant" value={nouveau.identifiant} onChange={(e) => setNouveau({ ...nouveau, identifiant: e.target.value })} required maxLength={60} />
+              <label htmlFor="email">E-mail</label>
+              <input id="email" type="email" value={nouveau.email} onChange={(e) => setNouveau({ ...nouveau, email: e.target.value })} required maxLength={150} />
+              <ChampMotDePasse
+                id="motDePasse"
+                libelle="Mot de passe initial (12 caractères minimum)"
+                valeur={nouveau.motDePasse}
+                onChange={(v) => setNouveau({ ...nouveau, motDePasse: v })}
+                autoComplete="new-password"
+                required
+                minLength={12}
+              />
+            </>
+          )}
+          <button type="submit" disabled={creation.isPending}>{creation.isPending ? "Création..." : "Créer"}</button>
         </form>
       </section>
     </div>
@@ -183,16 +220,25 @@ export default function AdminUtilisateursPage() {
  * d'erreur clair y est toujours affiché en cas de refus.
  */
 function PanneauModificationCompte({ utilisateur, services, onErreur, onSucces }: {
-  utilisateur: { id: number; identifiant: string; email: string; serviceId: number | null };
+  utilisateur: UtilisateurDto;
   services: { id: number; libelle: string }[];
   onErreur: (message: string) => void;
   onSucces: () => void;
 }) {
-  const [identifiant, setIdentifiant] = useState(utilisateur.identifiant);
-  const [email, setEmail] = useState(utilisateur.email);
+  const [nom, setNom] = useState(utilisateur.nom ?? "");
+  const [prenom, setPrenom] = useState(utilisateur.prenom ?? "");
+  const [matricule, setMatricule] = useState(utilisateur.matricule ?? "");
+  const [identifiant, setIdentifiant] = useState(utilisateur.identifiant ?? "");
+  const [email, setEmail] = useState(utilisateur.email ?? "");
   const [serviceId, setServiceId] = useState(utilisateur.serviceId != null ? String(utilisateur.serviceId) : "");
   const [nouveauMotDePasse, setNouveauMotDePasse] = useState("");
+  const [nouveauCompte, setNouveauCompte] = useState({ identifiant: "", email: "", motDePasse: "" });
 
+  const majIdentite = useMutation({
+    mutationFn: () => modifierIdentite(utilisateur.id, { nom, prenom, matricule: matricule || null }),
+    onSuccess: onSucces,
+    onError: (e) => onErreur(extraireMessageErreur(e, "Impossible de modifier l'identité.")),
+  });
   const majIdentifiant = useMutation({
     mutationFn: () => modifierIdentifiant(utilisateur.id, identifiant),
     onSuccess: onSucces,
@@ -213,19 +259,73 @@ function PanneauModificationCompte({ utilisateur, services, onErreur, onSucces }
     onSuccess: () => { setNouveauMotDePasse(""); onSucces(); },
     onError: (e) => onErreur(extraireMessageErreur(e, "Impossible de réinitialiser le mot de passe.")),
   });
+  const ajoutCompte = useMutation({
+    mutationFn: () => ajouterCompteApplicatif(utilisateur.id, {
+      nom: utilisateur.nom ?? "", prenom: utilisateur.prenom ?? "", matricule: utilisateur.matricule,
+      identifiant: nouveauCompte.identifiant, email: nouveauCompte.email, motDePasse: nouveauCompte.motDePasse,
+      serviceId: utilisateur.serviceId,
+    }),
+    onSuccess: onSucces,
+    onError: (e) => onErreur(extraireMessageErreur(e, "Impossible d'ajouter un compte applicatif.")),
+  });
 
   return (
     <div className="panneau-imbrique">
-      <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majIdentifiant.mutate(); }}>
-        <label htmlFor={`identifiant-${utilisateur.id}`}>Identifiant</label>
-        <input id={`identifiant-${utilisateur.id}`} value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} maxLength={60} required />
-        <button type="submit" disabled={majIdentifiant.isPending || identifiant === utilisateur.identifiant}>Enregistrer</button>
+      <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majIdentite.mutate(); }}>
+        <label htmlFor={`nom-${utilisateur.id}`}>Nom</label>
+        <input id={`nom-${utilisateur.id}`} value={nom} onChange={(e) => setNom(e.target.value)} maxLength={100} required />
+        <label htmlFor={`prenom-${utilisateur.id}`}>Prénom</label>
+        <input id={`prenom-${utilisateur.id}`} value={prenom} onChange={(e) => setPrenom(e.target.value)} maxLength={100} required />
+        <label htmlFor={`matricule-${utilisateur.id}`}>Matricule</label>
+        <input id={`matricule-${utilisateur.id}`} value={matricule} onChange={(e) => setMatricule(e.target.value)} maxLength={20} />
+        <button type="submit" disabled={majIdentite.isPending}>Enregistrer</button>
       </form>
-      <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majEmail.mutate(); }}>
-        <label htmlFor={`email-${utilisateur.id}`}>E-mail</label>
-        <input id={`email-${utilisateur.id}`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={150} required />
-        <button type="submit" disabled={majEmail.isPending || email === utilisateur.email}>Enregistrer</button>
-      </form>
+      {utilisateur.possedeCompteApplicatif ? (
+        <>
+          <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majIdentifiant.mutate(); }}>
+            <label htmlFor={`identifiant-${utilisateur.id}`}>Identifiant</label>
+            <input id={`identifiant-${utilisateur.id}`} value={identifiant} onChange={(e) => setIdentifiant(e.target.value)} maxLength={60} required />
+            <button type="submit" disabled={majIdentifiant.isPending || identifiant === utilisateur.identifiant}>Enregistrer</button>
+          </form>
+          <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majEmail.mutate(); }}>
+            <label htmlFor={`email-${utilisateur.id}`}>E-mail</label>
+            <input id={`email-${utilisateur.id}`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={150} required />
+            <button type="submit" disabled={majEmail.isPending || email === utilisateur.email}>Enregistrer</button>
+          </form>
+          <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majMotDePasse.mutate(); }}>
+            <ChampMotDePasse
+              id={`motDePasse-${utilisateur.id}`}
+              libelle="Nouveau mot de passe (12 caractères minimum)"
+              valeur={nouveauMotDePasse}
+              onChange={setNouveauMotDePasse}
+              autoComplete="new-password"
+              required
+              minLength={12}
+            />
+            <button type="submit" disabled={majMotDePasse.isPending || nouveauMotDePasse.length < 12}>Réinitialiser le mot de passe</button>
+          </form>
+        </>
+      ) : (
+        <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); ajoutCompte.mutate(); }}>
+          <em>Cette personne ne dispose pas encore d'un compte applicatif.</em>
+          <label htmlFor={`nouvel-identifiant-${utilisateur.id}`}>Identifiant</label>
+          <input id={`nouvel-identifiant-${utilisateur.id}`} value={nouveauCompte.identifiant}
+                 onChange={(e) => setNouveauCompte({ ...nouveauCompte, identifiant: e.target.value })} maxLength={60} required />
+          <label htmlFor={`nouvel-email-${utilisateur.id}`}>E-mail</label>
+          <input id={`nouvel-email-${utilisateur.id}`} type="email" value={nouveauCompte.email}
+                 onChange={(e) => setNouveauCompte({ ...nouveauCompte, email: e.target.value })} maxLength={150} required />
+          <ChampMotDePasse
+            id={`nouveau-mdp-${utilisateur.id}`}
+            libelle="Mot de passe initial (12 caractères minimum)"
+            valeur={nouveauCompte.motDePasse}
+            onChange={(v) => setNouveauCompte({ ...nouveauCompte, motDePasse: v })}
+            autoComplete="new-password"
+            required
+            minLength={12}
+          />
+          <button type="submit" disabled={ajoutCompte.isPending}>Ajouter un compte applicatif</button>
+        </form>
+      )}
       <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majService.mutate(); }}>
         <label htmlFor={`service-${utilisateur.id}`}>Service</label>
         <select id={`service-${utilisateur.id}`} value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
@@ -233,18 +333,6 @@ function PanneauModificationCompte({ utilisateur, services, onErreur, onSucces }
           {services.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
         </select>
         <button type="submit" disabled={majService.isPending}>Enregistrer</button>
-      </form>
-      <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); majMotDePasse.mutate(); }}>
-        <ChampMotDePasse
-          id={`motDePasse-${utilisateur.id}`}
-          libelle="Nouveau mot de passe (12 caractères minimum)"
-          valeur={nouveauMotDePasse}
-          onChange={setNouveauMotDePasse}
-          autoComplete="new-password"
-          required
-          minLength={12}
-        />
-        <button type="submit" disabled={majMotDePasse.isPending || nouveauMotDePasse.length < 12}>Réinitialiser le mot de passe</button>
       </form>
     </div>
   );

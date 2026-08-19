@@ -1,6 +1,6 @@
 package com.snef.sgbf.bonsortie.entity;
 
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.referentiel.entity.Vehicule;
@@ -57,7 +57,9 @@ public class BonSortie {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "agent_id", nullable = false)
-    private Agent agent;
+    // Type Utilisateur, nom de champ/colonne "agent" conserve deliberement (evolution du
+    // 2026-08-19, unification Agent/Utilisateur) - voir FIPH.agent pour la justification complete.
+    private Utilisateur agent;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "vehicule_id")

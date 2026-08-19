@@ -17,7 +17,7 @@ import com.snef.sgbf.fiph.entity.Validation;
 import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.fiph.repository.ValidationRepository;
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -94,7 +94,7 @@ public class FiphVersionPdfService {
     }
 
     private String construireXhtml(FIPH fiph, FIPHVersion version, List<Pointage> pointages, List<Validation> validations) {
-        Agent agent = fiph.getAgent();
+        Utilisateur agent = fiph.getAgent();
 
         String lignesPointage = pointages.stream().map(p -> {
             String codeMission = p.getAffectationMission() != null

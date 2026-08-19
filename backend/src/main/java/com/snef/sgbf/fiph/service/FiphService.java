@@ -22,11 +22,10 @@ import com.snef.sgbf.fiph.repository.FiphRepository;
 import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.fiph.repository.SignatureRepository;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
+import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import java.time.DayOfWeek;
@@ -57,7 +56,7 @@ public class FiphService {
     private final FiphRepository fiphRepository;
     private final FiphVersionRepository fiphVersionRepository;
     private final PointageRepository pointageRepository;
-    private final AgentRepository agentRepository;
+    private final UtilisateurRepository utilisateurRepository;
     private final HabilitationRepository habilitationRepository;
     private final SignatureRepository signatureRepository;
     private final FiphMapper fiphMapper;
@@ -65,13 +64,13 @@ public class FiphService {
     private final NotificationService notificationService;
 
     public FiphService(FiphRepository fiphRepository, FiphVersionRepository fiphVersionRepository,
-                        PointageRepository pointageRepository, AgentRepository agentRepository,
+                        PointageRepository pointageRepository, UtilisateurRepository utilisateurRepository,
                         HabilitationRepository habilitationRepository, SignatureRepository signatureRepository,
                         FiphMapper fiphMapper, AuditService auditService, NotificationService notificationService) {
         this.fiphRepository = fiphRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
-        this.agentRepository = agentRepository;
+        this.utilisateurRepository = utilisateurRepository;
         this.habilitationRepository = habilitationRepository;
         this.signatureRepository = signatureRepository;
         this.fiphMapper = fiphMapper;
@@ -128,7 +127,7 @@ public class FiphService {
 
         return fiphRepository.findAll().stream()
                 .filter(f -> servicesGeres.contains(f.getService().getId())
-                        || (f.getAgent().getUtilisateur() != null && f.getAgent().getUtilisateur().getId().equals(courant.getId())))
+                        || f.getAgent().getId().equals(courant.getId()))
                 .toList();
     }
 
@@ -139,8 +138,8 @@ public class FiphService {
      * service de l'agent (RG-FIPH-004, RG-FIPH-010).
      */
     public FiphDto creerManuelle(CreerFiphManuelleRequest requete, Utilisateur auteur) {
-        Agent agent = agentRepository.findById(requete.agentId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Agent", requete.agentId()));
+        Utilisateur agent = utilisateurRepository.findById(requete.agentId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
         verifierPerimetreGestionnaire(auteur, agent);
 
         if (fiphRepository.findByAgent_IdAndAnneeAndNumeroSemaine(agent.getId(), requete.annee(), requete.numeroSemaine()).isPresent()) {
@@ -185,7 +184,7 @@ public class FiphService {
      * </ol>
      */
     public void genererOuEnrichirDepuisBonSortie(BonSortie bonSortie, Utilisateur auteur) {
-        Agent agent = bonSortie.getAgent();
+        Utilisateur agent = bonSortie.getAgent();
         LocalDate date = bonSortie.getDateSortie();
         int annee = date.get(IsoFields.WEEK_BASED_YEAR);
         int numeroSemaine = date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
@@ -258,8 +257,8 @@ public class FiphService {
      *       statut {@code BROUILLON} en attendant que l'agent titulaire la
      *       signe lui-meme via {@code FiphVersionService.signer()} - or
      *       {@code signer()} est strictement reservee au titulaire du compte
-     *       lie a l'agent (voir sa Javadoc), et un Agent enregistre sans
-     *       compte applicatif (cas courant, voir Javadoc de {@link Agent})
+     *       lie a l'agent (voir sa Javadoc), et une personne enregistree sans
+     *       compte applicatif (cas courant, voir {@link Utilisateur#possedeCompteApplicatif()})
      *       ne peut alors JAMAIS signer : la FIPH restait bloquee
      *       indefiniment au statut BROUILLON - anomalie reelle identifiee et
      *       corrigee ici, en meme temps que la demande explicite de la
@@ -268,7 +267,7 @@ public class FiphService {
      *       desormais celui du CREATEUR (le CA/PH), pas celui de l'agent.</li>
      * </ul>
      */
-    private FIPH creerFiphEtVersionInitiale(Agent agent, OrigineFiph origine, BonSortie bonSortieDeclencheur,
+    private FIPH creerFiphEtVersionInitiale(Utilisateur agent, OrigineFiph origine, BonSortie bonSortieDeclencheur,
                                              LocalDate lundiDeLaSemaine, Utilisateur auteur) {
         FIPH fiph = new FIPH();
         fiph.setAgent(agent);
@@ -432,7 +431,7 @@ public class FiphService {
     }
 
     /** RG-HAB-003 / RG-FIPH-010 : creation/modification bornee au perimetre (service) de l'habilitation active. */
-    void verifierPerimetreGestionnaire(Utilisateur auteur, Agent agent) {
+    void verifierPerimetreGestionnaire(Utilisateur auteur, Utilisateur agent) {
         Long serviceAgentId = agent.getService().getId();
         boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
                 .anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
@@ -470,7 +469,7 @@ public class FiphService {
      * que le texte source specifie explicitement.
      */
     public void verifierPerimetreLecture(Utilisateur lecteur, FIPH fiph) {
-        if (fiph.getAgent().getUtilisateur() != null && fiph.getAgent().getUtilisateur().getId().equals(lecteur.getId())) {
+        if (fiph.getAgent().getId().equals(lecteur.getId())) {
             return;
         }
         Long serviceFiphId = fiph.getService().getId();

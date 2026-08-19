@@ -18,5 +18,7 @@ public interface UtilisateurMapper {
 
     @Mapping(target = "serviceId", source = "service.id")
     @Mapping(target = "serviceLibelle", source = "service.libelle")
+    @Mapping(target = "nomComplet", expression = "java(utilisateur.getNomComplet())")
+    @Mapping(target = "possedeCompteApplicatif", expression = "java(utilisateur.possedeCompteApplicatif())")
     UtilisateurDto toDto(Utilisateur utilisateur);
 }

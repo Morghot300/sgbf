@@ -4,8 +4,7 @@ import { NavLink } from "react-router-dom";
 export default function AdminNav() {
   return (
     <nav className="admin-nav">
-      <NavLink to="/administration" end>Comptes et habilitations</NavLink>
-      <NavLink to="/administration/agents">Agents</NavLink>
+      <NavLink to="/administration" end>Personnel et habilitations</NavLink>
       <NavLink to="/administration/referentiels">Référentiels</NavLink>
     </nav>
   );

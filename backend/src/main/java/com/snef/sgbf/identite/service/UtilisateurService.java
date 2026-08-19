@@ -9,12 +9,13 @@ import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.identite.dto.CreerUtilisateurRequest;
 import com.snef.sgbf.identite.dto.ModifierEmailRequest;
 import com.snef.sgbf.identite.dto.ModifierIdentifiantRequest;
+import com.snef.sgbf.identite.dto.ModifierIdentiteRequest;
 import com.snef.sgbf.identite.dto.ReinitialiserMotDePasseRequest;
 import com.snef.sgbf.identite.dto.UtilisateurDto;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
+import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.identite.mapper.UtilisateurMapper;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
@@ -54,20 +55,18 @@ public class UtilisateurService {
     private final UtilisateurRepository utilisateurRepository;
     private final ServiceRepository serviceRepository;
     private final HabilitationRepository habilitationRepository;
-    private final AgentRepository agentRepository;
     private final UtilisateurMapper utilisateurMapper;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final RefreshTokenService refreshTokenService;
 
     public UtilisateurService(UtilisateurRepository utilisateurRepository, ServiceRepository serviceRepository,
-                               HabilitationRepository habilitationRepository, AgentRepository agentRepository,
+                               HabilitationRepository habilitationRepository,
                                UtilisateurMapper utilisateurMapper, PasswordEncoder passwordEncoder,
                                AuditService auditService, RefreshTokenService refreshTokenService) {
         this.utilisateurRepository = utilisateurRepository;
         this.serviceRepository = serviceRepository;
         this.habilitationRepository = habilitationRepository;
-        this.agentRepository = agentRepository;
         this.utilisateurMapper = utilisateurMapper;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
@@ -109,13 +108,15 @@ public class UtilisateurService {
 
     private boolean correspondAuTerme(Utilisateur utilisateur, String terme) {
         String recherche = terme.toLowerCase();
-        if (utilisateur.getIdentifiant().toLowerCase().contains(recherche)
-                || utilisateur.getEmail().toLowerCase().contains(recherche)) {
-            return true;
-        }
-        return agentRepository.findByUtilisateur_Id(utilisateur.getId())
-                .map(a -> a.getNom().toLowerCase().contains(recherche) || a.getPrenom().toLowerCase().contains(recherche))
-                .orElse(false);
+        return contient(utilisateur.getIdentifiant(), recherche)
+                || contient(utilisateur.getEmail(), recherche)
+                || contient(utilisateur.getMatricule(), recherche)
+                || contient(utilisateur.getNom(), recherche)
+                || contient(utilisateur.getPrenom(), recherche);
+    }
+
+    private boolean contient(String valeur, String recherche) {
+        return valeur != null && valeur.toLowerCase().contains(recherche);
     }
 
     // Pas readOnly : un acces refuse a un compte Super Administrateur ecrit un
@@ -132,20 +133,47 @@ public class UtilisateurService {
         return utilisateurMapper.toDto(cible);
     }
 
+    /**
+     * Cree une personne en une seule operation (evolution du 2026-08-19,
+     * "un utilisateur est obligatoirement un agent") : nom/prenom (et
+     * matricule, lorsque fourni) sont toujours enregistres ici - il n'existe
+     * plus de creation separee d'un "Agent" suivie d'un rattachement a un
+     * compte applicatif. {@link CreerUtilisateurRequest#identifiant()},
+     * {@link CreerUtilisateurRequest#email()} et
+     * {@link CreerUtilisateurRequest#motDePasse()} forment un groupe : soit
+     * les trois sont fournis (compte applicatif immediat), soit aucun ne
+     * l'est (personne du referentiel uniquement, sans acces direct - son
+     * compte pourra etre ajoute plus tard via {@link #ajouterCompteApplicatif}).
+     */
     public UtilisateurDto creer(CreerUtilisateurRequest requete, Utilisateur auteur) {
-        if (utilisateurRepository.existsByIdentifiant(requete.identifiant())) {
-            throw new ConflictException("L'identifiant " + requete.identifiant() + " est deja utilise.");
+        boolean demandeCompte = requete.identifiant() != null || requete.email() != null || requete.motDePasse() != null;
+        if (demandeCompte && (requete.identifiant() == null || requete.identifiant().isBlank()
+                || requete.email() == null || requete.email().isBlank()
+                || requete.motDePasse() == null || requete.motDePasse().isBlank())) {
+            throw new BusinessRuleViolationException("RG-UTIL-001",
+                    "Pour creer un compte applicatif, l'identifiant, l'e-mail et le mot de passe doivent "
+                            + "etre fournis tous les trois - ou aucun (personne sans acces a l'application).");
         }
-        if (utilisateurRepository.existsByEmail(requete.email())) {
-            throw new ConflictException("L'adresse e-mail " + requete.email() + " est deja utilisee.");
+        if (demandeCompte) {
+            if (utilisateurRepository.existsByIdentifiant(requete.identifiant())) {
+                throw new ConflictException("L'identifiant " + requete.identifiant() + " est deja utilise.");
+            }
+            if (utilisateurRepository.existsByEmail(requete.email())) {
+                throw new ConflictException("L'adresse e-mail " + requete.email() + " est deja utilisee.");
+            }
         }
 
         Utilisateur utilisateur = new Utilisateur();
-        utilisateur.setIdentifiant(requete.identifiant());
-        utilisateur.setEmail(requete.email());
-        // Le mot de passe fourni en clair par l'administrateur n'est jamais
-        // conserve : seul son hash BCrypt l'est, des cette ligne.
-        utilisateur.setMotDePasseHash(passwordEncoder.encode(requete.motDePasse()));
+        utilisateur.setNom(requete.nom());
+        utilisateur.setPrenom(requete.prenom());
+        utilisateur.setMatricule(requete.matricule());
+        if (demandeCompte) {
+            utilisateur.setIdentifiant(requete.identifiant());
+            utilisateur.setEmail(requete.email());
+            // Le mot de passe fourni en clair par l'administrateur n'est jamais
+            // conserve : seul son hash BCrypt l'est, des cette ligne.
+            utilisateur.setMotDePasseHash(passwordEncoder.encode(requete.motDePasse()));
+        }
         utilisateur.setStatutCompte(StatutCompte.ACTIF);
 
         if (requete.serviceId() != null) {
@@ -158,6 +186,41 @@ public class UtilisateurService {
 
         auditService.enregistrer(EntiteAuditable.UTILISATEUR, utilisateur.getId(), auteur,
                 TypeActionAudit.CREATION, null, utilisateurMapper.toDto(utilisateur), null, null);
+        return utilisateurMapper.toDto(utilisateur);
+    }
+
+    /**
+     * Ajoute un compte applicatif a une personne du referentiel qui n'en
+     * avait pas encore (evolution du 2026-08-19) - remplace l'ancien
+     * {@code AgentService.lierUtilisateur}, qui reliait deux entites
+     * distinctes ; ici, la personne existe deja, seuls ses attributs de
+     * connexion sont completes.
+     */
+    public UtilisateurDto ajouterCompteApplicatif(Long id, CreerUtilisateurRequest requete, Utilisateur auteur) {
+        Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
+        if (utilisateur.possedeCompteApplicatif()) {
+            throw new ConflictException("Cette personne dispose deja d'un compte applicatif.");
+        }
+        if (requete.identifiant() == null || requete.identifiant().isBlank()
+                || requete.email() == null || requete.email().isBlank()
+                || requete.motDePasse() == null || requete.motDePasse().isBlank()) {
+            throw new BusinessRuleViolationException("RG-UTIL-001",
+                    "L'identifiant, l'e-mail et le mot de passe sont tous obligatoires pour ajouter un compte applicatif.");
+        }
+        if (utilisateurRepository.existsByIdentifiant(requete.identifiant())) {
+            throw new ConflictException("L'identifiant " + requete.identifiant() + " est deja utilise.");
+        }
+        if (utilisateurRepository.existsByEmail(requete.email())) {
+            throw new ConflictException("L'adresse e-mail " + requete.email() + " est deja utilisee.");
+        }
+
+        utilisateur.setIdentifiant(requete.identifiant());
+        utilisateur.setEmail(requete.email());
+        utilisateur.setMotDePasseHash(passwordEncoder.encode(requete.motDePasse()));
+        utilisateur = utilisateurRepository.save(utilisateur);
+
+        auditService.enregistrerAction(EntiteAuditable.UTILISATEUR, utilisateur.getId(), auteur, TypeActionAudit.CREATION);
         return utilisateurMapper.toDto(utilisateur);
     }
 
@@ -233,6 +296,21 @@ public class UtilisateurService {
 
         auditService.enregistrerAction(EntiteAuditable.UTILISATEUR, utilisateur.getId(), auteur,
                 TypeActionAudit.REINITIALISATION_MOT_DE_PASSE);
+        return utilisateurMapper.toDto(utilisateur);
+    }
+
+    /** Correction du nom/prenom/matricule d'une personne (evolution du 2026-08-19). */
+    public UtilisateurDto modifierIdentite(Long id, ModifierIdentiteRequest requete, Utilisateur auteur) {
+        Utilisateur utilisateur = chargerUtilisateur(id);
+        verifierAccesCompteCible(utilisateur, auteur);
+        String avant = utilisateur.getNomComplet();
+        utilisateur.setNom(requete.nom());
+        utilisateur.setPrenom(requete.prenom());
+        utilisateur.setMatricule(requete.matricule());
+        utilisateur = utilisateurRepository.save(utilisateur);
+
+        auditService.enregistrer(EntiteAuditable.UTILISATEUR, utilisateur.getId(), auteur,
+                TypeActionAudit.MODIFICATION, avant, utilisateur.getNomComplet(), null, null);
         return utilisateurMapper.toDto(utilisateur);
     }
 

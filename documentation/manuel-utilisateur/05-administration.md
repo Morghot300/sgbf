@@ -2,79 +2,77 @@
 
 > Réservé au rôle **Administrateur** (et au **Super Administrateur**, qui hérite de tous ses droits — voir la section dédiée en fin de document). Chaque appel API concerné reste protégé côté serveur (`@PreAuthorize` et hiérarchie de rôles Spring Security) : même en accédant directement à une URL d'administration, un compte sans ce rôle se voit systématiquement refuser l'accès — jamais seulement un bouton masqué côté React.
 
-## Comptes et habilitations
+## Personnel et habilitations
 
-**Accès** — Menu **Administration** (n'apparaît que pour un Administrateur ou un Super Administrateur) → onglet **Comptes et habilitations**.
+> **Évolution du 2026-08-19** — Toute personne utilisant l'application est obligatoirement un membre du personnel : il n'existe plus d'écran séparé « Agents » ni de rattachement en deux étapes. Une seule fiche par personne réunit son identité RH (nom, prénom, matricule) et, lorsqu'elle en dispose, son compte applicatif (identifiant, e-mail, mot de passe) — le compte reste optionnel : une personne de terrain peut exister dans ce référentiel sans jamais se connecter elle-même, son Bon de Sortie et sa FIPH étant alors gérés pour son compte par un tiers habilité (Chargé d'Affaires, Personne habilitée, Administrateur ou Super Administrateur).
 
-### Rechercher et filtrer les comptes (évolution du 2026-08-18)
+**Accès** — Menu **Administration** (n'apparaît que pour un Administrateur ou un Super Administrateur) → onglet **Personnel et habilitations**.
 
-**Objectif** — Retrouver rapidement un compte parmi tous ceux existants.
+### Rechercher et filtrer
 
-**Accès** — En haut de la page **Comptes et habilitations**, barre de filtres.
+**Objectif** — Retrouver rapidement une personne parmi toutes celles existantes.
+
+**Accès** — En haut de la page, barre de filtres.
 
 **Étapes** — Combinez librement :
-- **Rechercher** : identifiant, e-mail, ou nom/prénom de l'agent éventuellement rattaché (insensible à la casse) ;
-- **Service** : ne montre que les comptes rattachés à ce service ;
-- **Rôle** : ne montre que les comptes détenant une habilitation active de ce rôle ;
+- **Rechercher** : identifiant, e-mail, nom, prénom ou matricule (insensible à la casse) ;
+- **Service** : ne montre que les personnes rattachées à ce service ;
+- **Rôle** : ne montre que les personnes détenant une habilitation active de ce rôle ;
 - **Statut** : ACTIF / VERROUILLE / DESACTIVE.
 
-Le bouton **Réinitialiser les filtres** efface tous les critères. Le filtrage est effectué côté serveur (paramètres de requête), pas en chargeant tous les comptes puis en filtrant dans le navigateur.
+Le bouton **Réinitialiser les filtres** efface tous les critères. Le filtrage est effectué côté serveur, pas en chargeant toutes les personnes puis en filtrant dans le navigateur.
 
-### Créer un compte
+### Créer une personne
 
-**Étapes** — Renseignez l'**identifiant**, l'**e-mail**, un **mot de passe initial** (12 caractères minimum) et, le cas échéant, le **service** de rattachement. Cliquez sur **Créer le compte**.
+**Étapes** — Renseignez le **nom**, le **prénom**, le **matricule** (facultatif) et le **service** (facultatif — voir plus bas). Cochez **Cette personne dispose d'un compte applicatif** pour lui donner directement un accès : renseignez alors l'**identifiant**, l'**e-mail** et un **mot de passe initial** (12 caractères minimum). Laissez la case décochée pour une personne sans accès direct. Cliquez sur **Créer**.
 
-**Résultat attendu** — Le compte est créé au statut **ACTIF**, sans aucune habilitation — à attribuer séparément (voir ci-dessous).
+**Résultat attendu** — La personne est créée au statut **ACTIF**, sans aucune habilitation — à attribuer séparément (voir ci-dessous). Le service reste obligatoire dès qu'un rôle à périmètre non global (Chargé d'Affaires, Personne habilitée, Responsable d'Activité…) lui sera attribué ; le serveur refuse toute habilitation de ce type sans service, indépendamment de ce qui a été saisi à la création de la personne elle-même.
+
+### Ajouter un compte applicatif à une personne existante
+
+**Objectif** — Permettre à une personne créée sans accès de se connecter elle-même par la suite (visa de ses propres bons de sortie, signature de ses FIPH).
+
+**Accès** — Bouton **Modifier** sur la ligne de la personne concernée.
+
+**Étapes** — Le panneau affiche *« Cette personne ne dispose pas encore d'un compte applicatif »* : renseignez l'**identifiant**, l'**e-mail** et un **mot de passe initial**, puis cliquez sur **Ajouter un compte applicatif**.
+
+**Résultat attendu** — La personne peut désormais se connecter, viser ses propres bons de sortie et signer ses FIPH.
 
 ### Changer le statut d'un compte
 
-**Étapes** — Dans le tableau des comptes, changez la valeur du menu déroulant **Statut** sur la ligne concernée (ACTIF / VERROUILLE / DESACTIVE).
+**Étapes** — Dans le tableau, changez la valeur du menu déroulant **Statut** sur la ligne concernée (ACTIF / VERROUILLE / DESACTIVE).
 
 **Résultat attendu** — Effet immédiat : un compte VERROUILLE ou DESACTIVE ne peut plus se connecter, même avec des identifiants corrects ; ses éventuels jetons de rafraîchissement déjà émis sont également révoqués.
 
-### Corriger un compte (identifiant, e-mail, mot de passe, service) — évolution du 2026-08-18
+### Corriger une personne (identité, identifiant, e-mail, mot de passe, service) — évolution du 2026-08-18/2026-08-19
 
-**Objectif** — Corriger une erreur de saisie ou un changement administratif (mariage, faute de frappe, oubli du service à la création…), sans devoir recréer le compte.
+**Objectif** — Corriger une erreur de saisie ou un changement administratif (mariage, faute de frappe, oubli du service à la création…), sans devoir recréer la personne.
 
-**Accès** — Bouton **Modifier** sur la ligne du compte concerné.
+**Accès** — Bouton **Modifier** sur la ligne de la personne concernée.
 
-**Étapes** — Le panneau qui s'ouvre propose quatre corrections indépendantes, chacune avec son propre bouton **Enregistrer** :
-- **Identifiant** — refusé si déjà attribué à un autre compte (message explicite) ;
-- **E-mail** — refusé si déjà attribué, ou si le format n'est pas valide ;
-- **Service** — peut être retiré (laisser « Non renseigné ») pour un compte à périmètre global (RH, Administrateur, Super Administrateur) ;
-- **Réinitialiser le mot de passe** — nouveau mot de passe (12 caractères minimum), avec la case **Afficher le mot de passe** pour le relire avant validation.
+**Étapes** — Le panneau qui s'ouvre propose plusieurs corrections indépendantes, chacune avec son propre bouton **Enregistrer** :
+- **Nom / prénom / matricule** — identité RH de la personne ;
+- **Identifiant** — refusé si déjà attribué à un autre compte (message explicite), uniquement si la personne dispose d'un compte ;
+- **E-mail** — refusé si déjà attribué, ou si le format n'est pas valide, uniquement si la personne dispose d'un compte ;
+- **Service** — peut être retiré (laisser « Non renseigné ») pour une personne à périmètre global (RH, Administrateur, Super Administrateur) ;
+- **Réinitialiser le mot de passe** — nouveau mot de passe (12 caractères minimum), avec la case **Afficher le mot de passe** pour le relire avant validation, uniquement si la personne dispose d'un compte.
 
 **Résultat attendu** — Le mot de passe saisi n'est jamais conservé ni journalisé en clair : seul son empreinte cryptographique (hash) est enregistrée, exactement comme à la création d'un compte. Toute session déjà ouverte avec l'ancien mot de passe est invalidée (les jetons de rafraîchissement du compte sont révoqués) — une reconnexion avec le nouveau mot de passe est nécessaire.
 
-### Attribuer ou retirer une habilitation
+### Attribuer, retirer, ou réaffecter une habilitation
 
-**Objectif** — Associer un utilisateur à un rôle métier sur un périmètre (service), ou l'en retirer (RG-HAB-001 à 006).
+**Objectif** — Associer une personne à un rôle métier sur un périmètre (service), l'en retirer, ou la réaffecter à un autre service (RG-HAB-001 à 007).
 
 **Étapes**
-1. Cliquez sur **Habilitations** sur la ligne du compte concerné pour dérouler le panneau.
+1. Cliquez sur **Habilitations** sur la ligne de la personne concernée pour dérouler le panneau.
 2. Choisissez le **rôle** et, sauf pour RH ou Administrateur (périmètre global, sans service), le **service**.
 3. Cliquez sur **Attribuer**.
 4. Pour retirer une habilitation active, cliquez sur **Retirer** sur la ligne correspondante.
+5. Pour un Chargé d'Affaires, une Personne habilitée ou un Responsable d'Activité déjà en poste, utilisez plutôt **Changer de service** (menu déroulant + bouton **Changer** sur sa ligne) : une seule action tracée qui remplace un retrait suivi d'une nouvelle attribution.
 
 **Cas particuliers**
-- **RG-HAB-005 (exclusivité RH)** : un compte détenant l'habilitation RH ne peut cumuler aucune autre habilitation, et réciproquement — le serveur refuse la tentative avec un message explicite.
-- Un utilisateur peut cumuler plusieurs habilitations non-RH (ex. Chargé d'Affaires sur un service et personne habilitée sur un autre).
-
-## Agents
-
-**Accès** — Menu **Administration** → onglet **Agents**.
-
-### Créer un agent
-
-**Étapes** — Renseignez le **matricule**, le **nom**, le **prénom** et le **service**, puis cliquez sur **Créer l'agent**.
-
-### Rattacher un compte applicatif à un agent
-
-**Objectif** — Permettre à un agent de se connecter lui-même à l'application (visa de ses propres bons de sortie, signature de ses FIPH).
-
-**Étapes** — Sur la ligne de l'agent non encore rattaché, sélectionnez un **compte** dans la liste puis cliquez sur **Rattacher**.
-
-**Résultat attendu** — L'agent est marqué « Rattaché » ; son compte applicatif peut désormais viser ses bons de sortie et signer ses FIPH.
+- **RG-HAB-005 (exclusivité RH)** : une personne détenant l'habilitation RH ne peut cumuler aucune autre habilitation, et réciproquement — le serveur refuse la tentative avec un message explicite.
+- **RG-HAB-007 (un seul service par rôle, évolution du 2026-08-19)** : un Chargé d'Affaires, une Personne habilitée ou un Responsable d'Activité ne peut détenir qu'une seule habilitation active de ce rôle à la fois — sur un seul service. Une seconde attribution du même rôle est refusée ; utilisez **Changer de service** pour réaffecter la personne. La Direction reste exempte de cette règle (portée transverse).
 
 ## Référentiels
 
@@ -115,5 +113,5 @@ ADMINISTRATEUR
         ↓
 RESPONSABLES / RÔLES MÉTIER (Chargé d'Affaires, Responsable d'activité, Direction, RH...)
         ↓
-UTILISATEURS (agents)
+PERSONNEL (chaque personne = un utilisateur/agent)
 ```

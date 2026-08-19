@@ -11,7 +11,7 @@ import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.service.FiphService;
-import com.snef.sgbf.identite.entity.Agent;
+import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
@@ -86,7 +86,7 @@ public class PersonneABordGenerationService {
         }
 
         BonSortie principal = association.getBonSortiePrincipal();
-        Agent personneAgent = association.getAgent();
+        Utilisateur personneAgent = association.getAgent();
 
         Optional<AffectationMission> affectationPersonne =
                 affectationMissionService.resoudreActiveADate(personneAgent.getId(), principal.getDateSortie());

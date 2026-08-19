@@ -91,7 +91,7 @@ public class BootstrapAdminSeeder implements ApplicationRunner {
         String motDePasse = motDePasseGenere ? genererMotDePasse() : motDePasseConfigure;
 
         Utilisateur admin = versEntite(utilisateurService.creer(
-                new CreerUtilisateurRequest("admin", email, motDePasse, null), null));
+                new CreerUtilisateurRequest("Administrateur", "Systeme", null, "admin", email, motDePasse, null), null));
 
         habilitationService.attribuer(
                 new CreerHabilitationRequest(admin.getId(), CodeRoleMetier.ADMINISTRATEUR.name(),

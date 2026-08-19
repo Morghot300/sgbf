@@ -111,7 +111,11 @@ public class NotificationService {
 
     /** Informe le titulaire de la FIPH (s'il possede un compte applicatif) que sa fiche est definitivement validee. */
     public void notifierValidationFinale(Long fiphId, Long fiphVersionId, String referenceFiph, Utilisateur titulaireCompte, Utilisateur declencheur) {
-        if (titulaireCompte == null) {
+        // Le titulaire d'une FIPH (Utilisateur.agent) n'est plus jamais null depuis l'unification
+        // Agent/Utilisateur du 2026-08-19, mais peut ne pas disposer d'un compte applicatif
+        // (possedeCompteApplicatif() == false) - une notification n'a alors aucun sens, personne ne
+        // pourra jamais se connecter pour la lire.
+        if (titulaireCompte == null || !titulaireCompte.possedeCompteApplicatif()) {
             return;
         }
         creer(titulaireCompte, TypeNotification.FIPH_VALIDEE, referenceFiph + " validee definitivement",

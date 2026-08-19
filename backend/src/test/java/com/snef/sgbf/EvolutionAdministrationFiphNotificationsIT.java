@@ -13,11 +13,9 @@ import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.EvenementAudit;
 import com.snef.sgbf.common.audit.EvenementAuditRepository;
-import com.snef.sgbf.identite.entity.Agent;
 import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.repository.AgentRepository;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
@@ -82,7 +80,6 @@ class EvolutionAdministrationFiphNotificationsIT {
     @Autowired private ServiceRepository serviceRepository;
     @Autowired private ChantierRepository chantierRepository;
     @Autowired private CodeHNRepository codeHNRepository;
-    @Autowired private AgentRepository agentRepository;
     @Autowired private UtilisateurRepository utilisateurRepository;
     @Autowired private HabilitationRepository habilitationRepository;
     @Autowired private RoleMetierRepository roleMetierRepository;
@@ -189,10 +186,8 @@ class EvolutionAdministrationFiphNotificationsIT {
 
     @Test
     void administrateurStandardNePeutPasUtiliserLaPriseEnMainSuperAdmin() throws Exception {
-        Agent agent = agentRepository.save(nouvelAgent("PEM" + (suffixe % 100_000L), "Test", "PriseEnMain", service));
-        Utilisateur agentUtilisateur = creerUtilisateur("agent_pem_" + suffixe, service);
-        agent.setUtilisateur(agentUtilisateur);
-        agentRepository.save(agent);
+        Utilisateur agent = creerPersonneAvecCompte("PEM" + (suffixe % 100_000L), "Test", "PriseEnMain", "agent_pem_" + suffixe, service);
+        Utilisateur agentUtilisateur = agent;
         Utilisateur ca = creerUtilisateurAvecHabilitation("ca_pem_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         affecterAgentAMission(agent, ca);
 
@@ -217,10 +212,8 @@ class EvolutionAdministrationFiphNotificationsIT {
 
     @Test
     void parcoursCompletFiphL99AvecUneNotificationAChaqueNiveauDeValidation() throws Exception {
-        Agent agentL99 = agentRepository.save(nouvelAgent("L99-" + (suffixe % 100_000L), "Ekwalla", "Paul", service));
-        Utilisateur utilisateurL99 = creerUtilisateur("agent_l99n_" + suffixe, service);
-        agentL99.setUtilisateur(utilisateurL99);
-        agentRepository.save(agentL99);
+        Utilisateur agentL99 = creerPersonneAvecCompte("L99-" + (suffixe % 100_000L), "Ekwalla", "Paul", "agent_l99n_" + suffixe, service);
+        Utilisateur utilisateurL99 = agentL99;
 
         Utilisateur ca = creerUtilisateurAvecHabilitation("ca_notif_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         Utilisateur ra = creerUtilisateurAvecHabilitation("ra_notif_" + suffixe, service, CodeRoleMetier.RESPONSABLE_ACTIVITE);
@@ -299,10 +292,8 @@ class EvolutionAdministrationFiphNotificationsIT {
 
     @Test
     void interruptionMedianeEtPriseEnMainExceptionnelleParLeSuperAdministrateur() throws Exception {
-        Agent agent = agentRepository.save(nouvelAgent("PEM2-" + (suffixe % 100_000L), "Test", "Interrompue", service));
-        Utilisateur agentUtilisateur = creerUtilisateur("agent_interrompu_" + suffixe, service);
-        agent.setUtilisateur(agentUtilisateur);
-        agentRepository.save(agent);
+        Utilisateur agent = creerPersonneAvecCompte("PEM2-" + (suffixe % 100_000L), "Test", "Interrompue", "agent_interrompu_" + suffixe, service);
+        Utilisateur agentUtilisateur = agent;
         Utilisateur ca = creerUtilisateurAvecHabilitation("ca_interrompu_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         affecterAgentAMission(agent, ca);
 
@@ -446,7 +437,7 @@ class EvolutionAdministrationFiphNotificationsIT {
         return compte;
     }
 
-    private void affecterAgentAMission(Agent agent, Utilisateur creePar) {
+    private void affecterAgentAMission(Utilisateur agent, Utilisateur creePar) {
         Mission mission = new Mission();
         mission.setCodeHN(codeHN);
         mission.setChantier(chantier);
@@ -526,12 +517,17 @@ class EvolutionAdministrationFiphNotificationsIT {
         return codeHN;
     }
 
-    private Agent nouvelAgent(String matricule, String nom, String prenom, Service service) {
-        Agent agent = new Agent();
-        agent.setMatricule(matricule);
-        agent.setNom(nom);
-        agent.setPrenom(prenom);
-        agent.setService(service);
-        return agent;
+    /** Personne avec compte applicatif ET identite RH complete en une seule creation (evolution du 2026-08-19, unification Agent/Utilisateur). */
+    private Utilisateur creerPersonneAvecCompte(String matricule, String nom, String prenom, String identifiant, Service service) {
+        Utilisateur utilisateur = new Utilisateur();
+        utilisateur.setMatricule(matricule);
+        utilisateur.setNom(nom);
+        utilisateur.setPrenom(prenom);
+        utilisateur.setIdentifiant(identifiant);
+        utilisateur.setEmail(identifiant + "@example.invalid");
+        utilisateur.setMotDePasseHash(passwordEncoder.encode(MOT_DE_PASSE));
+        utilisateur.setStatutCompte(StatutCompte.ACTIF);
+        utilisateur.setService(service);
+        return utilisateurRepository.save(utilisateur);
     }
 }

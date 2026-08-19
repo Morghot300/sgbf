@@ -30,7 +30,7 @@ com.snef.sgbf
 │   ├── pdf/             # PdfRenderer (HTML -> PDF a la demande), HtmlUtils, DocumentPdf
 │   └── validation/      # Validateurs personnalisés (ex: exclusivité code mission/service)
 ├── referentiel/        # Service, Vehicule, Chantier, CodeHN, MotifInterruptionMission
-├── identite/            # Utilisateur, Agent, RoleMetier, Habilitation
+├── identite/            # Utilisateur (personnel unifie, voir §2bis), RoleMetier, Habilitation
 ├── mission/             # Mission, AffectationMission (+ interruption/réaffectation)
 ├── bonsortie/           # BonSortie, BonSortiePersonne, BonSortiePdfService
 └── fiph/                # FIPH, FIPHVersion, Pointage, Validation, Signature, FiphVersionPdfService
@@ -39,6 +39,16 @@ com.snef.sgbf
 Aucune entité `DocumentGenere` : la génération PDF (bon de sortie, FIPH) est une opération de lecture pure, sans aucun état persisté (voir §3, choix "Génération PDF à la demande").
 
 Chaque module suit la même stratification : `*.controller` (REST, DTO in/out), `*.service` (logique métier, transactions), `*.repository` (Spring Data JPA), `*.entity` (JPA), `*.dto` (records Java), `*.mapper` (MapStruct).
+
+## 2bis. Unification Agent/Utilisateur (évolution du 2026-08-19)
+
+Jusqu'au 2026-08-19, le modèle distinguait deux entités reliées par un lien 0..1 facultatif : `Agent` (référentiel RH — matricule, nom, prénom, service) et `Utilisateur` (compte applicatif — identifiant, e-mail, mot de passe). Cette séparation obligeait une création en deux étapes (créer l'Agent, puis créer l'Utilisateur, puis les relier) et dupliquait la notion de service de rattachement entre les deux entités.
+
+Règle désormais appliquée : **toute personne utilisant l'application est un membre du personnel** — une seule entité `Utilisateur` (table `users`) porte à la fois l'identité RH (`matricule`, `nom`, `prenom`) et, lorsqu'elle existe, l'identité de connexion (`identifiant`, `email`, `motDePasseHash`, désormais tous trois nullables). `Utilisateur.possedeCompteApplicatif()` (`identifiant != null`) remplace l'ancien contrôle `agent.getUtilisateur() != null` partout où il conditionnait un droit (signature d'une FIPH, visa d'un bon de sortie, etc.).
+
+FIPH, BonSortie, BonSortiePersonne et AffectationMission référencent désormais directement `Utilisateur` (colonne `agent_id`, nom conservé pour limiter le churn — le champ Java reste `agent` mais son type est `Utilisateur`, documenté explicitement dans chaque entité). La migration `V12__unification_agent_utilisateur.sql` réalise la fusion des données existantes (enrichissement des comptes déjà liés, création d'une nouvelle ligne `users` pour chaque agent sans compte) et le repointage des clés étrangères — voir son en-tête pour le détail complet, y compris le contournement temporaire du trigger `trg_affectation_mission_immutabilite` (RG-MIS-006), nécessaire une seule fois pour ce repointage structurel.
+
+Une personne peut être créée pour le compte d'un tiers dépourvu d'accès applicatif — un Chargé d'Affaires, une Personne habilitée, l'Administrateur ou le Super Administrateur peuvent alors créer un Bon de Sortie « pour » cette personne (`CreerBonSortieRequest.agentId`), avec un visa automatique du créateur au même titre que celui déjà appliqué à la création automatique depuis un Bon de Sortie et à la création manuelle d'une FIPH.
 
 ## 3. Choix techniques justifiés
 

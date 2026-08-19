@@ -1,6 +1,6 @@
 import { httpClient } from "./httpClient";
 import type {
-  AgentDto, CreerAgentRequest, CreerHabilitationRequest, CreerUtilisateurRequest,
+  CreerHabilitationRequest, CreerUtilisateurRequest, ModifierIdentiteRequest,
   HabilitationDto, StatutCompte, UtilisateurDto,
 } from "../types/identite";
 
@@ -36,18 +36,13 @@ export async function modifierServiceUtilisateur(id: number, serviceId: number |
 export async function reinitialiserMotDePasse(id: number, nouveauMotDePasse: string): Promise<UtilisateurDto> {
   return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/mot-de-passe`, { nouveauMotDePasse })).data;
 }
-
-export async function listerAgents(): Promise<AgentDto[]> {
-  return (await httpClient.get<AgentDto[]>("/agents")).data;
+/** Correction du nom/prénom/matricule d'une personne (évolution du 2026-08-19). */
+export async function modifierIdentite(id: number, requete: ModifierIdentiteRequest): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/identite`, requete)).data;
 }
-export async function rechercherAgents(terme: string, serviceId?: number): Promise<AgentDto[]> {
-  return (await httpClient.get<AgentDto[]>("/agents/recherche", { params: { terme, serviceId } })).data;
-}
-export async function creerAgent(requete: CreerAgentRequest): Promise<AgentDto> {
-  return (await httpClient.post<AgentDto>("/agents", requete)).data;
-}
-export async function lierUtilisateurAgent(agentId: number, utilisateurId: number): Promise<AgentDto> {
-  return (await httpClient.put<AgentDto>(`/agents/${agentId}/utilisateur/${utilisateurId}`)).data;
+/** Ajoute un compte applicatif à une personne du référentiel qui n'en avait pas encore (évolution du 2026-08-19). */
+export async function ajouterCompteApplicatif(id: number, requete: CreerUtilisateurRequest): Promise<UtilisateurDto> {
+  return (await httpClient.put<UtilisateurDto>(`/utilisateurs/${id}/compte`, requete)).data;
 }
 
 export async function listerHabilitationsUtilisateur(utilisateurId: number): Promise<HabilitationDto[]> {
