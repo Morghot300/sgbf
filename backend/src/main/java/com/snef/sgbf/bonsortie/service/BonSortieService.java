@@ -23,6 +23,7 @@ import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
+import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import com.snef.sgbf.referentiel.repository.VehiculeRepository;
 import java.time.LocalDate;
@@ -66,6 +67,7 @@ public class BonSortieService {
     private final FiphService fiphService;
     private final BonSortieMapper bonSortieMapper;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public BonSortieService(BonSortieRepository bonSortieRepository,
                              BonSortiePersonneRepository bonSortiePersonneRepository,
@@ -76,7 +78,8 @@ public class BonSortieService {
                              PersonneABordGenerationService personneABordGenerationService,
                              FiphService fiphService,
                              BonSortieMapper bonSortieMapper,
-                             AuditService auditService) {
+                             AuditService auditService,
+                             NotificationService notificationService) {
         this.bonSortieRepository = bonSortieRepository;
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -87,13 +90,14 @@ public class BonSortieService {
         this.fiphService = fiphService;
         this.bonSortieMapper = bonSortieMapper;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
     public BonSortieDto obtenirParId(Long id, Utilisateur courant) {
         BonSortie bonSortie = chargerBonSortie(id);
         verifierPerimetreLecture(courant, bonSortie);
-        return bonSortieMapper.toDto(bonSortie);
+        return avecAvertissementAffectation(bonSortieMapper.toDto(bonSortie), bonSortie);
     }
 
     /** Reserve a {@link BonSortiePdfService} : memes droits que la consultation (RG-DOC-007), mais retourne l'entite plutot que le DTO. */
@@ -127,8 +131,36 @@ public class BonSortieService {
                 .filter(bs -> dateFin == null || !bs.getDateSortie().isAfter(dateFin))
                 .filter(bs -> statut == null || statut == bs.getStatut())
                 .filter(bs -> serviceId == null || serviceId.equals(bs.getAgent().getService().getId()))
-                .map(bonSortieMapper::toDto)
+                .map(bs -> avecAvertissementAffectation(bonSortieMapper.toDto(bs), bs))
                 .toList();
+    }
+
+    /**
+     * Avertissement actionnable (Lot 2, evolution du 2026-08-19) : jamais
+     * bloquant (decision confirmee), visible aussi bien AVANT la validation
+     * (pour que le Charge d'Affaires corrige en amont : code affaire ou
+     * affectation manquante) qu'APRES si le bon a ete valide malgre cette
+     * absence. Resolution live plutot que simple lecture de
+     * {@code bonSortie.getAffectationMission()} : tant que le bon n'est pas
+     * encore valide, ce champ est toujours nul par construction (resolu
+     * seulement a la validation, voir {@link #valider}) - sans resolution
+     * live ici, aucun avertissement ne serait jamais visible avant coup.
+     */
+    private BonSortieDto avecAvertissementAffectation(BonSortieDto dto, BonSortie bonSortie) {
+        if (bonSortie.getAffectationMission() != null) {
+            return dto;
+        }
+        boolean resoluble = affectationMissionService
+                .resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie())
+                .isPresent();
+        if (resoluble) {
+            return dto;
+        }
+        String avertissement = "Aucune affectation active trouvee pour " + bonSortie.getAgent().getNomComplet()
+                + " a la date du " + bonSortie.getDateSortie() + " (code affaire saisi : "
+                + (bonSortie.getCodeAffaireSaisi() != null ? bonSortie.getCodeAffaireSaisi() : "non renseigne")
+                + "). Verifiez l'affectation de l'agent ou corrigez le code affaire avant de valider.";
+        return dto.avecAvertissementAffectation(avertissement);
     }
 
     private List<BonSortie> entitesVisibles(Utilisateur courant) {
@@ -204,6 +236,10 @@ public class BonSortieService {
                             + " (bon de sortie cree pour le compte de " + titulaire.getNomComplet()
                             + ", sans acces applicatif)",
                     StatutBonSortie.BROUILLON.name(), StatutBonSortie.VISE.name());
+            // Le bon est immediatement pret pour le niveau 2 (Lot 3, evolution du 2026-08-19) -
+            // meme point d'entree que pour un visa explicite via viser(), jamais duplique.
+            notificationService.notifierBonSortieAValider(bonSortie.getId(), titulaire.getService().getId(),
+                    "Bon de sortie #" + bonSortie.getId(), auteur);
         }
         return bonSortieMapper.toDto(bonSortie);
     }
@@ -271,6 +307,8 @@ public class BonSortieService {
 
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
                 TypeActionAudit.VISA, avant.name(), StatutBonSortie.VISE.name(), avant.name(), StatutBonSortie.VISE.name());
+        notificationService.notifierBonSortieAValider(bonSortie.getId(), bonSortie.getAgent().getService().getId(),
+                "Bon de sortie #" + bonSortie.getId(), auteur);
         return bonSortieMapper.toDto(bonSortie);
     }
 
@@ -281,6 +319,40 @@ public class BonSortieService {
      * declenche la generation automatique des bons de sortie individuels
      * des personnes a bord deja associees (RG-PAB-002), chacune dans sa
      * propre transaction isolee (section 9.6).
+     *
+     * <p><strong>Auto-validation (evolution du 2026-08-19, Lot 1 -
+     * decision confirmee explicitement, pas un effet de bord)</strong> :
+     * un Charge d'Affaires/personne habilitee qui a lui-meme vise ce bon en
+     * tant qu'agent titulaire (cas ou la meme personne cumule les deux
+     * qualites) PEUT valider son propre bon - aucun controle de separation
+     * des taches n'est applique ici, contrairement a RG-HAB-004 pour les
+     * FIPH. Seuls le role (niveau 2) et le perimetre de service
+     * ({@link #verifierPerimetreGestionnaire}) conditionnent le droit de
+     * valider.
+     *
+     * <p><strong>Affectation manquante : avertissement, jamais un blocage
+     * (evolution du 2026-08-19, Lot 2 - decision confirmee)</strong> : avant
+     * cette evolution, l'absence d'AffectationMission active refusait
+     * purement et simplement la validation (RG-FIPH-020, {@code 422}). Elle
+     * n'empeche plus la validation - {@code bonSortie.affectationMission}
+     * reste alors {@code null}, et {@link BonSortieDto#avertissementAffectation()}
+     * porte un message actionnable (voir {@link #avecAvertissementAffectation}),
+     * deja visible avant meme de valider. Repercussion tracee jusqu'a la
+     * FIPH : {@link FiphService} bascule alors la ligne de pointage
+     * correspondante sur le service de l'agent plutot que sur une
+     * affectation inexistante (voir sa Javadoc), au lieu de laisser les deux
+     * colonnes nulles - ce que la contrainte CHECK de {@code fiph_pointage}
+     * interdirait de toute maniere (RG-FIPH-007).
+     *
+     * <p><strong>Idempotence / atomicite</strong> : le controle de statut
+     * ci-dessous (uniquement depuis {@code VISE}) combine au verrouillage
+     * optimiste JPA ({@code @Version lockVersion} sur {@link BonSortie})
+     * rend un double-clic ou un rejeu de requete sans effet - la seconde
+     * ecriture est soit refusee des le controle de statut (rechargement
+     * entre-temps), soit rejetee par Hibernate avec
+     * {@code OptimisticLockingFailureException} (traduite en {@code 409} par
+     * {@code GlobalExceptionHandler}) si les deux requetes lisaient le meme
+     * etat en concurrence.
      */
     public BonSortieDto valider(Long bonSortieId, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
@@ -292,14 +364,9 @@ public class BonSortieService {
 
         Optional<AffectationMission> affectation =
                 affectationMissionService.resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
-        if (affectation.isEmpty()) {
-            throw new BusinessRuleViolationException("RG-FIPH-020",
-                    "Aucune affectation active trouvee pour cet agent a la date de sortie : "
-                            + "verifiez le code affaire saisi ou l'affectation de l'agent.");
-        }
 
         StatutBonSortie avant = bonSortie.getStatut();
-        bonSortie.setAffectationMission(affectation.get());
+        affectation.ifPresent(bonSortie::setAffectationMission);
         bonSortie.setStatut(StatutBonSortie.VALIDE);
         bonSortie.setValideParCA(auteur);
         bonSortie.setDateValidation(LocalDateTime.now());
@@ -308,6 +375,15 @@ public class BonSortieService {
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
                 TypeActionAudit.VALIDATION, avant.name(), StatutBonSortie.VALIDE.name(),
                 avant.name(), StatutBonSortie.VALIDE.name());
+        if (affectation.isEmpty()) {
+            // Anomalie tracee separement (RG-FIPH-020) : jamais silencieuse,
+            // meme devenue non bloquante - et notifiee au valideur (Lot 3,
+            // notifierAnomalieAffectation) pour suivi.
+            auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
+                    TypeActionAudit.ANOMALIE_AFFECTATION, null,
+                    "Bon valide sans affectation active resolue pour l'agent a la date de sortie", null, null);
+            notificationService.notifierAnomalieAffectation(bonSortie.getId(), auteur, bonSortie.getAgent().getService().getId());
+        }
 
         // RG-BS-007 / RG-FIPH-001 : declenche la generation ou l'enrichissement
         // automatique de la FIPH de l'agent emetteur lui-meme.
@@ -315,7 +391,9 @@ public class BonSortieService {
 
         genererPourPersonnesABordEnAttente(bonSortie.getId(), auteur);
 
-        return bonSortieMapper.toDto(bonSortie);
+        notificationService.notifierBonSortieValide(bonSortie.getId(), bonSortie.getAgent(), auteur);
+
+        return avecAvertissementAffectation(bonSortieMapper.toDto(bonSortie), bonSortie);
     }
 
     /**
@@ -418,5 +496,10 @@ public class BonSortieService {
 
     BonSortie chargerBonSortie(Long id) {
         return bonSortieRepository.findById(id).orElseThrow(() -> ResourceNotFoundException.of("BonSortie", id));
+    }
+
+    /** Tous les bons de sortie dont cet agent est titulaire - utilise pour signaler (Lot 4) un creneau deja occupe. */
+    List<BonSortie> chargerBonsPourAgent(Long agentId) {
+        return bonSortieRepository.findByAgent_IdOrderByDateSortieDesc(agentId);
     }
 }

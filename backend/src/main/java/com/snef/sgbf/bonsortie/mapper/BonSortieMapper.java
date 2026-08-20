@@ -19,5 +19,7 @@ public interface BonSortieMapper {
     @Mapping(target = "bonSortiePrincipalId", source = "bonSortiePrincipal.id")
     @Mapping(target = "viseParIdentifiant", source = "visePar.identifiant")
     @Mapping(target = "valideParIdentifiant", source = "valideParCA.identifiant")
+    // Calcule separement dans BonSortieService (necessite une resolution live de l'affectation, hors de portee d'un mapper pur).
+    @Mapping(target = "avertissementAffectation", ignore = true)
     BonSortieDto toDto(BonSortie bonSortie);
 }

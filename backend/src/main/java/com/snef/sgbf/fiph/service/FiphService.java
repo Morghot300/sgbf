@@ -371,8 +371,19 @@ public class FiphService {
         pointage.setFiphVersion(version);
         pointage.setJourSemaine(JourSemaine.depuis(date.getDayOfWeek()));
         pointage.setDatePointage(date);
-        pointage.setAffectationMission(bonSortie.getAffectationMission());
-        pointage.setService(null);
+        // RG-FIPH-007 (contrainte CHECK chk_pointage_affectation_xor_service) : la ligne doit porter
+        // EXACTEMENT l'un des deux, jamais aucun. Depuis l'evolution du 2026-08-19 (Lot 2 - un bon de
+        // sortie peut desormais etre valide sans affectation resolue, avertissement au lieu d'un
+        // blocage), affectationMission peut etre nulle ici alors qu'elle etait auparavant toujours
+        // renseignee a ce stade - retombe alors sur le service de l'agent, exactement comme le fait
+        // deja une FIPH d'origine MANUELLE (Code Service) sans affectation.
+        if (bonSortie.getAffectationMission() != null) {
+            pointage.setAffectationMission(bonSortie.getAffectationMission());
+            pointage.setService(null);
+        } else {
+            pointage.setAffectationMission(null);
+            pointage.setService(bonSortie.getAgent().getService());
+        }
         // Les heures normales/supplementaires ne sont JAMAIS deduites
         // automatiquement d'un seul bon de sortie (point non tranche §29.1,
         // "les heures d'un seul bon de sortie ne suffisent pas a determiner

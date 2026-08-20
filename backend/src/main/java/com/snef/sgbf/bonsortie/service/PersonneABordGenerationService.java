@@ -12,12 +12,10 @@ import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.service.FiphService;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
+import com.snef.sgbf.notification.service.NotificationService;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,10 +40,19 @@ import org.springframework.transaction.annotation.Transactional;
  * fait sur SA PROPRE {@code AffectationMission} active a la date de sortie
  * du principal (coherent avec le modele ou chaque bon de sortie porte sa
  * propre reference d'affectation, section 8) - pas une copie de
- * l'affectation du principal, qui reste specifique a son propre agent. Si la
- * personne a bord n'a pas d'affectation active a cette date, la generation
- * est journalisee comme echec recuperable (section 9.6 : "rejoue
- * manuellement par une personne habilitee") plutot que de bloquer la chaine.
+ * l'affectation du principal, qui reste specifique a son propre agent.
+ *
+ * <p><strong>Anomalie corrigee (evolution du 2026-08-19, Lot 4, point 9)</strong> :
+ * jusqu'a cette evolution, l'absence d'affectation active pour la personne a
+ * bord faisait ABANDONNER definitivement la generation (retour anticipe,
+ * aucune tentative ulterieure) - le frontend affichait alors indefiniment
+ * "En cours de generation" alors que rien n'etait effectivement en cours ni
+ * ne le serait jamais sans intervention manuelle (aucun mecanisme de
+ * "reprise" n'existe reellement malgre ce que suggerait l'ancien
+ * commentaire). Desormais coherent avec Lot 2 : le bon individuel est
+ * genere quand meme, sans affectation renseignee, avec le meme avertissement
+ * actionnable et la meme notification que pour le bon principal - plus
+ * jamais de blocage silencieux permanent.
  *
  * <p>Le bon de sortie individuel genere declenche a son tour, exactement
  * comme un bon de sortie principal, la generation automatique et le
@@ -55,24 +62,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PersonneABordGenerationService {
 
-    private static final Logger log = LoggerFactory.getLogger(PersonneABordGenerationService.class);
-
     private final BonSortiePersonneRepository bonSortiePersonneRepository;
     private final BonSortieRepository bonSortieRepository;
     private final AffectationMissionService affectationMissionService;
     private final FiphService fiphService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     public PersonneABordGenerationService(BonSortiePersonneRepository bonSortiePersonneRepository,
                                            BonSortieRepository bonSortieRepository,
                                            AffectationMissionService affectationMissionService,
                                            FiphService fiphService,
-                                           AuditService auditService) {
+                                           AuditService auditService,
+                                           NotificationService notificationService) {
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
         this.bonSortieRepository = bonSortieRepository;
         this.affectationMissionService = affectationMissionService;
         this.fiphService = fiphService;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -91,19 +99,10 @@ public class PersonneABordGenerationService {
         Optional<AffectationMission> affectationPersonne =
                 affectationMissionService.resoudreActiveADate(personneAgent.getId(), principal.getDateSortie());
 
-        if (affectationPersonne.isEmpty()) {
-            log.warn("Generation automatique impossible pour la personne a bord agent={} (bon de sortie principal={}) : "
-                            + "aucune affectation active a la date {}. Reprise manuelle requise (section 9.6).",
-                    personneAgent.getMatricule(), principal.getId(), principal.getDateSortie());
-            auditService.enregistrerAction(EntiteAuditable.BON_SORTIE_PERSONNE, association.getId(), auteur,
-                    TypeActionAudit.MODIFICATION);
-            return;
-        }
-
         BonSortie individuel = new BonSortie();
         individuel.setAgent(personneAgent);
         individuel.setVehicule(principal.getVehicule());
-        individuel.setAffectationMission(affectationPersonne.get());
+        affectationPersonne.ifPresent(individuel::setAffectationMission);
         individuel.setMoyenUtilise(principal.getMoyenUtilise());
         individuel.setLt(principal.getLt());
         individuel.setKilometrage(principal.getKilometrage());
@@ -125,6 +124,15 @@ public class PersonneABordGenerationService {
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, individuel.getId(), auteur,
                 TypeActionAudit.BS_INDIVIDUEL_AUTO_GENERE, null, individuel.getId(),
                 null, StatutBonSortie.VALIDE.name());
+        if (affectationPersonne.isEmpty()) {
+            auditService.enregistrer(EntiteAuditable.BON_SORTIE, individuel.getId(), auteur,
+                    TypeActionAudit.ANOMALIE_AFFECTATION, null,
+                    "Bon individuel genere sans affectation active resolue pour la personne a bord "
+                            + personneAgent.getMatricule(), null, null);
+            if (personneAgent.getService() != null) {
+                notificationService.notifierAnomalieAffectation(individuel.getId(), auteur, personneAgent.getService().getId());
+            }
+        }
 
         // RG-BS-007 / RG-FIPH-001 / RG-PAB-004 : declenche, pour cette
         // personne a bord, exactement la meme chaine de generation

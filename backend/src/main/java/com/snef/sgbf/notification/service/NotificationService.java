@@ -120,7 +120,73 @@ public class NotificationService {
         }
         creer(titulaireCompte, TypeNotification.FIPH_VALIDEE, referenceFiph + " validee definitivement",
                 "La FIPH " + referenceFiph + " a ete validee definitivement par la Direction.",
-                fiphId, fiphVersionId, declencheur);
+                EntiteAuditable.FIPH_VERSION, fiphVersionId, "/fiph/" + fiphId, declencheur);
+    }
+
+    /**
+     * Notifie chaque titulaire actif du role Charge d'Affaires OU personne
+     * habilitee sur le service du bon (niveau 2, evolution du 2026-08-19,
+     * Lot 3) - meme ciblage que celui deja applique aux FIPH
+     * ({@link #notifierNiveau2}), reutilise a l'identique pour rester une
+     * seule et unique implementation (exigence explicite de la mission :
+     * "une seule implementation, pas deux").
+     */
+    public void notifierBonSortieAValider(Long bonSortieId, Long serviceId, String reference, Utilisateur declencheur) {
+        List<Habilitation> ca = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.CHARGE_AFFAIRES.name(), serviceId);
+        List<Habilitation> ph = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.PERSONNE_HABILITEE.name(), serviceId);
+        String titre = reference + " disponible pour validation";
+        String message = "Le bon de sortie " + reference + " a ete vise et necessite votre validation.";
+        String lien = "/bons-sortie/" + bonSortieId;
+        java.util.stream.Stream.concat(ca.stream(), ph.stream())
+                .map(Habilitation::getUtilisateur)
+                .distinct()
+                .forEach(destinataire -> creer(destinataire, TypeNotification.BON_SORTIE_A_VALIDER, titre, message,
+                        EntiteAuditable.BON_SORTIE, bonSortieId, lien, declencheur));
+    }
+
+    /** Informe l'agent titulaire (s'il possede un compte applicatif) que son bon de sortie est definitivement valide. */
+    public void notifierBonSortieValide(Long bonSortieId, Utilisateur titulaire, Utilisateur declencheur) {
+        if (titulaire == null || !titulaire.possedeCompteApplicatif()) {
+            return;
+        }
+        creer(titulaire, TypeNotification.BON_SORTIE_VALIDE, "Bon de sortie #" + bonSortieId + " valide",
+                "Votre bon de sortie #" + bonSortieId + " a ete valide.",
+                EntiteAuditable.BON_SORTIE, bonSortieId, "/bons-sortie/" + bonSortieId, declencheur);
+    }
+
+    /** Informe l'agent ajoute comme personne a bord (s'il possede un compte applicatif). */
+    public void notifierPersonneABordAjoutee(Long bonSortieId, Utilisateur agentAjoute, Utilisateur declencheur) {
+        if (agentAjoute == null || !agentAjoute.possedeCompteApplicatif()) {
+            return;
+        }
+        creer(agentAjoute, TypeNotification.PERSONNE_A_BORD_AJOUTEE, "Ajoute a bord du bon de sortie #" + bonSortieId,
+                "Vous avez ete ajoute comme personne a bord du bon de sortie #" + bonSortieId + ".",
+                EntiteAuditable.BON_SORTIE, bonSortieId, "/bons-sortie/" + bonSortieId, declencheur);
+    }
+
+    /**
+     * Informe chaque Charge d'Affaires/personne habilitee du service concerne
+     * qu'un bon a ete valide malgre l'absence d'affectation active resolue
+     * pour l'agent (Lot 2 : avertissement, jamais un blocage - voir
+     * {@code BonSortieService#valider}) - suivi possible sans que
+     * l'anomalie ne reste silencieuse.
+     */
+    public void notifierAnomalieAffectation(Long bonSortieId, Utilisateur declencheur, Long serviceId) {
+        List<Habilitation> ca = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.CHARGE_AFFAIRES.name(), serviceId);
+        List<Habilitation> ph = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.PERSONNE_HABILITEE.name(), serviceId);
+        String titre = "Anomalie d'affectation - bon de sortie #" + bonSortieId;
+        String message = "Le bon de sortie #" + bonSortieId + " a ete valide sans affectation active "
+                + "resolue pour l'agent a la date de sortie - verification recommandee.";
+        String lien = "/bons-sortie/" + bonSortieId;
+        java.util.stream.Stream.concat(ca.stream(), ph.stream())
+                .map(Habilitation::getUtilisateur)
+                .distinct()
+                .forEach(destinataire -> creer(destinataire, TypeNotification.ANOMALIE_AFFECTATION, titre, message,
+                        EntiteAuditable.BON_SORTIE, bonSortieId, lien, declencheur));
     }
 
     private void notifierTous(List<Habilitation> habilitations, Long fiphId, Long fiphVersionId, String referenceFiph,
@@ -130,19 +196,20 @@ public class NotificationService {
         habilitations.stream()
                 .map(Habilitation::getUtilisateur)
                 .distinct()
-                .forEach(destinataire -> creer(destinataire, TypeNotification.FIPH_A_VALIDER, titre, message, fiphId, fiphVersionId, declencheur));
+                .forEach(destinataire -> creer(destinataire, TypeNotification.FIPH_A_VALIDER, titre, message,
+                        EntiteAuditable.FIPH_VERSION, fiphVersionId, "/fiph/" + fiphId, declencheur));
     }
 
     private void creer(Utilisateur destinataire, TypeNotification type, String titre, String message,
-                        Long fiphId, Long fiphVersionId, Utilisateur declencheur) {
+                        EntiteAuditable entiteType, Long entiteId, String lien, Utilisateur declencheur) {
         Notification notification = new Notification();
         notification.setDestinataire(destinataire);
         notification.setType(type);
         notification.setTitre(titre);
         notification.setMessage(message);
-        notification.setEntiteType(EntiteAuditable.FIPH_VERSION);
-        notification.setEntiteId(fiphVersionId);
-        notification.setLien("/fiph/" + fiphId);
+        notification.setEntiteType(entiteType);
+        notification.setEntiteId(entiteId);
+        notification.setLien(lien);
         notification.setDeclenchePar(declencheur);
         notificationRepository.save(notification);
     }

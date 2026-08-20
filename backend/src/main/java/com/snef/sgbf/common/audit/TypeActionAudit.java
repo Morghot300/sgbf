@@ -78,5 +78,14 @@ public enum TypeActionAudit {
      * des lignes marquees {@code priseEnMainSuperAdmin = true}) - jamais
      * confondue avec une {@link #VALIDATION} normale.
      */
-    PRISE_EN_MAIN_SUPER_ADMIN
+    PRISE_EN_MAIN_SUPER_ADMIN,
+
+    /**
+     * Bon de sortie valide malgre l'absence d'affectation active resolue
+     * pour l'agent a la date de sortie (evolution du 2026-08-19, Lot 2 :
+     * avertissement, jamais un blocage) - trace separement de
+     * {@link #VALIDATION} pour rester repérable dans l'historique meme si
+     * la validation elle-meme a reussi.
+     */
+    ANOMALIE_AFFECTATION
 }

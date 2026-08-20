@@ -32,6 +32,8 @@ export interface BonSortieDto {
   valideParIdentifiant: string | null;
   dateValidation: string | null;
   lockVersion: number;
+  /** Message actionnable si aucune affectation active n'est résolue pour l'agent à la date de sortie (évolution du 2026-08-19, Lot 2) - jamais bloquant, `null` dès qu'une affectation est résolue. */
+  avertissementAffectation: string | null;
 }
 
 export interface CreerBonSortieRequest {
@@ -66,6 +68,23 @@ export interface BonSortiePersonneDto {
 
 export interface AjouterPersonneABordRequest {
   agentId: number;
+}
+
+export interface AjouterPersonnesABordEnLotRequest {
+  agentIds: number[];
+}
+
+export type StatutCompte = "ACTIF" | "VERROUILLE" | "DESACTIVE";
+
+/** Personne éligible à être ajoutée comme personne à bord (évolution du 2026-08-19, Lot 4) - périmètre calculé côté serveur. */
+export interface AgentEligibleDto {
+  id: number;
+  nomComplet: string;
+  matricule: string | null;
+  serviceLibelle: string | null;
+  statutCompte: StatutCompte;
+  /** Signale (sans jamais bloquer) que cette personne est déjà à bord d'un AUTRE bon à la même date de sortie. */
+  dejaAffecteMemeCreneau: boolean;
 }
 
 export const LIBELLES_STATUT_BON_SORTIE: Record<StatutBonSortie, string> = {
