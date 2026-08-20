@@ -1,10 +1,12 @@
 package com.snef.sgbf.bonsortie.controller;
 
+import com.snef.sgbf.bonsortie.dto.AgentEligibleDto;
 import com.snef.sgbf.bonsortie.dto.BonSortieDto;
 import com.snef.sgbf.bonsortie.dto.CreerBonSortieRequest;
 import com.snef.sgbf.bonsortie.dto.ModifierRetourRequest;
 import com.snef.sgbf.bonsortie.entity.StatutBonSortie;
 import com.snef.sgbf.bonsortie.service.BonSortiePdfService;
+import com.snef.sgbf.bonsortie.service.BonSortiePersonneService;
 import com.snef.sgbf.bonsortie.service.BonSortieService;
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.security.CustomUserDetails;
@@ -44,10 +46,13 @@ public class BonSortieController {
 
     private final BonSortieService bonSortieService;
     private final BonSortiePdfService bonSortiePdfService;
+    private final BonSortiePersonneService bonSortiePersonneService;
 
-    public BonSortieController(BonSortieService bonSortieService, BonSortiePdfService bonSortiePdfService) {
+    public BonSortieController(BonSortieService bonSortieService, BonSortiePdfService bonSortiePdfService,
+                                BonSortiePersonneService bonSortiePersonneService) {
         this.bonSortieService = bonSortieService;
         this.bonSortiePdfService = bonSortiePdfService;
+        this.bonSortiePersonneService = bonSortiePersonneService;
     }
 
     /**
@@ -73,6 +78,17 @@ public class BonSortieController {
     @GetMapping("/{id}")
     public BonSortieDto obtenir(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
         return bonSortieService.obtenirParId(id, principal.getUtilisateur());
+    }
+
+    /**
+     * Personnel eligible a etre ajoute comme personne a bord de ce bon
+     * (evolution du 2026-08-19, Lot 4) - perimetre (service du titulaire du
+     * bon) calcule cote serveur uniquement, voir
+     * {@code BonSortiePersonneService.listerAgentsEligibles}.
+     */
+    @GetMapping("/{id}/agents-eligibles")
+    public List<AgentEligibleDto> agentsEligibles(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
+        return bonSortiePersonneService.listerAgentsEligibles(id, principal.getUtilisateur());
     }
 
     /** Impression du document valide au format PDF (section 13.2, RG-DOC-001 a 007). */

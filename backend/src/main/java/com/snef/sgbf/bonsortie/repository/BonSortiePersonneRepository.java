@@ -17,4 +17,7 @@ public interface BonSortiePersonneRepository extends JpaRepository<BonSortiePers
 
     /** RG-PAB-003 : verification de preexistence avant insertion (doublee par la contrainte d'unicite en base). */
     Optional<BonSortiePersonne> findByBonSortiePrincipal_IdAndAgent_Id(Long bonSortiePrincipalId, Long agentId);
+
+    /** Associations actives d'un agent, toutes principaux confondus - utilise pour signaler (jamais bloquer) un agent deja a bord d'un autre bon sur le meme creneau (evolution du 2026-08-19, Lot 4). */
+    List<BonSortiePersonne> findByAgent_IdAndStatutAssociation(Long agentId, StatutAssociationPersonne statutAssociation);
 }

@@ -1,6 +1,7 @@
 package com.snef.sgbf.bonsortie.controller;
 
 import com.snef.sgbf.bonsortie.dto.AjouterPersonneABordRequest;
+import com.snef.sgbf.bonsortie.dto.AjouterPersonnesABordEnLotRequest;
 import com.snef.sgbf.bonsortie.dto.BonSortiePersonneDto;
 import com.snef.sgbf.bonsortie.service.BonSortiePersonneService;
 import com.snef.sgbf.security.CustomUserDetails;
@@ -45,6 +46,20 @@ public class BonSortiePersonneController {
                                                           @AuthenticationPrincipal CustomUserDetails principal) {
         BonSortiePersonneDto creee = bonSortiePersonneService.ajouter(bonSortiePrincipalId, requete, principal.getUtilisateur());
         return ResponseEntity.status(HttpStatus.CREATED).body(creee);
+    }
+
+    /**
+     * Ajout groupe (evolution du 2026-08-19, Lot 4) : un seul appel pour
+     * l'ensemble de la selection, transactionnel (tout ou rien pour les
+     * echecs reels) et idempotent (les personnes deja associees sont
+     * silencieusement ignorees, jamais une erreur).
+     */
+    @PostMapping("/lot")
+    public ResponseEntity<List<BonSortiePersonneDto>> ajouterEnLot(@PathVariable Long bonSortiePrincipalId,
+                                                                     @Valid @RequestBody AjouterPersonnesABordEnLotRequest requete,
+                                                                     @AuthenticationPrincipal CustomUserDetails principal) {
+        List<BonSortiePersonneDto> creees = bonSortiePersonneService.ajouterEnLot(bonSortiePrincipalId, requete, principal.getUtilisateur());
+        return ResponseEntity.status(HttpStatus.CREATED).body(creees);
     }
 
     @DeleteMapping("/{associationId}")

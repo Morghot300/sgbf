@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  ajouterPersonneABord, listerPersonnesABord, obtenirBonSortie, ouvrirPdfBonSortie,
+  listerPersonnesABord, obtenirBonSortie, ouvrirPdfBonSortie, retirerPersonneABord,
   validerBonSortie, viserBonSortie,
 } from "../../api/bonSortieApi";
 import { extraireMessageErreur } from "../../api/httpClient";
@@ -10,6 +10,7 @@ import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutBonSortie } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
 import { LIBELLES_MOYEN_UTILISE, LIBELLES_STATUT_BON_SORTIE } from "../../types/bonSortie";
+import { SelectionPersonnesABord } from "./SelectionPersonnesABord";
 
 /** Detail d'un bon de sortie : consultation, visa (titulaire), validation (CA/personne habilitee), personnes a bord, impression. */
 export default function BonSortieDetailPage() {
@@ -18,7 +19,6 @@ export default function BonSortieDetailPage() {
   const queryClient = useQueryClient();
   const { aLeRole } = useAuth();
   const [erreurAction, setErreurAction] = useState<string | null>(null);
-  const [nouvelAgentId, setNouvelAgentId] = useState("");
 
   const bonSortie = useQuery({ queryKey: ["bon-sortie", bonSortieId], queryFn: () => obtenirBonSortie(bonSortieId) });
   const personnesABord = useQuery({ queryKey: ["personnes-a-bord", bonSortieId], queryFn: () => listerPersonnesABord(bonSortieId) });
@@ -26,6 +26,9 @@ export default function BonSortieDetailPage() {
   function invalider() {
     void queryClient.invalidateQueries({ queryKey: ["bon-sortie", bonSortieId] });
     void queryClient.invalidateQueries({ queryKey: ["bons-sortie"] });
+  }
+  function invaliderPersonnesABord() {
+    void queryClient.invalidateQueries({ queryKey: ["personnes-a-bord", bonSortieId] });
   }
 
   const viser = useMutation({
@@ -38,13 +41,10 @@ export default function BonSortieDetailPage() {
     onSuccess: invalider,
     onError: (e) => setErreurAction(extraireMessageErreur(e, "Impossible de valider ce bon de sortie.")),
   });
-  const ajouterPersonne = useMutation({
-    mutationFn: () => ajouterPersonneABord(bonSortieId, { agentId: Number(nouvelAgentId) }),
-    onSuccess: () => {
-      setNouvelAgentId("");
-      void queryClient.invalidateQueries({ queryKey: ["personnes-a-bord", bonSortieId] });
-    },
-    onError: (e) => setErreurAction(extraireMessageErreur(e, "Impossible d'ajouter cette personne à bord.")),
+  const retirer = useMutation({
+    mutationFn: (associationId: number) => retirerPersonneABord(bonSortieId, associationId),
+    onSuccess: invaliderPersonnesABord,
+    onError: (e) => setErreurAction(extraireMessageErreur(e, "Impossible de retirer cette personne à bord.")),
   });
 
   const peutValider = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE");
@@ -70,6 +70,10 @@ export default function BonSortieDetailPage() {
                 <tr><th>Validation</th><td>{bs.valideParIdentifiant ? `${bs.valideParIdentifiant} le ${bs.dateValidation}` : "Non validé"}</td></tr>
               </tbody>
             </table>
+
+            {bs.avertissementAffectation && (
+              <p role="alert" className="avertissement">{bs.avertissementAffectation}</p>
+            )}
 
             {erreurAction && <p role="alert">{erreurAction}</p>}
 
@@ -98,13 +102,26 @@ export default function BonSortieDetailPage() {
                       ? <p>Aucune personne à bord renseignée.</p>
                       : (
                         <table className="tableau">
-                          <thead><tr><th>Agent</th><th>Statut</th><th>Bon individuel</th></tr></thead>
+                          <thead><tr><th>Agent</th><th>Statut</th><th>Bon individuel</th><th></th></tr></thead>
                           <tbody>
                             {liste.map((p) => (
                               <tr key={p.id}>
                                 <td>{p.agentNomComplet} ({p.agentMatricule})</td>
                                 <td>{p.statutAssociation === "ACTIVE" ? "Active" : "Retirée"}</td>
-                                <td>{p.bonSortieIndividuelId ? <a href={`/bons-sortie/${p.bonSortieIndividuelId}`}>#{p.bonSortieIndividuelId}</a> : "En cours de génération"}</td>
+                                <td>
+                                  {p.bonSortieIndividuelId
+                                    ? <a href={`/bons-sortie/${p.bonSortieIndividuelId}`}>#{p.bonSortieIndividuelId}</a>
+                                    : bs.statut === "VALIDE"
+                                      ? "Non générée — signalé, voir avertissement ci-dessus"
+                                      : "Générée à la validation du bon principal"}
+                                </td>
+                                <td>
+                                  {p.statutAssociation === "ACTIVE" && (
+                                    <button type="button" onClick={() => retirer.mutate(p.id)} disabled={retirer.isPending}>
+                                      Retirer
+                                    </button>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -112,14 +129,8 @@ export default function BonSortieDetailPage() {
                       )
                   )}
                 </EtatAsync>
-                <form
-                  className="formulaire-ligne"
-                  onSubmit={(e) => { e.preventDefault(); ajouterPersonne.mutate(); }}
-                >
-                  <label htmlFor="agentId">Identifiant de l'agent à ajouter</label>
-                  <input id="agentId" type="number" value={nouvelAgentId} onChange={(e) => setNouvelAgentId(e.target.value)} required />
-                  <button type="submit" disabled={ajouterPersonne.isPending || !nouvelAgentId}>Ajouter</button>
-                </form>
+                <h3>Ajouter des personnes à bord</h3>
+                <SelectionPersonnesABord bonSortieId={bonSortieId} onAjoutReussi={invaliderPersonnesABord} />
               </section>
             )}
           </>

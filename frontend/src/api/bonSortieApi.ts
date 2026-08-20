@@ -1,7 +1,7 @@
 import { httpClient } from "./httpClient";
 import type {
-  AjouterPersonneABordRequest, BonSortieDto, BonSortiePersonneDto, CreerBonSortieRequest,
-  ModifierRetourRequest,
+  AgentEligibleDto, AjouterPersonneABordRequest, AjouterPersonnesABordEnLotRequest,
+  BonSortieDto, BonSortiePersonneDto, CreerBonSortieRequest, ModifierRetourRequest,
 } from "../types/bonSortie";
 
 export interface FiltresBonSortie {
@@ -44,6 +44,14 @@ export async function ajouterPersonneABord(bonSortiePrincipalId: number, requete
 }
 export async function retirerPersonneABord(bonSortiePrincipalId: number, associationId: number): Promise<BonSortiePersonneDto> {
   return (await httpClient.delete<BonSortiePersonneDto>(`/bons-sortie/${bonSortiePrincipalId}/personnes-a-bord/${associationId}`)).data;
+}
+/** Personnel du service du titulaire éligible à être ajouté à ce bon (évolution du 2026-08-19, Lot 4) - périmètre calculé côté serveur. */
+export async function listerAgentsEligibles(bonSortieId: number): Promise<AgentEligibleDto[]> {
+  return (await httpClient.get<AgentEligibleDto[]>(`/bons-sortie/${bonSortieId}/agents-eligibles`)).data;
+}
+/** Ajout groupé, transactionnel et idempotent. */
+export async function ajouterPersonnesABordEnLot(bonSortiePrincipalId: number, requete: AjouterPersonnesABordEnLotRequest): Promise<BonSortiePersonneDto[]> {
+  return (await httpClient.post<BonSortiePersonneDto[]>(`/bons-sortie/${bonSortiePrincipalId}/personnes-a-bord/lot`, requete)).data;
 }
 
 /**
