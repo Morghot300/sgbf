@@ -178,15 +178,19 @@ class FiphWorkflowIT {
             put("decision", "VALIDEE");
         }});
 
-        // 4. CA2 a complete le pointage : il ne peut pas valider lui-meme (RG-HAB-004).
+        // 4. CA2 a complete le pointage lui-meme - au niveau 2 uniquement,
+        // RG-HAB-004 ne s'applique plus (evolution du 2026-08-21) : il peut
+        // valider directement sa propre saisie, sans etape de signature ni
+        // de soumission prealable.
         mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/2")
                         .header("Authorization", "Bearer " + tokenCa2)
                         .contentType("application/json").content(decisionValidee))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutVersion").value("VALIDEE_NIVEAU_2"));
 
-        // 5. CA1 - qui a valide le bon de sortie declencheur mais n'a rien
-        // complete lui-meme - PEUT valider directement le niveau 2, sans
-        // etape de signature ni de soumission prealable.
+        // 5. RG-FIPH-012 : une seconde validation de niveau 2 (par un autre
+        // Charge d'Affaires du meme service) reste acceptee mais n'a plus
+        // aucun effet - le statut a deja progresse.
         mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/2")
                         .header("Authorization", "Bearer " + tokenCa1)
                         .contentType("application/json").content(decisionValidee))
@@ -217,7 +221,10 @@ class FiphWorkflowIT {
                 .andExpect(status().isUnprocessableEntity());
 
         // 9. Historique : chaque etape reste tracee individuellement
-        // (precreation, visa automatique, complement, 3 validations).
+        // (precreation, visa automatique, complement, 4 validations - la
+        // seconde validation niveau 2, sans effet sur le statut, reste
+        // neanmoins tracee : CA2 niveau 2, CA1 niveau 2 (redondante), RA
+        // niveau 3, Direction niveau 4).
         String reponseHistorique = mockMvc.perform(get("/api/audit/fiph/" + fiphId).header("Authorization", "Bearer " + tokenCa1))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -226,7 +233,7 @@ class FiphWorkflowIT {
         List<String> actions = new ArrayList<>();
         historique.forEach(e -> actions.add(e.get("action").asText()));
         assertThat(actions).contains("FIPH_AUTO_GENEREE", "SIGNATURE", "COMPLEMENT", "VALIDATION");
-        assertThat(actions.stream().filter("VALIDATION"::equals).count()).isEqualTo(3);
+        assertThat(actions.stream().filter("VALIDATION"::equals).count()).isEqualTo(4);
 
         // 10. Correction post-validation (RG-VER-001 a 007) : nouvelle
         // version, motif obligatoire, contenu copie, entierement re-validee.

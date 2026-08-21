@@ -198,9 +198,15 @@ class AuditPdfDroitsRhIT {
                         .contentType("application/json").content(corpsCompletionRh))
                 .andExpect(status().isForbidden());
 
-        // --- 7. Telechargement PDF de la FIPH refuse tant qu'elle n'est pas VALIDEE_DEFINITIVEMENT (RG-DOC-003). ---
+        // --- 7. Previsualisation PDF de la FIPH disponible avant VALIDEE_DEFINITIVEMENT (evolution du
+        // 2026-08-21) : le Charge d'Affaires peut desormais previsualiser une FIPH non encore terminee,
+        // borne par le meme perimetre de lecture que la consultation en ligne - jamais par le statut.
         mockMvc.perform(get("/api/fiph-versions/" + versionId + "/pdf").header("Authorization", "Bearer " + tokenCa1))
-                .andExpect(status().isUnprocessableEntity());
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/pdf"));
+        // Toujours borne par le perimetre : un utilisateur hors service ne peut pas previsualiser non plus.
+        mockMvc.perform(get("/api/fiph-versions/" + versionId + "/pdf").header("Authorization", "Bearer " + tokenHorsPerimetre))
+                .andExpect(status().isForbidden());
 
         // --- 8. Deroule le circuit complet (complement -> soumission -> validations 2/3/4). Plus
         // d'etape de signature explicite : le visa de l'agent titulaire est deja acquis d'office

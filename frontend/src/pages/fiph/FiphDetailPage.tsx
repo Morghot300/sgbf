@@ -196,9 +196,9 @@ export default function FiphDetailPage() {
                   {soumettre.isPending ? "Soumission..." : "Soumettre au circuit de validation"}
                 </button>
               )}
-              {v.statutVersion === "VALIDEE_DEFINITIVEMENT" && (
-                <button type="button" onClick={() => void ouvrirPdfFiphVersion(v.id)}>Télécharger le PDF</button>
-              )}
+              <button type="button" onClick={() => void ouvrirPdfFiphVersion(v.id)}>
+                {v.statutVersion === "VALIDEE_DEFINITIVEMENT" ? "Télécharger le PDF" : "Prévisualiser (PDF)"}
+              </button>
             </div>
 
             {niveauAttendu !== undefined && peutValiderNiveauCourant && (

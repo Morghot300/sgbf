@@ -51,15 +51,15 @@ import org.springframework.transaction.annotation.Transactional;
  * section 12 et 21 du document source).
  *
  * <p>C'est ici, et uniquement ici, qu'est appliquee la separation des
- * responsabilites RG-HAB-004 : un utilisateur ne peut jamais valider, a un
- * niveau superieur, une version dont il a lui-meme SAISI le contenu (pointage
- * complete/modifie) - verifie en interrogeant le journal d'audit (seule
- * source fiable de "qui a touche cette version", puisque plusieurs personnes
- * habilitees du meme perimetre peuvent successivement completer un meme
- * document). La CREATION seule d'une FIPH n'empeche plus son createur de la
- * valider ensuite (evolution du 2026-08-19, voir Javadoc de
- * {@link #verifierSeparationResponsabilites}) - seul le contenu saisi
- * (pointage) reste bloquant.
+ * responsabilites RG-HAB-004 : un utilisateur ne peut jamais valider, aux
+ * niveaux 3 (Responsable d'Activite) et 4 (Direction), une version dont il a
+ * lui-meme SAISI le contenu (pointage complete/modifie) - verifie en
+ * interrogeant le journal d'audit (seule source fiable de "qui a touche
+ * cette version", puisque plusieurs personnes habilitees du meme perimetre
+ * peuvent successivement completer un meme document). Au niveau 2, en
+ * revanche, le Charge d'Affaires/la personne habilitee peut valider une
+ * FIPH qu'il a lui-meme creee ET completee (evolution du 2026-08-21) : voir
+ * Javadoc de {@link #verifierSeparationResponsabilites}.
  */
 @org.springframework.stereotype.Service
 @Transactional
@@ -245,7 +245,7 @@ public class FiphVersionService {
     public FiphVersionDto valider(Long fiphVersionId, int niveau, ValiderFiphRequest requete, String adresseIp, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
         verifierRoleNiveau(auteur, version, niveau);
-        verifierSeparationResponsabilites(version, auteur);
+        verifierSeparationResponsabilites(version, auteur, niveau);
         verifierSequencementNiveau(version, niveau);
         if (niveau == 2) {
             // RG-FIPH-025 : verifiee ici (plutot qu'uniquement a la signature,
@@ -479,9 +479,10 @@ public class FiphVersionService {
 
     /**
      * RG-HAB-004 : un utilisateur ne peut jamais valider une version dont il
-     * a lui-meme SAISI le contenu (pointage complete/modifie), verifie via le
-     * journal d'audit (entree {@code FIPH_VERSION}), seule source exhaustive
-     * de "qui a agi sur cette version".
+     * a lui-meme SAISI le contenu (pointage complete/modifie) a un niveau
+     * AUTRE que le niveau 2, verifie via le journal d'audit (entree
+     * {@code FIPH_VERSION}), seule source exhaustive de "qui a agi sur cette
+     * version".
      *
      * <p><strong>Auto-validation de la creation elle-meme, autorisee
      * (evolution du 2026-08-19, section 11 : "Auto-validation de sa propre
@@ -494,19 +495,22 @@ public class FiphVersionService {
      * ensuite la valider au niveau 2 UNIQUEMENT PARCE QU'IL DISPOSE DE
      * L'HABILITATION CORRESPONDANTE SUR SON PROPRE SERVICE" - c'est-a-dire
      * que la creation seule (acte administratif d'enregistrement, pas un
-     * choix de contenu) ne doit plus, a elle seule, faire obstacle. Ce
-     * blocage specifique a donc ete retire : seule la creation d'une FIPH
-     * {@code MANUELLE} elle-meme (action {@code CREATION}, journalisee sur
-     * l'entite {@code FIPH}, jamais sur {@code FIPH_VERSION}) echappe donc au
-     * controle d'historique ci-dessous, exactement comme le visa automatique
-     * (action {@code SIGNATURE}) en echappait deja pour une FIPH
-     * {@link OrigineFiph#BON_SORTIE} - les deux origines se comportent
-     * desormais de facon coherente sur ce point. Completer le pointage
-     * (RG-FIPH-009/010) reste, dans tous les cas, bloquant pour la
-     * validation : c'est ce controle d'historique qui protege reellement
-     * contre le conflit d'interet vise par RG-HAB-004.
+     * choix de contenu) ne doit plus, a elle seule, faire obstacle.
+     *
+     * <p><strong>Auto-validation apres completion du pointage, autorisee
+     * au niveau 2 uniquement (evolution du 2026-08-21)</strong> : le
+     * Charge d'Affaires/la personne habilitee qui a complete le pointage
+     * (RG-FIPH-009/010) peut desormais valider lui-meme au niveau 2 - c'est
+     * la meme personne, dans le meme role, qui exerce a la fois la saisie et
+     * la premiere validation sur son propre service ; le controle de
+     * separation des responsabilites reste en revanche pleinement applique
+     * aux niveaux 3 (Responsable d'Activite) et 4 (Direction), qui restent
+     * des acteurs distincts du createur/completeur par construction.
      */
-    private void verifierSeparationResponsabilites(FIPHVersion version, Utilisateur auteur) {
+    private void verifierSeparationResponsabilites(FIPHVersion version, Utilisateur auteur, int niveau) {
+        if (niveau == 2) {
+            return;
+        }
         List<EvenementAudit> historique = evenementAuditRepository
                 .findByEntiteTypeAndEntiteIdOrderByDateActionAsc(EntiteAuditable.FIPH_VERSION, String.valueOf(version.getId()));
         boolean auteurADejaModifie = historique.stream()
