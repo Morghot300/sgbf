@@ -1,0 +1,6 @@
+/.apt_generated/
+/.apt_generated_tests/
+
+# Chemins absolus specifiques a la machine (voir .settings/org.eclipse.jdt.apt.core.prefs) -
+# jamais commite, chaque poste de developpement genere le sien (Maven -> Update Project).
+/.factorypath

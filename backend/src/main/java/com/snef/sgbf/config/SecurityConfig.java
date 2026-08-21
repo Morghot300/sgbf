@@ -50,12 +50,17 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final String origineFrontendAutorisee;
+    private final List<String> originesFrontendAutorisees;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
                            @Value("${app.security.cors.origine-frontend:http://localhost:5173}") String origineFrontendAutorisee) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.origineFrontendAutorisee = origineFrontendAutorisee;
+        // Plusieurs origines separees par une virgule (ex. localhost + IP LAN
+        // en developpement pour un test multi-poste) : une seule variable
+        // d'environnement suffit donc, sans introduire de wildcard incompatible
+        // avec allowCredentials(true).
+        this.originesFrontendAutorisees = List.of(origineFrontendAutorisee.split(","))
+                .stream().map(String::trim).toList();
     }
 
     @Bean
@@ -124,7 +129,7 @@ public class SecurityConfig {
 
     private CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(origineFrontendAutorisee));
+        configuration.setAllowedOrigins(originesFrontendAutorisees);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         // Indispensable pour que le navigateur envoie le cookie httpOnly du
