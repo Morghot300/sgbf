@@ -312,7 +312,6 @@ class ReaffectationMiMissionIT {
         fiph.setMois(date.getMonthValue());
         fiph.setNumeroSemaine(date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
         fiph.setDateDebutPeriode(date.with(java.time.DayOfWeek.MONDAY));
-        fiph.setDateFinPeriode(date.with(java.time.DayOfWeek.SUNDAY));
         fiph.setStatut(StatutFiphVersion.BROUILLON);
         fiph.setDateCreation(LocalDateTime.now());
         fiph = fiphRepository.save(fiph);
@@ -323,6 +322,7 @@ class ReaffectationMiMissionIT {
         version.setDateCreation(LocalDateTime.now());
         version.setCreePar(agentPointe);
         version.setStatutVersion(StatutFiphVersion.BROUILLON);
+        version.setDateFinPeriode(date.with(java.time.DayOfWeek.SUNDAY));
         version.setLockVersion(0);
         version = fiphVersionRepository.save(version);
 

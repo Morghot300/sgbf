@@ -18,7 +18,6 @@ public record FiphDto(
         int mois,
         int numeroSemaine,
         LocalDate dateDebutPeriode,
-        LocalDate dateFinPeriode,
         StatutFiphVersion statut,
         Long versionCouranteId,
         Integer versionCouranteNumero

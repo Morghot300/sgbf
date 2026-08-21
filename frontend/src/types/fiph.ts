@@ -29,8 +29,8 @@ export interface FiphDto {
   annee: number;
   mois: number;
   numeroSemaine: number;
+  /** Automatiquement issue du Bon de Sortie declencheur (evolution du 2026-08-21) — jamais modifiable. */
   dateDebutPeriode: string;
-  dateFinPeriode: string;
   statut: StatutFiphVersion;
   versionCouranteId: number;
   versionCouranteNumero: number;
@@ -62,12 +62,24 @@ export interface FiphVersionDto {
   creeParIdentifiant: string;
   motifModification: string | null;
   versionPrecedenteId: number | null;
+  /** Celle de la FIPH parente (automatique, issue du Bon de Sortie). */
+  dateDebutPeriode: string;
+  /** Definie par le Charge d'Affaires/la personne habilitee — null tant que non encore renseignee (evolution du 2026-08-21). */
+  dateFinPeriode: string | null;
+  /** Recalcule a chaque lecture : jours de la periode exclus du tableau faute d'affectation reelle. */
+  avertissementPeriode: string | null;
   totalHN: number;
   totalHS: number;
   statutVersion: StatutFiphVersion;
   empreinteIntegrite: string | null;
   lockVersion: number;
   pointages: PointageDto[];
+}
+
+/** Definit/modifie la date de fin de la periode (evolution du 2026-08-21). */
+export interface DefinirDateFinRequest {
+  dateFin: string;
+  motifModification: string | null;
 }
 
 export interface CompleterPointageRequest {

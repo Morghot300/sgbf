@@ -1,7 +1,7 @@
 import { ouvrirBlobPdf } from "./bonSortieApi";
 import { httpClient } from "./httpClient";
 import type {
-  CompleterPointageRequest, CreerFiphManuelleRequest, CreerNouvelleVersionRequest,
+  CompleterPointageRequest, CreerFiphManuelleRequest, CreerNouvelleVersionRequest, DefinirDateFinRequest,
   FiphDto, FiphVersionDto, PriseEnMainSuperAdminRequest, ValiderFiphRequest, ValidationDto,
 } from "../types/fiph";
 
@@ -35,6 +35,10 @@ export async function listerValidations(fiphVersionId: number): Promise<Validati
 export async function completerPointage(fiphVersionId: number, requete: CompleterPointageRequest): Promise<FiphVersionDto> {
   return (await httpClient.put<FiphVersionDto>(`/fiph-versions/${fiphVersionId}/pointage`, requete)).data;
 }
+/** Definit/modifie la date de fin de la periode (evolution du 2026-08-21) - date de debut jamais modifiable. */
+export async function definirDateFinFiph(fiphVersionId: number, requete: DefinirDateFinRequest): Promise<FiphVersionDto> {
+  return (await httpClient.put<FiphVersionDto>(`/fiph-versions/${fiphVersionId}/date-fin`, requete)).data;
+}
 export async function signerFiph(fiphVersionId: number): Promise<FiphVersionDto> {
   return (await httpClient.post<FiphVersionDto>(`/fiph-versions/${fiphVersionId}/signer`)).data;
 }
@@ -51,7 +55,7 @@ export async function creerNouvelleVersionFiph(fiphId: number, requete: CreerNou
 export async function priseEnMainSuperAdminFiph(fiphVersionId: number, requete: PriseEnMainSuperAdminRequest): Promise<FiphVersionDto> {
   return (await httpClient.post<FiphVersionDto>(`/fiph-versions/${fiphVersionId}/prise-en-main-super-admin`, requete)).data;
 }
-/** Ouvre le PDF de la FIPH (RG-DOC-003 : disponible uniquement une fois VALIDEE_DEFINITIVEMENT). */
+/** Ouvre le PDF de la FIPH - previsualisation a tout statut, document final une fois VALIDEE_DEFINITIVEMENT (evolution du 2026-08-21). */
 export async function ouvrirPdfFiphVersion(fiphVersionId: number): Promise<void> {
   const reponse = await httpClient.get(`/fiph-versions/${fiphVersionId}/pdf`, { responseType: "blob" });
   ouvrirBlobPdf(reponse.data as Blob);

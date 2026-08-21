@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { historiqueAuditFiph, telechargerAuditCsv, telechargerAuditPdf } from "../../api/auditApi";
 import {
-  completerPointage, creerNouvelleVersionFiph, listerValidations, listerVersionsFiph, obtenirFiph, obtenirFiphVersion,
-  ouvrirPdfFiphVersion, priseEnMainSuperAdminFiph, signerFiph, soumettreFiph, validerFiph,
+  completerPointage, creerNouvelleVersionFiph, definirDateFinFiph, listerValidations, listerVersionsFiph, obtenirFiph,
+  obtenirFiphVersion, ouvrirPdfFiphVersion, priseEnMainSuperAdminFiph, signerFiph, soumettreFiph, validerFiph,
 } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { EtatAsync } from "../../components/EtatAsync";
@@ -35,6 +35,8 @@ export default function FiphDetailPage() {
   const [commentaireDecision, setCommentaireDecision] = useState("");
   const [commentairePriseEnMain, setCommentairePriseEnMain] = useState("");
   const [pointagesModifies, setPointagesModifies] = useState<Record<number, { heuresNormales: string; heuresSup: string }>>({});
+  const [dateFinSaisie, setDateFinSaisie] = useState("");
+  const [motifDateFin, setMotifDateFin] = useState("");
 
   const fiph = useQuery({ queryKey: ["fiph-detail", fiphId], queryFn: () => obtenirFiph(fiphId) });
   const versionId = fiph.data?.versionCouranteId;
@@ -106,6 +108,11 @@ export default function FiphDetailPage() {
     onSuccess: () => { setCommentairePriseEnMain(""); invalider(); },
     onError: (e) => gererErreur(e, "Impossible d'effectuer la prise en main exceptionnelle de cette FIPH."),
   });
+  const definirDateFin = useMutation({
+    mutationFn: () => definirDateFinFiph(versionId as number, { dateFin: dateFinSaisie, motifModification: motifDateFin || null }),
+    onSuccess: () => { setMotifDateFin(""); invalider(); },
+    onError: (e) => gererErreur(e, "Impossible de définir la date de fin de la période."),
+  });
 
   // Role litteral, jamais herite via la hierarchie Spring Security (voir Javadoc de aLeRole) : contrairement a
   // aLeRole("ADMINISTRATEUR"), qui accepte aussi un Super Administrateur par confort d'affichage, la prise en
@@ -127,7 +134,7 @@ export default function FiphDetailPage() {
             <tbody>
               <tr><th>Agent</th><td>{f.agentNomComplet} ({f.agentMatricule})</td></tr>
               <tr><th>Service</th><td>{f.serviceLibelle}</td></tr>
-              <tr><th>Période</th><td>Semaine {f.numeroSemaine} de {f.annee} — du {f.dateDebutPeriode} au {f.dateFinPeriode}</td></tr>
+              <tr><th>Date de début</th><td>{f.dateDebutPeriode} <span className="note">(automatique, issue du bon de sortie — non modifiable)</span></td></tr>
               <tr><th>Origine</th><td>{f.origine === "BON_SORTIE" ? "Générée depuis un bon de sortie" : "Créée manuellement"}</td></tr>
             </tbody>
           </table>
@@ -147,6 +154,38 @@ export default function FiphDetailPage() {
         {(v) => (
           <>
             <h2>Version {v.numeroVersion} <BadgeStatutFiph statut={v.statutVersion} libelle={LIBELLES_STATUT_FIPH[v.statutVersion]} /></h2>
+
+            <table className="fiche">
+              <tbody>
+                <tr><th>Date de fin</th><td>{v.dateFinPeriode ?? "Non encore définie"}</td></tr>
+                <tr><th>Nombre de jours</th><td>{v.pointages.length}</td></tr>
+              </tbody>
+            </table>
+
+            {v.avertissementPeriode && <p role="alert" className="avertissement">{v.avertissementPeriode}</p>}
+
+            {peutCompleter && (
+              <section>
+                <h3>{v.dateFinPeriode ? "Modifier la date de fin" : "Définir la date de fin"}</h3>
+                <label htmlFor="dateFin">Date de fin</label>
+                <input id="dateFin" type="date" min={fiph.data?.dateDebutPeriode} value={dateFinSaisie}
+                       onChange={(e) => setDateFinSaisie(e.target.value)} />
+                {v.statutVersion === "VALIDEE_DEFINITIVEMENT" && (
+                  <>
+                    <label htmlFor="motifDateFin">Motif de la modification (obligatoire, FIPH déjà validée définitivement)</label>
+                    <textarea id="motifDateFin" maxLength={500} value={motifDateFin} onChange={(e) => setMotifDateFin(e.target.value)} />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => definirDateFin.mutate()}
+                  disabled={definirDateFin.isPending || !dateFinSaisie
+                    || (v.statutVersion === "VALIDEE_DEFINITIVEMENT" && !motifDateFin.trim())}
+                >
+                  {definirDateFin.isPending ? "Enregistrement..." : "Confirmer la date de fin"}
+                </button>
+              </section>
+            )}
 
             <table className="tableau">
               <thead>

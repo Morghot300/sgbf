@@ -3,6 +3,7 @@ package com.snef.sgbf.fiph.controller;
 import com.snef.sgbf.common.pdf.DocumentPdf;
 import com.snef.sgbf.fiph.dto.CompleterPointageRequest;
 import com.snef.sgbf.fiph.dto.CreerNouvelleVersionRequest;
+import com.snef.sgbf.fiph.dto.DefinirDateFinRequest;
 import com.snef.sgbf.fiph.dto.FiphVersionDto;
 import com.snef.sgbf.fiph.dto.PriseEnMainSuperAdminRequest;
 import com.snef.sgbf.fiph.dto.ValidationDto;
@@ -83,6 +84,14 @@ public class FiphVersionController {
     public FiphVersionDto completerPointage(@PathVariable Long id, @Valid @RequestBody CompleterPointageRequest requete,
                                              @AuthenticationPrincipal CustomUserDetails principal) {
         return fiphVersionService.completerPointage(id, requete, principal.getUtilisateur());
+    }
+
+    /** Definit/modifie la date de fin de la periode (evolution du 2026-08-21, section 2/7/8). */
+    @PutMapping("/{id}/date-fin")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    public FiphVersionDto definirDateFin(@PathVariable Long id, @Valid @RequestBody DefinirDateFinRequest requete,
+                                          @AuthenticationPrincipal CustomUserDetails principal) {
+        return fiphVersionService.definirDateFin(id, requete, principal.getUtilisateur());
     }
 
     /** Signature de l'emetteur (RG-FIPH-019) - reservee au titulaire, verifie en service. */

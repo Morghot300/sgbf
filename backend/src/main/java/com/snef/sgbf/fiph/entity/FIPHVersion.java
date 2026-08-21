@@ -15,6 +15,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -72,6 +73,18 @@ public class FIPHVersion {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "version_precedente_id", updatable = false)
     private FIPHVersion versionPrecedente;
+
+    /**
+     * Date de fin de la periode couverte par CETTE version (evolution du
+     * 2026-08-21) - definie par le Charge d'Affaires/la personne habilitee du
+     * service, {@code null} tant qu'elle n'a pas encore ete renseignee
+     * (statut initial {@code SIGNEE}/{@code BROUILLON} avec periode "ouverte").
+     * Portee ici, et non sur {@link FIPH}, car elle peut evoluer d'une version
+     * a l'autre (RG-VER-003) sans jamais reecrire retroactivement la periode
+     * d'une version deja figee.
+     */
+    @Column(name = "date_fin_periode")
+    private LocalDate dateFinPeriode;
 
     @Column(name = "total_hn", nullable = false, precision = 5, scale = 2)
     private BigDecimal totalHN = BigDecimal.ZERO;

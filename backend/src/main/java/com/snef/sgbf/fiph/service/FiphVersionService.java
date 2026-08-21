@@ -10,6 +10,7 @@ import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.dto.CompleterPointageRequest;
 import com.snef.sgbf.fiph.dto.CreerNouvelleVersionRequest;
+import com.snef.sgbf.fiph.dto.DefinirDateFinRequest;
 import com.snef.sgbf.fiph.dto.FiphVersionDto;
 import com.snef.sgbf.fiph.dto.PointageDto;
 import com.snef.sgbf.fiph.dto.PriseEnMainSuperAdminRequest;
@@ -18,6 +19,7 @@ import com.snef.sgbf.fiph.dto.ValiderFiphRequest;
 import com.snef.sgbf.fiph.entity.DecisionValidation;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
+import com.snef.sgbf.fiph.entity.JourSemaine;
 import com.snef.sgbf.fiph.entity.OrigineFiph;
 import com.snef.sgbf.fiph.entity.Pointage;
 import com.snef.sgbf.fiph.entity.Signature;
@@ -33,15 +35,21 @@ import com.snef.sgbf.fiph.repository.SignatureRepository;
 import com.snef.sgbf.fiph.repository.ValidationRepository;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
+import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
+import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -203,6 +211,128 @@ public class FiphVersionService {
      * directement au niveau 2 une version {@code SIGNEE} sans passer par
      * cette methode (voir {@link #ETATS_ELIGIBLES_NIVEAU_2}).
      */
+    /**
+     * Definit ou modifie la date de fin de la periode de pointage (evolution
+     * du 2026-08-21, section 2/7/8) - reservee au Charge d'Affaires/la
+     * personne habilitee du service de l'agent (memes verifications que pour
+     * completer le pointage). La date de debut, elle, n'est jamais modifiable
+     * ici ni ailleurs (section 1/9 : automatiquement issue du Bon de Sortie,
+     * aucun endpoint n'expose son ecriture).
+     *
+     * <ol>
+     *   <li>Refuse une date de fin anterieure a la date de debut (RG-FIPH-030,
+     *       Test 4) ;</li>
+     *   <li>Refuse toute periode qui chevaucherait une AUTRE FIPH deja
+     *       existante du meme agent (RG-FIPH-031) ;</li>
+     *   <li>Si la version courante est deja {@code VALIDEE_DEFINITIVEMENT},
+     *       cree une NOUVELLE version tracable (section 8 : ancienne/nouvelle
+     *       date, auteur, horodatage - tous deja portes par le mecanisme
+     *       d'audit generique - et redemarre le circuit de validation depuis
+     *       {@code BROUILLON}) plutot que de modifier silencieusement la
+     *       version figee ;</li>
+     *   <li>Si elle est engagee dans le circuit sans etre figee (soumise ou
+     *       au-dela), repasse en {@code EN_COMPLEMENT} - meme traitement que
+     *       l'arrivee d'un nouveau jour via un bon de sortie ;</li>
+     *   <li>Retrecir la periode retire les lignes de pointage devenues hors
+     *       plage UNIQUEMENT lorsqu'elles n'ont jamais ete renseignees
+     *       (heures a zero, simple placeholder) - une ligne portant deja des
+     *       heures saisies bloque le retrecissement plutot que d'etre
+     *       supprimee silencieusement (section 8 : "ne jamais modifier
+     *       silencieusement") ;</li>
+     *   <li>Genere les lignes de pointage manquantes pour chaque jour de
+     *       [debut, fin] ou l'agent est reellement affecte (verifie via
+     *       {@link AffectationMissionService#resoudreActiveADate}) - les jours
+     *       sans affectation reelle restent exclus, signales par
+     *       {@link FiphVersionDto#avertissementPeriode()} a chaque lecture,
+     *       jamais bloquants (section 6/10).</li>
+     * </ol>
+     */
+    public FiphVersionDto definirDateFin(Long fiphVersionId, DefinirDateFinRequest requete, Utilisateur auteur) {
+        FIPHVersion version = chargerVersion(fiphVersionId);
+        FIPH fiph = version.getFiph();
+        fiphService.verifierPerimetreGestionnaire(auteur, fiph.getAgent());
+
+        LocalDate debut = fiph.getDateDebutPeriode();
+        LocalDate nouvelleFin = requete.dateFin();
+        if (nouvelleFin.isBefore(debut)) {
+            throw new BusinessRuleViolationException("RG-FIPH-030",
+                    "La date de fin (" + nouvelleFin + ") ne peut pas etre anterieure a la date de debut (" + debut + ").");
+        }
+        if (!fiphRepository.trouverChevauchements(fiph.getAgent().getId(), fiph.getId(), debut, nouvelleFin).isEmpty()) {
+            throw new BusinessRuleViolationException("RG-FIPH-031",
+                    "Cette periode chevauche une autre FIPH deja existante de cet agent.");
+        }
+
+        LocalDate ancienneFin = version.getDateFinPeriode();
+        FIPHVersion versionCible = version;
+        if (version.getStatutVersion().estFigee()) {
+            String motif = (requete.motifModification() == null || requete.motifModification().isBlank())
+                    ? "Modification de la date de fin de la periode (" + (ancienneFin != null ? ancienneFin : "non definie")
+                            + " -> " + nouvelleFin + ")"
+                    : requete.motifModification();
+            versionCible = fiphService.creerVersionSuivante(fiph, version, auteur, motif);
+        } else if (!version.getStatutVersion().estPointageModifiable()) {
+            StatutFiphVersion avant = version.getStatutVersion();
+            version.setStatutVersion(StatutFiphVersion.EN_COMPLEMENT);
+            fiph.setStatut(StatutFiphVersion.EN_COMPLEMENT);
+            fiphRepository.save(fiph);
+            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
+                    TypeActionAudit.MODIFICATION, avant.name(), StatutFiphVersion.EN_COMPLEMENT.name(),
+                    avant.name(), StatutFiphVersion.EN_COMPLEMENT.name());
+        }
+
+        // Retrecissement de la periode : une ligne de pointage hors de la nouvelle plage ne peut
+        // etre retiree que si elle n'a JAMAIS ete renseignee (heures a zero, simple placeholder
+        // genere automatiquement - voir plus bas) - toute ligne portant deja des heures saisies
+        // bloque le retrecissement plutot que d'etre supprimee silencieusement (section 8).
+        List<Pointage> pointagesActuels = pointageRepository.findByFiphVersion_IdOrderByDatePointageAsc(versionCible.getId());
+        List<Pointage> pointagesHorsPeriode = pointagesActuels.stream()
+                .filter(p -> p.getDatePointage().isBefore(debut) || p.getDatePointage().isAfter(nouvelleFin))
+                .toList();
+        List<Pointage> pointagesHorsPeriodeAvecHeures = pointagesHorsPeriode.stream()
+                .filter(p -> p.getHeuresNormales().signum() != 0 || p.getHeuresSup().signum() != 0)
+                .toList();
+        if (!pointagesHorsPeriodeAvecHeures.isEmpty()) {
+            String joursBloquants = pointagesHorsPeriodeAvecHeures.stream()
+                    .map(p -> p.getDatePointage().toString()).collect(Collectors.joining(", "));
+            throw new BusinessRuleViolationException("RG-FIPH-032",
+                    "Impossible de reduire la periode : des heures sont deja saisies pour les jours suivants, "
+                            + "hors de la nouvelle periode : " + joursBloquants
+                            + ". Corrigez-les avant de reduire la periode - aucune donnee de pointage saisie n'est jamais supprimee automatiquement.");
+        }
+        pointageRepository.deleteAll(pointagesHorsPeriode);
+        pointagesActuels = pointagesActuels.stream().filter(p -> !pointagesHorsPeriode.contains(p)).toList();
+
+        versionCible.setDateFinPeriode(nouvelleFin);
+        fiphVersionRepository.save(versionCible);
+
+        Set<LocalDate> joursExistants = pointagesActuels.stream().map(Pointage::getDatePointage).collect(Collectors.toSet());
+        for (LocalDate jour = debut; !jour.isAfter(nouvelleFin); jour = jour.plusDays(1)) {
+            if (joursExistants.contains(jour)) {
+                continue;
+            }
+            Optional<AffectationMission> affectation = affectationMissionService.resoudreActiveADate(fiph.getAgent().getId(), jour);
+            if (affectation.isEmpty()) {
+                continue; // jour exclu, sans affectation reelle - signale via avertissementPeriode a la lecture (section 6/10).
+            }
+            Pointage nouveauJour = new Pointage();
+            nouveauJour.setFiphVersion(versionCible);
+            nouveauJour.setJourSemaine(JourSemaine.depuis(jour.getDayOfWeek()));
+            nouveauJour.setDatePointage(jour);
+            nouveauJour.setAffectationMission(affectation.get());
+            nouveauJour.setHeuresNormales(BigDecimal.ZERO);
+            nouveauJour.setHeuresSup(BigDecimal.ZERO);
+            pointageRepository.save(nouveauJour);
+        }
+
+        fiphService.recalculerTotaux(versionCible);
+        auditService.enregistrer(EntiteAuditable.FIPH_VERSION, versionCible.getId(), auteur, TypeActionAudit.MODIFICATION,
+                ancienneFin != null ? ancienneFin.toString() : "non definie", nouvelleFin.toString(),
+                versionCible.getStatutVersion().name(), versionCible.getStatutVersion().name());
+
+        return versDto(chargerVersion(versionCible.getId()));
+    }
+
     public FiphVersionDto soumettre(Long fiphVersionId, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
         fiphService.verifierPerimetreGestionnaire(auteur, version.getFiph().getAgent());
@@ -620,14 +750,47 @@ public class FiphVersionService {
     }
 
     private FiphVersionDto versDto(FIPHVersion version) {
-        List<PointageDto> pointages = pointageRepository.findByFiphVersion_IdOrderByDatePointageAsc(version.getId())
-                .stream().map(pointageMapper::toDto).toList();
+        List<Pointage> pointageEntites = pointageRepository.findByFiphVersion_IdOrderByDatePointageAsc(version.getId());
+        List<PointageDto> pointages = pointageEntites.stream().map(pointageMapper::toDto).toList();
         return new FiphVersionDto(
                 version.getId(), version.getFiph().getId(), version.getNumeroVersion(), version.getDateCreation(),
                 version.getCreePar().getIdentifiant(), version.getMotifModification(),
                 version.getVersionPrecedente() != null ? version.getVersionPrecedente().getId() : null,
+                version.getFiph().getDateDebutPeriode(), version.getDateFinPeriode(),
+                calculerAvertissementPeriode(version, pointageEntites),
                 version.getTotalHN(), version.getTotalHS(), version.getStatutVersion(),
                 version.getEmpreinteIntegrite(), version.getLockVersion(), pointages);
+    }
+
+    /**
+     * Signale, a chaque lecture (jamais persiste - meme principe que
+     * {@code BonSortieDto.avertissementAffectation}), les jours de la periode
+     * [date de debut, date de fin] qui restent exclus du tableau de pointage
+     * faute d'affectation reelle de l'agent ce jour-la (evolution du
+     * 2026-08-21, section 6/10 : "la periode ne doit pas permettre de
+     * declarer des jours pendant lesquels l'agent n'est pas reellement
+     * affecte"). {@code null} tant que la date de fin n'est pas encore
+     * definie (rien a signaler sur une periode encore ouverte) ou si tous les
+     * jours de la periode ont bien une ligne de pointage.
+     */
+    private String calculerAvertissementPeriode(FIPHVersion version, List<Pointage> pointages) {
+        LocalDate fin = version.getDateFinPeriode();
+        if (fin == null) {
+            return null;
+        }
+        LocalDate debut = version.getFiph().getDateDebutPeriode();
+        Set<LocalDate> joursExistants = pointages.stream().map(Pointage::getDatePointage).collect(Collectors.toSet());
+        List<LocalDate> joursManquants = new ArrayList<>();
+        for (LocalDate jour = debut; !jour.isAfter(fin); jour = jour.plusDays(1)) {
+            if (!joursExistants.contains(jour)) {
+                joursManquants.add(jour);
+            }
+        }
+        if (joursManquants.isEmpty()) {
+            return null;
+        }
+        return "Jours de la periode sans affectation active de l'agent, exclus du tableau de pointage : "
+                + joursManquants.stream().map(LocalDate::toString).collect(Collectors.joining(", ")) + ".";
     }
 
     private FIPHVersion chargerVersion(Long id) {

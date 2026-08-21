@@ -2,7 +2,6 @@ package com.snef.sgbf.fiph.entity;
 
 import com.snef.sgbf.bonsortie.entity.BonSortie;
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.referentiel.entity.Service;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -85,11 +84,15 @@ public class FIPH {
     @Column(name = "numero_semaine", nullable = false)
     private int numeroSemaine;
 
+    /**
+     * Date de debut, automatiquement issue de la date de sortie du Bon de
+     * Sortie declencheur (evolution du 2026-08-21) - jamais ressaisie, jamais
+     * modifiable une fois la FIPH creee (verifie en service : aucun endpoint
+     * n'expose son ecriture). La date de fin, elle, est une donnee de CONTENU
+     * qui peut evoluer au fil des versions - voir {@link FIPHVersion#getDateFinPeriode()}.
+     */
     @Column(name = "date_debut_periode", nullable = false)
     private LocalDate dateDebutPeriode;
-
-    @Column(name = "date_fin_periode", nullable = false)
-    private LocalDate dateFinPeriode;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "version_courante_id")

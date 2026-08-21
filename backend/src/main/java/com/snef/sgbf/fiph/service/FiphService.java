@@ -96,8 +96,13 @@ public class FiphService {
     public List<FiphDto> listerVisibles(Utilisateur courant, java.time.LocalDate date, java.time.LocalDate dateDebut,
                                          java.time.LocalDate dateFin, StatutFiphVersion statut, Long serviceId) {
         return entitesVisibles(courant).stream()
-                .filter(f -> date == null || !date.isBefore(f.getDateDebutPeriode()) && !date.isAfter(f.getDateFinPeriode()))
-                .filter(f -> dateDebut == null || !f.getDateFinPeriode().isBefore(dateDebut))
+                // La date de fin vit desormais sur la version courante et peut etre nulle
+                // (periode encore "ouverte", evolution du 2026-08-21) - traitee alors comme
+                // ne s'arretant jamais (toujours en cours) pour ces filtres de recherche.
+                .filter(f -> date == null || !date.isBefore(f.getDateDebutPeriode())
+                        && (f.getVersionCourante().getDateFinPeriode() == null || !date.isAfter(f.getVersionCourante().getDateFinPeriode())))
+                .filter(f -> dateDebut == null || f.getVersionCourante().getDateFinPeriode() == null
+                        || !f.getVersionCourante().getDateFinPeriode().isBefore(dateDebut))
                 .filter(f -> dateFin == null || !f.getDateDebutPeriode().isAfter(dateFin))
                 .filter(f -> statut == null || statut == f.getStatut())
                 .filter(f -> serviceId == null || serviceId.equals(f.getService().getId()))
@@ -142,12 +147,12 @@ public class FiphService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
         verifierPerimetreGestionnaire(auteur, agent);
 
-        if (fiphRepository.findByAgent_IdAndAnneeAndNumeroSemaine(agent.getId(), requete.annee(), requete.numeroSemaine()).isPresent()) {
-            throw new ConflictException("Une FIPH existe deja pour cet agent sur cette periode (RG-FIPH-002).");
+        LocalDate lundi = lundiDeLaSemaineIso(requete.annee(), requete.numeroSemaine());
+        if (!fiphRepository.trouverChevauchements(agent.getId(), lundi, lundi.with(DayOfWeek.SUNDAY)).isEmpty()) {
+            throw new ConflictException("Une FIPH existe deja pour cet agent sur une periode qui chevauche cette semaine (RG-FIPH-002).");
         }
 
-        LocalDate lundi = lundiDeLaSemaineIso(requete.annee(), requete.numeroSemaine());
-        FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.MANUELLE, null, lundi, auteur);
+        FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.MANUELLE, null, lundi, lundi.with(DayOfWeek.SUNDAY), auteur);
         return fiphMapper.toDto(fiph);
     }
 
@@ -186,13 +191,17 @@ public class FiphService {
     public void genererOuEnrichirDepuisBonSortie(BonSortie bonSortie, Utilisateur auteur) {
         Utilisateur agent = bonSortie.getAgent();
         LocalDate date = bonSortie.getDateSortie();
-        int annee = date.get(IsoFields.WEEK_BASED_YEAR);
-        int numeroSemaine = date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
 
-        Optional<FIPH> fiphExistante = fiphRepository.findByAgent_IdAndAnneeAndNumeroSemaine(agent.getId(), annee, numeroSemaine);
+        // Evolution du 2026-08-21 : une FIPH ne represente plus une semaine ISO fixe -
+        // sa date de fin est desormais definie librement par le Charge d'Affaires/la
+        // personne habilitee (voir FiphVersionService#definirDateFin) et peut depasser
+        // une seule semaine. La resolution "y a-t-il deja une FIPH pour cet agent a
+        // cette date" se fait donc sur la periode reellement couverte, plutot que sur
+        // le couple (annee, numero de semaine).
+        Optional<FIPH> fiphExistante = fiphRepository.trouverCouvrantDate(agent.getId(), date).stream().findFirst();
 
         if (fiphExistante.isEmpty()) {
-            FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.BON_SORTIE, bonSortie, date.with(DayOfWeek.MONDAY), auteur);
+            FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.BON_SORTIE, bonSortie, date, null, auteur);
             ajouterOuMettreAJourPointage(fiph.getVersionCourante(), bonSortie);
             recalculerTotaux(fiph.getVersionCourante());
             log.info("FIPH creee automatiquement (id={}) pour l'agent {} suite a la validation du bon de sortie {}",
@@ -268,7 +277,7 @@ public class FiphService {
      * </ul>
      */
     private FIPH creerFiphEtVersionInitiale(Utilisateur agent, OrigineFiph origine, BonSortie bonSortieDeclencheur,
-                                             LocalDate lundiDeLaSemaine, Utilisateur auteur) {
+                                             LocalDate dateDebut, LocalDate dateFinInitiale, Utilisateur auteur) {
         FIPH fiph = new FIPH();
         fiph.setAgent(agent);
         fiph.setService(agent.getService());
@@ -277,11 +286,13 @@ public class FiphService {
         if (origine == OrigineFiph.MANUELLE) {
             fiph.setCreePar(auteur);
         }
-        fiph.setAnnee(lundiDeLaSemaine.get(IsoFields.WEEK_BASED_YEAR));
-        fiph.setMois(lundiDeLaSemaine.getMonthValue());
-        fiph.setNumeroSemaine(lundiDeLaSemaine.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
-        fiph.setDateDebutPeriode(lundiDeLaSemaine);
-        fiph.setDateFinPeriode(lundiDeLaSemaine.with(DayOfWeek.SUNDAY));
+        fiph.setAnnee(dateDebut.get(IsoFields.WEEK_BASED_YEAR));
+        fiph.setMois(dateDebut.getMonthValue());
+        fiph.setNumeroSemaine(dateDebut.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
+        // Date de debut automatiquement issue de l'evenement declencheur (date de
+        // sortie du Bon de Sortie, ou lundi de la semaine choisie pour une FIPH
+        // MANUELLE) - jamais modifiable ensuite (evolution du 2026-08-21, section 1/9).
+        fiph.setDateDebutPeriode(dateDebut);
         StatutFiphVersion statutInitial = StatutFiphVersion.SIGNEE;
         fiph.setStatut(statutInitial);
         fiph = fiphRepository.save(fiph);
@@ -291,6 +302,13 @@ public class FiphService {
         version.setNumeroVersion(1);
         version.setCreePar(auteur);
         version.setStatutVersion(statutInitial);
+        // La date de fin d'une FIPH BON_SORTIE reste "ouverte" (non definie) jusqu'a
+        // ce que le Charge d'Affaires/la personne habilitee la renseigne explicitement
+        // (section 2 : "l'utilisateur ne doit pas avoir a ressaisir la date de debut...
+        // la date de fin doit etre definie par le CA/PH"). Une FIPH MANUELLE, elle,
+        // porte deja une semaine entiere explicitement choisie a la creation - fermee
+        // d'office, comportement inchange depuis avant cette evolution.
+        version.setDateFinPeriode(dateFinInitiale);
         Signature visaAutomatique = signatureRepository.save(new Signature(TypeSignature.VISA_APPLICATIF,
                 origine == OrigineFiph.BON_SORTIE
                         ? "auto:agent:" + agent.getId() + ":bon-sortie:"
@@ -336,6 +354,10 @@ public class FiphService {
         nouvelle.setMotifModification(motif);
         nouvelle.setVersionPrecedente(versionPrecedente);
         nouvelle.setStatutVersion(StatutFiphVersion.BROUILLON);
+        // La periode est reconduite par defaut (RG-VER-003 : rien n'est perdu d'une
+        // version a l'autre) - modifiable ensuite via FiphVersionService#definirDateFin
+        // si c'est precisement l'objet de cette nouvelle version (section 8).
+        nouvelle.setDateFinPeriode(versionPrecedente.getDateFinPeriode());
         nouvelle = fiphVersionRepository.save(nouvelle);
 
         // RG-VER-003 : la version precedente n'est ni supprimee ni modifiee -
