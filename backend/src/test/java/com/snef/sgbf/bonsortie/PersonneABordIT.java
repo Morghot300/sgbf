@@ -32,6 +32,7 @@ import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,15 +77,19 @@ class PersonneABordIT {
 
     private long suffixe;
     private Service service;
+    private Service autreService;
     private Utilisateur emetteurUtilisateur;
     private Utilisateur ca;
     private Utilisateur personneA;
     private Utilisateur personneB;
+    private Utilisateur personneAutreService;
 
     @BeforeEach
     void construireJeuDeDonnees() {
         suffixe = System.nanoTime();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
+        autreService = serviceRepository.save(nouveauService("AUT" + suffixe, "Autre service"));
+        personneAutreService = utilisateurRepository.save(nouvelAgent("PXC" + (suffixe % 100_000L), "Eyenga", "Claire", autreService));
         Chantier chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
         CodeHN codeHN = codeHNRepository.save(nouveauCodeHN("MIS" + suffixe, chantier));
 
@@ -254,6 +259,74 @@ class PersonneABordIT {
         }
         assertThat(bEncoreActive).isFalse(); // B n'est plus active...
         assertThat(personnesApresRetrait.size()).isEqualTo(2); // ...mais la ligne (et son historique) subsiste, jamais supprimee
+    }
+
+    /**
+     * RG-PAB-010 (evolution du 2026-08-21) : une personne d'un AUTRE service
+     * que le titulaire du bon principal ne peut jamais etre ajoutee comme
+     * personne a bord - ni via l'ajout unitaire, ni via l'ajout en lot -
+     * meme en fournissant directement son {@code agentId} par appel API
+     * direct, sans jamais passer par la liste d'agents eligibles proposee
+     * par {@code GET /agents-eligibles} (qui l'exclurait deja cote
+     * ergonomie ; ce test verifie que le backend reste la source de verite
+     * meme en contournant totalement cette liste).
+     */
+    @Test
+    void ajoutRefusePourUnePersonneDUnAutreService_uniteEtLot() throws Exception {
+        String tokenEmetteur = seConnecter(emetteurUtilisateur.getIdentifiant());
+
+        String reponseBs = mockMvc.perform(post("/api/bons-sortie")
+                        .header("Authorization", "Bearer " + tokenEmetteur)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("moyenUtilise", MoyenUtilise.OMNIUM_SERVICE.name());
+                            put("kilometrage", 30);
+                            put("dateSortie", LocalDate.now().toString());
+                            put("heureSortie", "08:00:00");
+                            put("lieu", "Chantier de test");
+                            put("codeAffaireSaisi", "CODE-TEST");
+                            put("motifSortie", "Test perimetre personnes a bord");
+                        }})))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long bonSortieId = objectMapper.readTree(reponseBs).get("id").asLong();
+
+        // La personne d'un autre service n'apparait jamais dans la liste des agents eligibles.
+        String reponseEligibles = mockMvc.perform(get("/api/bons-sortie/" + bonSortieId + "/agents-eligibles")
+                        .header("Authorization", "Bearer " + tokenEmetteur))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode eligibles = objectMapper.readTree(reponseEligibles);
+        for (JsonNode e : eligibles) {
+            assertThat(e.get("id").asLong()).isNotEqualTo(personneAutreService.getId());
+        }
+
+        // Ajout unitaire refuse malgre un appel API direct fournissant son agentId.
+        mockMvc.perform(post("/api/bons-sortie/" + bonSortieId + "/personnes-a-bord")
+                        .header("Authorization", "Bearer " + tokenEmetteur)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("agentId", personneAutreService.getId());
+                        }})))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codeRegle").value("RG-PAB-010"));
+
+        // Ajout en lot refuse de la meme facon, meme melangee a une personne valide du meme service.
+        mockMvc.perform(post("/api/bons-sortie/" + bonSortieId + "/personnes-a-bord/lot")
+                        .header("Authorization", "Bearer " + tokenEmetteur)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("agentIds", List.of(personneA.getId(), personneAutreService.getId()));
+                        }})))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codeRegle").value("RG-PAB-010"));
+
+        // Rien n'a ete ajoute : ni la personne valide (transaction du lot annulee en bloc), ni celle hors perimetre.
+        String reponsePersonnes = mockMvc.perform(get("/api/bons-sortie/" + bonSortieId + "/personnes-a-bord")
+                        .header("Authorization", "Bearer " + tokenEmetteur))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(objectMapper.readTree(reponsePersonnes).size()).isEqualTo(0);
     }
 
     // --- Aides ---

@@ -82,6 +82,7 @@ public class BonSortiePersonneService {
         }
         Utilisateur personneAgent = utilisateurRepository.findById(requete.agentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
+        verifierMemeService(principal, personneAgent);
 
         // RG-PAB-003 : verification applicative de preexistence, en complement
         // de la contrainte d'unicite en base (message d'erreur clair plutot
@@ -136,6 +137,7 @@ public class BonSortiePersonneService {
             }
             Utilisateur personneAgent = utilisateurRepository.findById(agentId)
                     .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", agentId));
+            verifierMemeService(principal, personneAgent);
 
             BonSortiePersonne association = new BonSortiePersonne();
             association.setBonSortiePrincipal(principal);
@@ -185,6 +187,25 @@ public class BonSortiePersonneService {
                         dejaAffecteMemeCreneau(u.getId(), principal)))
                 .filter(dto -> dto.statutCompte() == StatutCompte.ACTIF || dto.statutCompte() == StatutCompte.VERROUILLE)
                 .toList();
+    }
+
+    /**
+     * RG-PAB-010 (evolution du 2026-08-21) : une personne a bord doit
+     * obligatoirement appartenir au meme service que l'agent titulaire du bon
+     * de sortie principal - jamais seulement filtre cote client
+     * ({@link #listerAgentsEligibles} le fait deja pour l'ergonomie, mais
+     * n'est qu'un confort d'affichage), verifie de nouveau ici sur CHAQUE
+     * ecriture (ajout unitaire ou en lot), y compris pour un appel direct a
+     * l'API fournissant un {@code agentId} arbitraire hors de la liste
+     * proposee par le client (anti-IDOR, RG-SEC-002).
+     */
+    private void verifierMemeService(BonSortie principal, Utilisateur personneAgent) {
+        Long servicePrincipalId = principal.getAgent().getService() != null ? principal.getAgent().getService().getId() : null;
+        Long servicePersonneId = personneAgent.getService() != null ? personneAgent.getService().getId() : null;
+        if (servicePrincipalId == null || !servicePrincipalId.equals(servicePersonneId)) {
+            throw new BusinessRuleViolationException("RG-PAB-010",
+                    "Cette personne n'appartient pas au meme service que le titulaire du bon de sortie principal.");
+        }
     }
 
     private boolean dejaAffecteMemeCreneau(Long agentId, BonSortie principal) {
