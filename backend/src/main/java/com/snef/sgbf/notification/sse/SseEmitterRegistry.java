@@ -60,7 +60,7 @@ public class SseEmitterRegistry {
         try {
             emitter.send(SseEmitter.event().name("connecte").data("ok"));
         } catch (IOException e) {
-            retirer(utilisateurId, emitter);
+            terminerSurEchec(utilisateurId, emitter, e);
         }
         return emitter;
     }
@@ -70,6 +70,27 @@ public class SseEmitterRegistry {
             liste.remove(emitter);
             return liste.isEmpty() ? null : liste;
         });
+    }
+
+    /**
+     * Termine explicitement le contexte asynchrone Servlet lorsqu'un envoi
+     * echoue (client deconnecte), en plus de retirer l'emetteur du registre.
+     *
+     * <p><strong>Corrige un bug reel observe en conditions reelles (jamais en
+     * test)</strong> : sans cet appel a {@code completeWithError}, le contexte
+     * asynchrone restait "orphelin" jusqu'a ce que le conteneur (Tomcat) le
+     * detecte et tente lui-meme de le finaliser plus tard - cette finalisation
+     * tardive redeclenche un passage dans la chaine de filtres Spring Security
+     * (application {@code STATELESS}, aucune session a laquelle se raccrocher)
+     * sans jeton disponible sur ce re-dispatch interne, produisant un
+     * {@code AccessDeniedException} alors que la reponse SSE etait deja
+     * committee (rien de plus qu'un log bruyant cote serveur, mais qui merite
+     * d'etre elimine a la source plutot que tolere).
+     */
+    private void terminerSurEchec(Long utilisateurId, SseEmitter emitter, IOException e) {
+        log.debug("Emetteur SSE ferme pour l'utilisateur {} : {}", utilisateurId, e.getMessage());
+        retirer(utilisateurId, emitter);
+        emitter.completeWithError(e);
     }
 
     /** Pousse une notification a toutes les connexions actives du destinataire (aucune si non connecte - rattrapage par la liste REST). */
@@ -82,8 +103,7 @@ public class SseEmitterRegistry {
             try {
                 emitter.send(SseEmitter.event().name("notification").data(notification));
             } catch (IOException e) {
-                log.debug("Emetteur SSE ferme pour l'utilisateur {} : {}", utilisateurId, e.getMessage());
-                retirer(utilisateurId, emitter);
+                terminerSurEchec(utilisateurId, emitter, e);
             }
         }
     }
