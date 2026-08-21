@@ -11,6 +11,7 @@ import com.snef.sgbf.notification.entity.Notification;
 import com.snef.sgbf.notification.entity.TypeNotification;
 import com.snef.sgbf.notification.mapper.NotificationMapper;
 import com.snef.sgbf.notification.repository.NotificationRepository;
+import com.snef.sgbf.notification.sse.SseEmitterRegistry;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,13 +35,16 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final HabilitationRepository habilitationRepository;
     private final NotificationMapper notificationMapper;
+    private final SseEmitterRegistry sseEmitterRegistry;
 
     public NotificationService(NotificationRepository notificationRepository,
                                 HabilitationRepository habilitationRepository,
-                                NotificationMapper notificationMapper) {
+                                NotificationMapper notificationMapper,
+                                SseEmitterRegistry sseEmitterRegistry) {
         this.notificationRepository = notificationRepository;
         this.habilitationRepository = habilitationRepository;
         this.notificationMapper = notificationMapper;
+        this.sseEmitterRegistry = sseEmitterRegistry;
     }
 
     @Transactional(readOnly = true)
@@ -211,6 +215,23 @@ public class NotificationService {
         notification.setEntiteId(entiteId);
         notification.setLien(lien);
         notification.setDeclenchePar(declencheur);
-        notificationRepository.save(notification);
+        notification = notificationRepository.save(notification);
+
+        // Pousse en SSE seulement APRES commit (evolution du 2026-08-21, section 9-11) : si la
+        // transaction englobante devait finalement etre annulee (erreur plus loin dans le meme appel),
+        // le client ne doit jamais recevoir en temps reel une notification qui n'existe pas vraiment
+        // en base. Aucun connecte -> aucun envoi (rattrapage via la liste REST au prochain chargement).
+        Notification notificationFinale = notification;
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            sseEmitterRegistry.notifier(destinataire.getId(), notificationMapper.toDto(notificationFinale));
+                        }
+                    });
+        } else {
+            sseEmitterRegistry.notifier(destinataire.getId(), notificationMapper.toDto(notificationFinale));
+        }
     }
 }

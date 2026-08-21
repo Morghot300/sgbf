@@ -27,11 +27,20 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * sans authentification - c'est a Spring Security (regles de
  * {@link SecurityConfig}) de decider ensuite si l'endpoint demande
  * necessite d'etre authentifie.
+ *
+ * <p><strong>Exception strictement limitee au flux SSE (evolution du
+ * 2026-08-21)</strong> : {@code GET /api/notifications/stream} accepte
+ * egalement le jeton en parametre de requete {@code ?token=}, l'API
+ * navigateur {@code EventSource} ne permettant pas de definir d'en-tetes
+ * personnalises. Cette tolerance ne s'applique JAMAIS a un autre chemin -
+ * jamais un fallback general, qui exposerait le jeton dans les journaux de
+ * requetes de tout autre endpoint.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String PREFIXE_BEARER = "Bearer ";
+    private static final String CHEMIN_FLUX_NOTIFICATIONS = "/api/notifications/stream";
 
     private final JwtService jwtService;
     private final UserDetailsServiceImpl userDetailsService;
@@ -46,11 +55,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                      @NonNull HttpServletResponse response,
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
         String enTete = request.getHeader("Authorization");
+        String jetonBrut = null;
+        if (enTete != null && enTete.startsWith(PREFIXE_BEARER)) {
+            jetonBrut = enTete.substring(PREFIXE_BEARER.length());
+        } else if (CHEMIN_FLUX_NOTIFICATIONS.equals(request.getRequestURI())) {
+            jetonBrut = request.getParameter("token");
+        }
 
-        if (enTete != null && enTete.startsWith(PREFIXE_BEARER)
-                && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (jetonBrut != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-            String jeton = enTete.substring(PREFIXE_BEARER.length());
+            String jeton = jetonBrut;
             Optional<Long> utilisateurId = jwtService.extraireUtilisateurIdSiValide(jeton);
 
             utilisateurId.ifPresent(id -> {

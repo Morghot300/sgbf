@@ -386,6 +386,47 @@ button:disabled {
   color: var(--texte-secondaire);
 }
 
+/* Popups temps reel (evolution du 2026-08-21, section 9-11) : empilement fixe, distinct du
+   panneau deroulant de la cloche - un evenement recu via SSE, jamais un rechargement manuel. */
+.notification-toast-pile {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(340px, calc(100vw - 2rem));
+}
+.notification-toast {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure-defaut);
+  border-left: 3px solid var(--brand-2-text);
+  border-radius: var(--rayon-defaut);
+  box-shadow: var(--ombre-carte);
+  padding: 0.6rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  animation: notification-toast-entree 0.2s ease-out;
+}
+.notification-toast__titre {
+  font-size: var(--taille-petite);
+  font-weight: 600;
+  color: var(--texte-principal);
+}
+.notification-toast__message {
+  font-size: 0.75rem;
+  color: var(--texte-secondaire);
+}
+@keyframes notification-toast-entree {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .app-content {
   flex: 1;
   width: 100%;
