@@ -1,7 +1,7 @@
 import { httpClient } from "./httpClient";
 import type {
   AffecterAgentRequest, AffectationMissionDto, CreerMissionRequest, InterrompreAffectationRequest,
-  MissionDto, ReaffecterRequest,
+  MissionDto, ReaffecterMiMissionRequest, ReaffecterRequest,
 } from "../types/mission";
 
 export async function listerMissions(): Promise<MissionDto[]> {
@@ -31,4 +31,7 @@ export async function interrompreAffectation(id: number, requete: InterrompreAff
 }
 export async function reaffecterAgent(id: number, requete: ReaffecterRequest): Promise<AffectationMissionDto> {
   return (await httpClient.post<AffectationMissionDto>(`/affectations-mission/${id}/reaffecter`, requete)).data;
+}
+export async function reaffecterPendantMissionEnCours(requete: ReaffecterMiMissionRequest): Promise<AffectationMissionDto> {
+  return (await httpClient.post<AffectationMissionDto>("/affectations-mission/reaffecter-mi-mission", requete)).data;
 }

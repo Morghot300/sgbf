@@ -24,8 +24,11 @@ import com.snef.sgbf.mission.mapper.AffectationMissionMapper;
 import com.snef.sgbf.mission.repository.AffectationMissionRepository;
 import com.snef.sgbf.referentiel.entity.MotifInterruptionMission;
 import com.snef.sgbf.referentiel.repository.MotifInterruptionMissionRepository;
+import com.snef.sgbf.fiph.repository.PointageRepository;
+import com.snef.sgbf.mission.dto.ReaffecterMiMissionRequest;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -39,17 +42,23 @@ import org.springframework.transaction.annotation.Transactional;
  * RG-MIS-006) : une affectation interrompue n'est jamais supprimee ni
  * reecrite, seule une nouvelle ligne chainee est creee.
  *
- * <p><strong>Portee de ce module :</strong> l'impact d'une interruption sur
- * une FIPH deja generee (RG-FIPH-022 a 024, section 6.4) sera cable lors du
- * developpement du module FIPH (non encore construit) - ce service ne gere
- * ici que le cycle de vie de la mission et de l'affectation elles-memes,
- * conformement au developpement module par module annonce.
+ * <p><strong>Impact FIPH (evolution du 2026-08-20, section 9-13) :</strong>
+ * le module FIPH, non construit au moment ou le paragraphe precedent a ete
+ * ecrit, existe desormais - {@link #reaffecterPendantMissionEnCours} cable
+ * ce point, mais volontairement au minimum : chaque {@link com.snef.sgbf.fiph.entity.Pointage}
+ * journalier est deja rattache a l'affectation active CE JOUR-LA au moment
+ * ou son bon de sortie est valide (voir Javadoc de {@code Pointage}), donc
+ * aucun recalcul en masse n'est necessaire apres une reaffectation - seule
+ * une lecture (jamais une ecriture) de {@link com.snef.sgbf.fiph.repository.PointageRepository}
+ * est requise ici, pour interdire toute reaffectation retroactive sur des
+ * jours deja pointes (decision confirmee, voir Javadoc de la methode).
  */
 @org.springframework.stereotype.Service
 @Transactional
 public class AffectationMissionService {
 
     private static final String CODE_MOTIF_AUTRE = "AUTRE";
+    private static final String CODE_MOTIF_NOUVELLE_MISSION = "NOUVELLE_MISSION";
 
     private final AffectationMissionRepository affectationMissionRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -58,6 +67,7 @@ public class AffectationMissionService {
     private final MissionService missionService;
     private final AffectationMissionMapper affectationMissionMapper;
     private final AuditService auditService;
+    private final PointageRepository pointageRepository;
 
     public AffectationMissionService(AffectationMissionRepository affectationMissionRepository,
                                       UtilisateurRepository utilisateurRepository,
@@ -65,7 +75,8 @@ public class AffectationMissionService {
                                       HabilitationRepository habilitationRepository,
                                       MissionService missionService,
                                       AffectationMissionMapper affectationMissionMapper,
-                                      AuditService auditService) {
+                                      AuditService auditService,
+                                      PointageRepository pointageRepository) {
         this.affectationMissionRepository = affectationMissionRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.motifInterruptionMissionRepository = motifInterruptionMissionRepository;
@@ -73,6 +84,7 @@ public class AffectationMissionService {
         this.missionService = missionService;
         this.affectationMissionMapper = affectationMissionMapper;
         this.auditService = auditService;
+        this.pointageRepository = pointageRepository;
     }
 
     @Transactional(readOnly = true)
@@ -205,6 +217,105 @@ public class AffectationMissionService {
         auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, nouvelleAffectation.getId(), auteur,
                 TypeActionAudit.REAFFECTATION, affectationInterrompueId, affectationMissionMapper.toDto(nouvelleAffectation),
                 StatutAffectation.INTERROMPUE.name(), StatutAffectation.ACTIVE.name());
+        return affectationMissionMapper.toDto(nouvelleAffectation);
+    }
+
+    /**
+     * Reaffecte un agent vers une nouvelle mission alors que sa mission
+     * actuelle est encore ACTIVE (evolution du 2026-08-20, section 9-13) -
+     * a la difference de {@link #interrompre}/{@link #reaffecter} (parcours
+     * manuel en deux etapes, date et motif d'interruption choisis
+     * librement), cette methode agit en une seule operation atomique :
+     * l'affectation active est automatiquement close a la veille de
+     * {@link ReaffecterMiMissionRequest#dateDebutAffectation}, motif fixe
+     * {@value #CODE_MOTIF_NOUVELLE_MISSION}, puis la nouvelle affectation est
+     * creee - reproduisant exactement l'exemple du brief (mission 1 du 01/08
+     * au 20/08, nouvelle affectation le 11/08 -&gt; mission 1 se termine le
+     * 10/08, mission 2 commence le 11/08).
+     *
+     * <p><strong>Retroactivite refusee (decision confirmee)</strong> : la
+     * nouvelle date de debut doit etre strictement posterieure au dernier
+     * jour deja pointe pour cet agent ({@link PointageRepository#trouverDernierJourPointe}),
+     * toutes FIPH confondues - jamais de reecriture silencieuse d'un
+     * pointage deja valide via un bon de sortie, en coherence avec le
+     * principe de non-ecrasement deja applique ailleurs (RG-MIS-003/006).
+     *
+     * <p><strong>Aucun recalcul FIPH necessaire</strong> : chaque jour est
+     * rattache a l'affectation active CE JOUR-LA au moment ou son bon de
+     * sortie est valide, jamais retroactivement en bloc (voir Javadoc de
+     * {@link com.snef.sgbf.fiph.entity.Pointage}) - les bons de sortie
+     * valides a partir de la nouvelle date se rattacheront donc
+     * naturellement, un par un, a la nouvelle affectation.
+     */
+    public AffectationMissionDto reaffecterPendantMissionEnCours(ReaffecterMiMissionRequest requete, Utilisateur auteur) {
+        Utilisateur agent = utilisateurRepository.findById(requete.agentId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
+        verifierPerimetre(auteur, agent);
+
+        AffectationMission affectationActive = affectationMissionRepository
+                .findByAgent_IdAndStatutAffectation(agent.getId(), StatutAffectation.ACTIVE)
+                .orElseThrow(() -> new BusinessRuleViolationException("RG-MIS-009",
+                        "Cet agent n'a aucune affectation active a reaffecter. "
+                                + "Utilisez la creation d'affectation initiale (POST /affectations-mission)."));
+
+        Mission missionCible = missionService.chargerMission(requete.missionCibleId());
+        verifierMissionOuverte(missionCible);
+
+        LocalDate nouvelleDateDebut = requete.dateDebutAffectation();
+        if (!nouvelleDateDebut.isAfter(affectationActive.getDateDebutAffectation())) {
+            throw new BusinessRuleViolationException("RG-MIS-010",
+                    "La nouvelle affectation doit debuter apres le debut de l'affectation en cours ("
+                            + affectationActive.getDateDebutAffectation() + ").");
+        }
+
+        Optional<LocalDate> dernierJourPointe = pointageRepository.trouverDernierJourPointe(agent.getId());
+        if (dernierJourPointe.isPresent() && !nouvelleDateDebut.isAfter(dernierJourPointe.get())) {
+            throw new BusinessRuleViolationException("RG-MIS-011",
+                    "Impossible de reaffecter cet agent a partir du " + nouvelleDateDebut
+                            + " : un pointage existe deja jusqu'au " + dernierJourPointe.get()
+                            + ". La reaffectation ne peut porter que sur des jours non encore pointes.");
+        }
+
+        LocalDate dateInterruption = nouvelleDateDebut.minusDays(1);
+        MotifInterruptionMission motif = motifInterruptionMissionRepository.findAll().stream()
+                .filter(m -> m.getCode().equals(CODE_MOTIF_NOUVELLE_MISSION) && m.isActif())
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Motif d'interruption '" + CODE_MOTIF_NOUVELLE_MISSION + "' introuvable ou inactif en base."));
+
+        StatutAffectation statutAvant = affectationActive.getStatutAffectation();
+        affectationActive.setDateFinAffectation(dateInterruption);
+        affectationActive.setStatutAffectation(StatutAffectation.INTERROMPUE);
+        affectationActive.setMotifInterruption(motif);
+        affectationActive.setCommentaireInterruption("Reaffectation automatique vers la mission "
+                + missionCible.getCodeHN().getCode() + " a partir du " + nouvelleDateDebut + ".");
+        // saveAndFlush (et non save) : l'index unique uq_affectation_agent_actif
+        // (au plus une affectation ACTIVE par agent, voir migration) doit voir
+        // cette ligne repassee a INTERROMPUE AVANT l'insertion de la nouvelle
+        // ligne ACTIVE ci-dessous - Hibernate ordonnance par defaut les INSERT
+        // avant les UPDATE au sein d'un meme flush, ce qui violerait sinon
+        // transitoirement la contrainte (deux lignes ACTIVE simultanees).
+        affectationMissionRepository.saveAndFlush(affectationActive);
+        missionService.interrompre(affectationActive.getMission(), dateInterruption);
+
+        auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, affectationActive.getId(), auteur,
+                TypeActionAudit.INTERRUPTION, statutAvant, StatutAffectation.INTERROMPUE,
+                statutAvant.name(), StatutAffectation.INTERROMPUE.name());
+
+        AffectationMission nouvelleAffectation = new AffectationMission();
+        nouvelleAffectation.setAgent(agent);
+        nouvelleAffectation.setMission(missionCible);
+        nouvelleAffectation.setDateDebutAffectation(nouvelleDateDebut);
+        nouvelleAffectation.setStatutAffectation(StatutAffectation.ACTIVE);
+        nouvelleAffectation.setAffectationPrecedente(affectationActive);
+        nouvelleAffectation.setCreePar(auteur);
+        nouvelleAffectation = affectationMissionRepository.save(nouvelleAffectation);
+
+        missionService.demarrerOuReprendre(missionCible);
+
+        auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, nouvelleAffectation.getId(), auteur,
+                TypeActionAudit.REAFFECTATION, affectationActive.getId(), affectationMissionMapper.toDto(nouvelleAffectation),
+                StatutAffectation.ACTIVE.name(), StatutAffectation.ACTIVE.name());
         return affectationMissionMapper.toDto(nouvelleAffectation);
     }
 

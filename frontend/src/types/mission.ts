@@ -59,6 +59,12 @@ export interface ReaffecterRequest {
   dateDebutAffectation: string;
 }
 
+export interface ReaffecterMiMissionRequest {
+  agentId: number;
+  missionCibleId: number;
+  dateDebutAffectation: string;
+}
+
 export const LIBELLES_STATUT_MISSION: Record<StatutMission, string> = {
   PLANIFIEE: "Planifiée",
   EN_COURS: "En cours",

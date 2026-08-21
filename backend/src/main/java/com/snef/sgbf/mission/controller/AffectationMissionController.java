@@ -3,6 +3,7 @@ package com.snef.sgbf.mission.controller;
 import com.snef.sgbf.mission.dto.AffectationMissionDto;
 import com.snef.sgbf.mission.dto.AffecterAgentRequest;
 import com.snef.sgbf.mission.dto.InterrompreAffectationRequest;
+import com.snef.sgbf.mission.dto.ReaffecterMiMissionRequest;
 import com.snef.sgbf.mission.dto.ReaffecterRequest;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.security.CustomUserDetails;
@@ -73,6 +74,16 @@ public class AffectationMissionController {
                                                               @Valid @RequestBody ReaffecterRequest requete,
                                                               @AuthenticationPrincipal CustomUserDetails principal) {
         AffectationMissionDto nouvelle = affectationMissionService.reaffecter(id, requete, principal.getUtilisateur());
+        return ResponseEntity.status(HttpStatus.CREATED).body(nouvelle);
+    }
+
+    /** Reaffectation en une seule etape pendant qu'une mission est encore en cours (section 9-13, evolution du 2026-08-20). */
+    @PostMapping("/reaffecter-mi-mission")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    public ResponseEntity<AffectationMissionDto> reaffecterPendantMissionEnCours(
+            @Valid @RequestBody ReaffecterMiMissionRequest requete,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        AffectationMissionDto nouvelle = affectationMissionService.reaffecterPendantMissionEnCours(requete, principal.getUtilisateur());
         return ResponseEntity.status(HttpStatus.CREATED).body(nouvelle);
     }
 }

@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations, obtenirMission,
+  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations, listerMissions, obtenirMission,
+  reaffecterPendantMissionEnCours,
 } from "../../api/missionApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerMotifsInterruption } from "../../api/referentielApi";
@@ -20,11 +21,13 @@ export default function MissionDetailPage() {
   const [agentId, setAgentId] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [interruption, setInterruption] = useState<{ affectationId: number; motifCode: string; commentaire: string } | null>(null);
+  const [reaffectation, setReaffectation] = useState<{ agentId: number; missionCibleId: string; dateDebutAffectation: string } | null>(null);
 
   const mission = useQuery({ queryKey: ["mission", missionId], queryFn: () => obtenirMission(missionId) });
   const affectations = useQuery({ queryKey: ["affectations", missionId], queryFn: () => listerAffectations(missionId) });
   const motifs = useQuery({ queryKey: ["motifs-interruption"], queryFn: listerMotifsInterruption });
   const historique = useQuery({ queryKey: ["mission-historique", missionId], queryFn: () => historiqueMission(missionId) });
+  const toutesMissions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: reaffectation !== null });
 
   const peutGerer = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE");
 
@@ -45,6 +48,15 @@ export default function MissionDetailPage() {
     }),
     onSuccess: () => { setInterruption(null); invalider(); },
     onError: (e) => setErreur(extraireMessageErreur(e, "Impossible d'interrompre cette affectation.")),
+  });
+  const reaffecterMiMission = useMutation({
+    mutationFn: () => reaffecterPendantMissionEnCours({
+      agentId: reaffectation!.agentId,
+      missionCibleId: Number(reaffectation!.missionCibleId),
+      dateDebutAffectation: reaffectation!.dateDebutAffectation,
+    }),
+    onSuccess: () => { setReaffectation(null); invalider(); },
+    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de réaffecter cet agent.")),
   });
 
   return (
@@ -82,9 +94,15 @@ export default function MissionDetailPage() {
                   {peutGerer && (
                     <td>
                       {a.statutAffectation === "ACTIVE" && (
-                        <button type="button" onClick={() => setInterruption({ affectationId: a.id, motifCode: "", commentaire: "" })}>
-                          Interrompre
-                        </button>
+                        <>
+                          <button type="button" onClick={() => setInterruption({ affectationId: a.id, motifCode: "", commentaire: "" })}>
+                            Interrompre
+                          </button>
+                          {" "}
+                          <button type="button" onClick={() => setReaffectation({ agentId: a.agentId, missionCibleId: "", dateDebutAffectation: "" })}>
+                            Réaffecter vers une nouvelle mission
+                          </button>
+                        </>
                       )}
                     </td>
                   )}
@@ -108,6 +126,44 @@ export default function MissionDetailPage() {
           <div className="barre-actions">
             <button type="button" onClick={() => interrompre.mutate()} disabled={interrompre.isPending || !interruption.motifCode}>Confirmer l'interruption</button>
             <button type="button" onClick={() => setInterruption(null)}>Annuler</button>
+          </div>
+        </section>
+      )}
+
+      {reaffectation && (
+        <section>
+          <h3>Réaffecter l'agent vers une nouvelle mission</h3>
+          <p className="dashboard-accueil">
+            L'affectation actuelle se termine automatiquement la veille de la date de début choisie ci-dessous ;
+            elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent.
+          </p>
+          <label htmlFor="missionCibleId">Mission cible</label>
+          <select
+            id="missionCibleId"
+            value={reaffectation.missionCibleId}
+            onChange={(e) => setReaffectation({ ...reaffectation, missionCibleId: e.target.value })}
+          >
+            <option value="">— Sélectionner —</option>
+            {toutesMissions.data?.filter((m) => m.id !== missionId).map((m) => (
+              <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle}</option>
+            ))}
+          </select>
+          <label htmlFor="dateDebutReaffectation">Date de début de la nouvelle affectation</label>
+          <input
+            id="dateDebutReaffectation"
+            type="date"
+            value={reaffectation.dateDebutAffectation}
+            onChange={(e) => setReaffectation({ ...reaffectation, dateDebutAffectation: e.target.value })}
+          />
+          <div className="barre-actions">
+            <button
+              type="button"
+              onClick={() => reaffecterMiMission.mutate()}
+              disabled={reaffecterMiMission.isPending || !reaffectation.missionCibleId || !reaffectation.dateDebutAffectation}
+            >
+              Confirmer la réaffectation
+            </button>
+            <button type="button" onClick={() => setReaffectation(null)}>Annuler</button>
           </div>
         </section>
       )}
