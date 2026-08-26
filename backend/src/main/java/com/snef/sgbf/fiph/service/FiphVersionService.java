@@ -358,6 +358,14 @@ public class FiphVersionService {
             throw new BusinessRuleViolationException("RG-FIPH-019",
                     "La FIPH doit d'abord etre signee par l'emetteur avant d'etre soumise.");
         }
+        // RG-FIPH-033 (evolution du 2026-08-26, section 9) : une FIPH ne peut entrer dans le
+        // circuit de validation sans date de fin definie - la date de debut, elle, est toujours
+        // presente (issue automatiquement du Bon de Sortie declencheur, ou d'une semaine entiere
+        // choisie a la creation pour une FIPH MANUELLE - jamais absente, aucun controle necessaire).
+        if (version.getDateFinPeriode() == null) {
+            throw new BusinessRuleViolationException("RG-FIPH-033",
+                    "La date de fin de la periode doit etre definie avant de soumettre cette FIPH au circuit de validation.");
+        }
 
         version.setStatutVersion(StatutFiphVersion.SOUMISE);
         fiphVersionRepository.save(version);
@@ -392,7 +400,7 @@ public class FiphVersionService {
      */
     public FiphVersionDto valider(Long fiphVersionId, int niveau, ValiderFiphRequest requete, String adresseIp, Utilisateur auteur) {
         FIPHVersion version = chargerVersion(fiphVersionId);
-        verifierRoleNiveau(auteur, version, niveau);
+        boolean viaSuperAdministrateur = verifierRoleNiveau(auteur, version, niveau);
         verifierSeparationResponsabilites(version, auteur, niveau);
         verifierSequencementNiveau(version, niveau);
         if (niveau == 2) {
@@ -437,6 +445,16 @@ public class FiphVersionService {
         auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
                 TypeActionAudit.VALIDATION, statutAvant.name(), statutApres.name(),
                 statutAvant.name(), statutApres.name());
+
+        // Section 13-14 : distingue explicitement, dans l'historique, une validation de
+        // niveau normale d'une intervention exceptionnelle du Super Administrateur - jamais
+        // une simple deduction implicite a posteriori a partir des habilitations du moment.
+        if (viaSuperAdministrateur) {
+            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
+                    TypeActionAudit.VALIDATION_PAR_SUPER_ADMIN,
+                    "niveau " + niveau + " (hors perimetre normal du Super Administrateur)", statutApres.name(),
+                    statutAvant.name(), statutApres.name());
+        }
 
         // Notification du niveau suivant (evolution du 2026-08-19, section 5) :
         // uniquement apres une decision VALIDEE qui a reellement fait
@@ -614,8 +632,13 @@ public class FiphVersionService {
      * declencher explicitement, un a la fois). RG-HAB-004 (separation des
      * responsabilites, {@link #verifierSeparationResponsabilites}) continue
      * de s'appliquer normalement, y compris pour le Super Administrateur.
+     *
+     * @return {@code true} si l'auteur n'a ete reconnu habilite QUE via son
+     *         role SUPER_ADMINISTRATEUR (aucune habilitation de service
+     *         correspondante) - permet a l'appelant de journaliser
+     *         distinctement cette intervention exceptionnelle (section 14).
      */
-    private void verifierRoleNiveau(Utilisateur auteur, FIPHVersion version, int niveau) {
+    private boolean verifierRoleNiveau(Utilisateur auteur, FIPHVersion version, int niveau) {
         CodeRoleMetier roleAttendu = switch (niveau) {
             case 2 -> CodeRoleMetier.CHARGE_AFFAIRES;
             case 3 -> CodeRoleMetier.RESPONSABLE_ACTIVITE;
@@ -623,19 +646,22 @@ public class FiphVersionService {
             default -> throw new BusinessRuleViolationException("section-12", "Niveau de validation invalide : " + niveau);
         };
         List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
-        if (habilitationsAuteur.stream().anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()))) {
-            return;
-        }
         Long serviceId = version.getFiph().getService().getId();
-        boolean habilite = habilitationsAuteur.stream()
+        boolean habiliteNormalement = habilitationsAuteur.stream()
                 .filter(h -> h.getService() != null && h.getService().getId().equals(serviceId))
                 .anyMatch(h -> roleAttendu.name().equals(h.getRoleMetier().getCode())
                         // Niveau 2 accepte aussi la personne habilitee, au meme titre que le Charge d'Affaires (RG-FIPH-010, RG-HAB-003).
                         || (niveau == 2 && CodeRoleMetier.PERSONNE_HABILITEE.name().equals(h.getRoleMetier().getCode())));
-        if (!habilite) {
+        if (habiliteNormalement) {
+            return false;
+        }
+        boolean estSuperAdministrateur = habilitationsAuteur.stream()
+                .anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
+        if (!estSuperAdministrateur) {
             throw new ForbiddenOperationException(
                     "Vous n'etes pas habilite a valider cette FIPH au niveau " + niveau + ".");
         }
+        return true;
     }
 
     /**

@@ -79,16 +79,17 @@ public class FiphVersionController {
         return fiphVersionService.listerValidations(id, principal.getUtilisateur());
     }
 
+    /** RH inclus (evolution du 2026-08-26, section 7) : peut corriger le pointage d'une FIPH de n'importe quel service, y compris apres validation definitive - voir {@code FiphService.verifierPerimetreGestionnaire}. */
     @PutMapping("/{id}/pointage")
-    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE', 'RH')")
     public FiphVersionDto completerPointage(@PathVariable Long id, @Valid @RequestBody CompleterPointageRequest requete,
                                              @AuthenticationPrincipal CustomUserDetails principal) {
         return fiphVersionService.completerPointage(id, requete, principal.getUtilisateur());
     }
 
-    /** Definit/modifie la date de fin de la periode (evolution du 2026-08-21, section 2/7/8). */
+    /** Definit/modifie la date de fin de la periode (evolution du 2026-08-21, section 2/7/8 ; RH inclus depuis le 2026-08-26). */
     @PutMapping("/{id}/date-fin")
-    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE', 'RH')")
     public FiphVersionDto definirDateFin(@PathVariable Long id, @Valid @RequestBody DefinirDateFinRequest requete,
                                           @AuthenticationPrincipal CustomUserDetails principal) {
         return fiphVersionService.definirDateFin(id, requete, principal.getUtilisateur());
@@ -129,9 +130,9 @@ public class FiphVersionController {
         return fiphVersionService.priseEnMainSuperAdministrateur(id, requete, request.getRemoteAddr(), principal.getUtilisateur());
     }
 
-    /** RG-VER-001 a 007 : nouvelle version a partir d'une FIPH deja validee definitivement. */
+    /** RG-VER-001 a 007 : nouvelle version a partir d'une FIPH deja validee definitivement. RH inclus depuis le 2026-08-26 (section 7). */
     @PostMapping("/fiph/{fiphId}/nouvelle-version")
-    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE', 'RH')")
     public ResponseEntity<FiphVersionDto> creerNouvelleVersion(@PathVariable Long fiphId,
                                                                 @Valid @RequestBody CreerNouvelleVersionRequest requete,
                                                                 @AuthenticationPrincipal CustomUserDetails principal) {

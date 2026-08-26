@@ -51,8 +51,11 @@ import org.springframework.transaction.annotation.Transactional;
  *       perimetre ne peut consulter ni un bon de sortie, ni une FIPH, ni une
  *       FIPHVersion par identifiant, quand bien meme celui-ci est
  *       syntaxiquement valide ;</li>
- *   <li>droits RH en lecture seule (RG-HAB-005, section 25) : la RH consulte
- *       globalement mais ne peut jamais ecrire ;</li>
+ *   <li>droits RH (section 25 ; ecriture etendue le 2026-08-26, section 7) :
+ *       la RH consulte globalement, ET peut desormais corriger le pointage
+ *       d'une FIPH de n'importe quel service, y compris apres validation
+ *       definitive - meme mecanisme que CA/PH (nouvelle version tracable),
+ *       perimetre global plutot que par service ;</li>
  *   <li>impression/export PDF conditionnes au statut (RG-DOC-001/003) et
  *       journal d'audit d'une FIPH, dont l'export est reserve a la
  *       Direction/RH/Administrateur (section 24).</li>
@@ -187,7 +190,8 @@ class AuditPdfDroitsRhIT {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/fiph-versions/" + versionId).header("Authorization", "Bearer " + tokenRh))
                 .andExpect(status().isOk());
-        // La RH ne peut jamais ecrire (RG-HAB-005) : le complement de pointage lui est refuse au niveau role.
+        // Evolution du 2026-08-26 (section 7) : la RH PEUT desormais corriger le pointage d'une
+        // FIPH de n'importe quel service - meme mecanisme d'ecriture que CA/PH, perimetre global.
         String corpsCompletionRh = objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
             put("datePointage", LocalDate.now().toString());
             put("heuresNormales", 8);
@@ -195,6 +199,12 @@ class AuditPdfDroitsRhIT {
         }});
         mockMvc.perform(put("/api/fiph-versions/" + versionId + "/pointage")
                         .header("Authorization", "Bearer " + tokenRh)
+                        .contentType("application/json").content(corpsCompletionRh))
+                .andExpect(status().isOk());
+        // Un utilisateur hors perimetre (habilite, mais sur un AUTRE service, sans role RH/Super
+        // Administrateur) reste, lui, toujours refuse - l'exception ne beneficie qu'a RH/Super Admin.
+        mockMvc.perform(put("/api/fiph-versions/" + versionId + "/pointage")
+                        .header("Authorization", "Bearer " + tokenHorsPerimetre)
                         .contentType("application/json").content(corpsCompletionRh))
                 .andExpect(status().isForbidden());
 
@@ -220,6 +230,14 @@ class AuditPdfDroitsRhIT {
         mockMvc.perform(put("/api/fiph-versions/" + versionId + "/pointage")
                         .header("Authorization", "Bearer " + tokenCa1)
                         .contentType("application/json").content(corpsCompletion))
+                .andExpect(status().isOk());
+        // RG-FIPH-033 : date de fin obligatoire avant soumission (evolution du 2026-08-26, section 9).
+        mockMvc.perform(put("/api/fiph-versions/" + versionId + "/date-fin")
+                        .header("Authorization", "Bearer " + tokenCa1)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
+                            put("dateFin", LocalDate.now().toString());
+                        }})))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/fiph-versions/" + versionId + "/soumettre").header("Authorization", "Bearer " + tokenCa1))
                 .andExpect(status().isOk());

@@ -1,6 +1,7 @@
 package com.snef.sgbf.identite;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,6 +69,7 @@ class SuperAdministrateurValidateurIT {
     private Service service;
     private Service autreService;
     private Utilisateur emetteur;
+    private Utilisateur caService;
     private Utilisateur superAdmin;
     private Utilisateur caAutreService;
 
@@ -77,19 +79,24 @@ class SuperAdministrateurValidateurIT {
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         autreService = serviceRepository.save(nouveauService("AUT" + suffixe, "Autre service"));
         emetteur = creerPersonneAvecCompte("EMT" + (suffixe % 100_000L), "Test", "Emetteur", "emetteur_sa_" + suffixe, service);
+        caService = creerUtilisateurAvecHabilitation("ca_sa_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         superAdmin = creerUtilisateurAvecHabilitation("superadmin_" + suffixe, null, CodeRoleMetier.SUPER_ADMINISTRATEUR);
         caAutreService = creerUtilisateurAvecHabilitation("ca_autre_sa_" + suffixe, autreService, CodeRoleMetier.CHARGE_AFFAIRES);
     }
 
     /**
-     * Le Super Administrateur valide un bon de sortie d'un service sur
-     * lequel il ne detient AUCUNE habilitation de service, et une FIPH aux
-     * niveaux 2, 3 et 4, chacun par un appel explicite distinct (jamais la
-     * prise en main).
+     * Le Super Administrateur valide une FIPH aux niveaux 2, 3 et 4 sur un
+     * service ou il ne detient AUCUNE habilitation, chacun par un appel
+     * explicite distinct (jamais la prise en main) - PUR validateur ici (le
+     * Charge d'Affaires du service prepare la FIPH : RG-HAB-004, separation
+     * des responsabilites, continue de s'appliquer au Super Administrateur
+     * comme a quiconque des le niveau 3, et refuserait a bon droit qu'il
+     * valide une fiche qu'il aurait lui-meme completee).
      */
     @Test
     void superAdministrateurValideBonDeSortieEtFiphNiveauParNiveauSurNimporteQuelService() throws Exception {
         String tokenEmetteur = seConnecter(emetteur.getIdentifiant());
+        String tokenCaService = seConnecter(caService.getIdentifiant());
         String tokenSuperAdmin = seConnecter(superAdmin.getIdentifiant());
 
         String reponseBs = mockMvc.perform(post("/api/bons-sortie")
@@ -121,6 +128,18 @@ class SuperAdministrateurValidateurIT {
 
         long fiphId = trouverFiphDeLAgent(tokenSuperAdmin, emetteur.getId()).get("id").asLong();
         long versionId = trouverFiphDeLAgent(tokenSuperAdmin, emetteur.getId()).get("versionCouranteId").asLong();
+
+        // RG-FIPH-033 : date de fin obligatoire avant soumission - preparee ici par le Charge
+        // d'Affaires du service (jamais par le Super Administrateur lui-meme : RG-HAB-004 lui
+        // interdirait ensuite, a bon droit, de valider aux niveaux 3/4 une fiche qu'il aurait
+        // lui-meme completee - voir Javadoc de la methode).
+        mockMvc.perform(put("/api/fiph-versions/" + versionId + "/date-fin")
+                        .header("Authorization", "Bearer " + tokenCaService)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("dateFin", LocalDate.now().toString());
+                        }})))
+                .andExpect(status().isOk());
 
         // Une FIPH issue d'un bon de sortie est deja auto-signee (visa acquis via le bon
         // de sortie declencheur, voir FiphService#creerFiphEtVersionInitiale) : directement

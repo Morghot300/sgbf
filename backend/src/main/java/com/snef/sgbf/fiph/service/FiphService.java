@@ -382,6 +382,14 @@ public class FiphService {
         auditService.enregistrer(EntiteAuditable.FIPH_VERSION, nouvelle.getId(), auteur,
                 TypeActionAudit.CREATION_VERSION, versionPrecedente.getNumeroVersion(), nouvelle.getNumeroVersion(),
                 versionPrecedente.getStatutVersion().name(), StatutFiphVersion.BROUILLON.name());
+
+        // Section 17 : toute FIPH deja validee qui est ainsi modifiee (explicitement par le
+        // Charge d'Affaires/la personne habilitee/le RH, ou automatiquement par un nouveau bon
+        // de sortie - genererOuEnrichirDepuisBonSortie, cas 4) redemarre entierement le circuit
+        // de validation (nouvelle version au statut BROUILLON) - les niveaux qui devront
+        // revalider en sont informes des maintenant, pas seulement a la soumission effective.
+        notificationService.notifierFiphModifieeApresValidation(fiph.getId(), nouvelle.getId(), fiph.getService().getId(),
+                "FIPH #" + fiph.getId(), auteur.getNomComplet(), auteur);
         return nouvelle;
     }
 
@@ -471,10 +479,21 @@ public class FiphService {
      * voir la Javadoc equivalente dans {@code BonSortieService.verifierPerimetreGestionnaire} -
      * meme raisonnement, meme portee (validateur legitime niveau par niveau
      * sur n'importe quel service, sans passer par la "prise en main").
+     *
+     * <p><strong>Exception RH (evolution du 2026-08-26, section 7)</strong> :
+     * le RH peut modifier une FIPH de n'importe quel service, y compris apres
+     * validation definitive (declenche alors, comme pour CA/PH, une nouvelle
+     * version tracable via {@link #creerVersionSuivante} - jamais de
+     * modification en place). Son habilitation porte elle aussi toujours un
+     * perimetre global ({@code service == null}, role a perimetre global -
+     * voir {@code HabilitationService.validerCoherencePerimetre}), qui ne
+     * peut donc jamais satisfaire la comparaison de service ci-dessous par
+     * construction, au meme titre que SUPER_ADMINISTRATEUR.
      */
     void verifierPerimetreGestionnaire(Utilisateur auteur, Utilisateur agent) {
         List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
-        if (habilitationsAuteur.stream().anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()))) {
+        if (habilitationsAuteur.stream().anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode())
+                || CodeRoleMetier.RH.name().equals(h.getRoleMetier().getCode()))) {
             return;
         }
         Long serviceAgentId = agent.getService().getId();

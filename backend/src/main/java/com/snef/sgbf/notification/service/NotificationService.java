@@ -160,6 +160,31 @@ public class NotificationService {
                 EntiteAuditable.BON_SORTIE, bonSortieId, "/bons-sortie/" + bonSortieId, declencheur);
     }
 
+    /**
+     * FIPH modifiee apres une validation deja acquise (evolution du
+     * 2026-08-26, section 17) : informe les Charge d'Affaires/personnes
+     * habilitees du service qu'une nouvelle validation sera necessaire des
+     * que la nouvelle version sera soumise - des la modification elle-meme,
+     * pas seulement a la soumission ({@link #notifierNiveau2}, deja utilisee
+     * a ce moment-la, reste inchangee et complementaire).
+     */
+    public void notifierFiphModifieeApresValidation(Long fiphId, Long fiphVersionId, Long serviceId,
+                                                      String referenceFiph, String nomAuteur, Utilisateur declencheur) {
+        List<Habilitation> ca = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.CHARGE_AFFAIRES.name(), serviceId);
+        List<Habilitation> ph = habilitationRepository.findByRoleMetier_CodeAndService_IdAndActifTrue(
+                CodeRoleMetier.PERSONNE_HABILITEE.name(), serviceId);
+        String titre = referenceFiph + " modifiee";
+        String message = "La " + referenceFiph + " a ete modifiee par " + nomAuteur
+                + ". Une nouvelle validation sera requise a votre niveau.";
+        String lien = "/fiph/" + fiphId;
+        java.util.stream.Stream.concat(ca.stream(), ph.stream())
+                .map(Habilitation::getUtilisateur)
+                .distinct()
+                .forEach(destinataire -> creer(destinataire, TypeNotification.FIPH_A_VALIDER, titre, message,
+                        EntiteAuditable.FIPH_VERSION, fiphVersionId, lien, declencheur));
+    }
+
     /** Informe l'agent affecte (s'il possede un compte applicatif) que la date de fin prevue de sa mission a change. */
     public void notifierMissionModifiee(Long missionId, Utilisateur agentAffecte, String reference, Utilisateur declencheur) {
         if (agentAffecte == null || !agentAffecte.possedeCompteApplicatif()) {

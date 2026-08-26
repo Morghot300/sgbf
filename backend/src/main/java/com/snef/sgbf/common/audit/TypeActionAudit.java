@@ -81,6 +81,21 @@ public enum TypeActionAudit {
     PRISE_EN_MAIN_SUPER_ADMIN,
 
     /**
+     * Validation normale, niveau par niveau (evolution du 2026-08-26, section
+     * 13-14), effectuee par un Super Administrateur qui ne detient AUCUNE
+     * habilitation de service correspondante - distincte a la fois d'une
+     * {@link #VALIDATION} ordinaire (effectuee par un acteur metier habilite
+     * sur le service) et de {@link #PRISE_EN_MAIN_SUPER_ADMIN} (qui saute
+     * directement plusieurs niveaux en une seule operation) : ici, chaque
+     * niveau reste franchi explicitement, un a la fois, exactement comme le
+     * processus metier normal - seule l'identite du validateur sort du
+     * perimetre habituel. Journalisee EN PLUS de la {@link #VALIDATION}
+     * normale (jamais a sa place), pour que l'historique distingue clairement
+     * les deux categories d'intervention.
+     */
+    VALIDATION_PAR_SUPER_ADMIN,
+
+    /**
      * Bon de sortie valide malgre l'absence d'affectation active resolue
      * pour l'agent a la date de sortie (evolution du 2026-08-19, Lot 2 :
      * avertissement, jamais un blocage) - trace separement de
