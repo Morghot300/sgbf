@@ -130,7 +130,8 @@ public class BonSortieService {
                 .filter(bs -> dateDebut == null || !bs.getDateSortie().isBefore(dateDebut))
                 .filter(bs -> dateFin == null || !bs.getDateSortie().isAfter(dateFin))
                 .filter(bs -> statut == null || statut == bs.getStatut())
-                .filter(bs -> serviceId == null || serviceId.equals(bs.getAgent().getService().getId()))
+                .filter(bs -> serviceId == null
+                        || (bs.getAgent().getService() != null && serviceId.equals(bs.getAgent().getService().getId())))
                 .map(bs -> avecAvertissementAffectation(bonSortieMapper.toDto(bs), bs))
                 .toList();
     }
@@ -177,8 +178,14 @@ public class BonSortieService {
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
 
+        // Bug reel corrige le 2026-08-26 : un agent sans service (cas reel - Administrateur/Super
+        // Administrateur/RH qui emet son propre bon de sortie, aucun service ne leur est jamais
+        // impose) faisait planter ce filtre pour TOUT LE MONDE (NullPointerException sur
+        // Service.getId()), la moindre entree fautive dans findAll() cassant la liste entiere.
+        // Un tel bon de sortie n'appartient a aucun perimetre gere -> jamais visible via
+        // servicesGeres, seulement pour son propre titulaire (deuxieme condition, inchangee).
         return bonSortieRepository.findAll().stream()
-                .filter(bs -> servicesGeres.contains(bs.getAgent().getService().getId())
+                .filter(bs -> (bs.getAgent().getService() != null && servicesGeres.contains(bs.getAgent().getService().getId()))
                         || bs.getAgent().getId().equals(courant.getId()))
                 .toList();
     }
@@ -196,6 +203,18 @@ public class BonSortieService {
     public BonSortieDto creer(CreerBonSortieRequest requete, Utilisateur auteur) {
         Utilisateur titulaire = resoudreTitulaire(requete.agentId(), auteur);
         verifierPrecisionVehicule(requete.moyenUtilise(), requete.precisionVehicule());
+        // Bug reel corrige le 2026-08-26 : un titulaire sans service (Administrateur/Super
+        // Administrateur/RH - aucun service ne leur est jamais impose, cf. HabilitationService)
+        // faisait planter la suite du parcours plus loin (NullPointerException a la validation,
+        // puis violation de contrainte NOT NULL sur fiph.service_id a la generation de la FIPH -
+        // ce champ represente le service reel de terrain de l'agent, jamais nul par construction
+        // dans tout le modele FIPH/perimetre). Refuse ici, tot et clairement, plutot que de
+        // planter plus loin dans une chaine d'appels moins lisible.
+        if (titulaire.getService() == null) {
+            throw new BusinessRuleViolationException("RG-BS-009",
+                    "Impossible de creer un bon de sortie pour " + titulaire.getNomComplet()
+                            + " : cette personne n'est rattachee a aucun service. Rattachez-la a un service avant de continuer.");
+        }
 
         BonSortie bonSortie = new BonSortie();
         bonSortie.setAgent(titulaire);
@@ -307,8 +326,14 @@ public class BonSortieService {
 
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
                 TypeActionAudit.VISA, avant.name(), StatutBonSortie.VISE.name(), avant.name(), StatutBonSortie.VISE.name());
-        notificationService.notifierBonSortieAValider(bonSortie.getId(), bonSortie.getAgent().getService().getId(),
-                "Bon de sortie #" + bonSortie.getId(), auteur);
+        // Bug reel corrige le 2026-08-26 : un titulaire sans service (Administrateur/Super
+        // Administrateur/RH - aucun service ne leur est jamais impose) faisait planter cet appel
+        // (NullPointerException). Rien de significatif a notifier dans ce cas : aucun groupe de
+        // Charge d'Affaires/personne habilitee "du service" n'existe pour un agent sans service.
+        if (bonSortie.getAgent().getService() != null) {
+            notificationService.notifierBonSortieAValider(bonSortie.getId(), bonSortie.getAgent().getService().getId(),
+                    "Bon de sortie #" + bonSortie.getId(), auteur);
+        }
         return bonSortieMapper.toDto(bonSortie);
     }
 
@@ -361,6 +386,14 @@ public class BonSortieService {
             throw new BusinessRuleViolationException("RG-BS-004",
                     "Le bon de sortie doit d'abord avoir recu le visa de l'agent.");
         }
+        if (bonSortie.getAgent().getService() == null) {
+            // RG-BS-009 : filet de securite pour un enregistrement heritage (cree avant l'ajout
+            // du controle a la creation) - fiph.service_id est NOT NULL en base, une validation
+            // ici echouerait de toute facon plus loin, avec un message bien moins clair.
+            throw new BusinessRuleViolationException("RG-BS-009",
+                    "Impossible de valider ce bon de sortie : " + bonSortie.getAgent().getNomComplet()
+                            + " n'est rattache a aucun service. Rattachez-le a un service avant de continuer.");
+        }
 
         Optional<AffectationMission> affectation =
                 affectationMissionService.resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
@@ -382,7 +415,11 @@ public class BonSortieService {
             auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur,
                     TypeActionAudit.ANOMALIE_AFFECTATION, null,
                     "Bon valide sans affectation active resolue pour l'agent a la date de sortie", null, null);
-            notificationService.notifierAnomalieAffectation(bonSortie.getId(), auteur, bonSortie.getAgent().getService().getId());
+            // Meme garde qu'en viser() (bug reel corrige le 2026-08-26) : rien a notifier "au
+            // service" pour un agent qui n'en a aucun.
+            if (bonSortie.getAgent().getService() != null) {
+                notificationService.notifierAnomalieAffectation(bonSortie.getId(), auteur, bonSortie.getAgent().getService().getId());
+            }
         }
 
         // RG-BS-007 / RG-FIPH-001 : declenche la generation ou l'enrichissement
@@ -464,6 +501,15 @@ public class BonSortieService {
         List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
         if (habilitationsAuteur.stream().anyMatch(BonSortieService::estSuperAdministrateur)) {
             return;
+        }
+        if (agent.getService() == null) {
+            // Bug reel corrige le 2026-08-26 : un agent sans service ne peut par construction
+            // correspondre a l'habilitation "gestionnaire du service" d'aucun tiers - seul le
+            // Super Administrateur (deja gere ci-dessus) peut agir ici. Evite une
+            // NullPointerException sur un enregistrement heritage (bon de sortie deja cree par un
+            // titulaire sans service, avant l'ajout du controle a la creation).
+            throw new ForbiddenOperationException(
+                    "Vous n'etes pas habilite a gerer les bons de sortie des agents de ce service.");
         }
         Long serviceAgentId = agent.getService().getId();
         boolean habilite = habilitationsAuteur.stream()

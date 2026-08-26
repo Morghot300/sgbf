@@ -496,6 +496,13 @@ public class FiphService {
                 || CodeRoleMetier.RH.name().equals(h.getRoleMetier().getCode()))) {
             return;
         }
+        if (agent.getService() == null) {
+            // Bug reel corrige le 2026-08-26 : voir la Javadoc equivalente dans
+            // BonSortieService.verifierPerimetreGestionnaire - un agent sans service ne peut par
+            // construction correspondre a l'habilitation d'aucun gestionnaire de service.
+            throw new ForbiddenOperationException(
+                    "Vous n'etes pas habilite a gerer les FIPH des agents de ce service.");
+        }
         Long serviceAgentId = agent.getService().getId();
         boolean habilite = habilitationsAuteur.stream()
                 .anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
