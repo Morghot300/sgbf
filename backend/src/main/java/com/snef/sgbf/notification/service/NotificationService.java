@@ -160,6 +160,16 @@ public class NotificationService {
                 EntiteAuditable.BON_SORTIE, bonSortieId, "/bons-sortie/" + bonSortieId, declencheur);
     }
 
+    /** Informe l'agent affecte (s'il possede un compte applicatif) que la date de fin prevue de sa mission a change. */
+    public void notifierMissionModifiee(Long missionId, Utilisateur agentAffecte, String reference, Utilisateur declencheur) {
+        if (agentAffecte == null || !agentAffecte.possedeCompteApplicatif()) {
+            return;
+        }
+        creer(agentAffecte, TypeNotification.MISSION_MODIFIEE, reference + " modifiee",
+                "La date de fin prevue de la mission " + reference + " a ete modifiee.",
+                EntiteAuditable.MISSION, missionId, "/missions/" + missionId, declencheur);
+    }
+
     /** Informe l'agent ajoute comme personne a bord (s'il possede un compte applicatif). */
     public void notifierPersonneABordAjoutee(Long bonSortieId, Utilisateur agentAjoute, Utilisateur declencheur) {
         if (agentAjoute == null || !agentAjoute.possedeCompteApplicatif()) {

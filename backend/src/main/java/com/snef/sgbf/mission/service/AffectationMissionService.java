@@ -15,6 +15,8 @@ import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
 import com.snef.sgbf.mission.dto.AffectationMissionDto;
 import com.snef.sgbf.mission.dto.AffecterAgentRequest;
 import com.snef.sgbf.mission.dto.InterrompreAffectationRequest;
+import com.snef.sgbf.mission.dto.ModifierDateFinPrevueRequest;
+import com.snef.sgbf.mission.dto.MissionDto;
 import com.snef.sgbf.mission.dto.ReaffecterRequest;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.entity.Mission;
@@ -22,8 +24,10 @@ import com.snef.sgbf.mission.entity.StatutAffectation;
 import com.snef.sgbf.mission.entity.StatutMission;
 import com.snef.sgbf.mission.mapper.AffectationMissionMapper;
 import com.snef.sgbf.mission.repository.AffectationMissionRepository;
+import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.MotifInterruptionMission;
 import com.snef.sgbf.referentiel.repository.MotifInterruptionMissionRepository;
+import com.snef.sgbf.fiph.entity.Pointage;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.mission.dto.ReaffecterMiMissionRequest;
 import java.time.LocalDate;
@@ -68,6 +72,7 @@ public class AffectationMissionService {
     private final AffectationMissionMapper affectationMissionMapper;
     private final AuditService auditService;
     private final PointageRepository pointageRepository;
+    private final NotificationService notificationService;
 
     public AffectationMissionService(AffectationMissionRepository affectationMissionRepository,
                                       UtilisateurRepository utilisateurRepository,
@@ -76,7 +81,8 @@ public class AffectationMissionService {
                                       MissionService missionService,
                                       AffectationMissionMapper affectationMissionMapper,
                                       AuditService auditService,
-                                      PointageRepository pointageRepository) {
+                                      PointageRepository pointageRepository,
+                                      NotificationService notificationService) {
         this.affectationMissionRepository = affectationMissionRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.motifInterruptionMissionRepository = motifInterruptionMissionRepository;
@@ -85,6 +91,7 @@ public class AffectationMissionService {
         this.affectationMissionMapper = affectationMissionMapper;
         this.auditService = auditService;
         this.pointageRepository = pointageRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -317,6 +324,74 @@ public class AffectationMissionService {
                 TypeActionAudit.REAFFECTATION, affectationActive.getId(), affectationMissionMapper.toDto(nouvelleAffectation),
                 StatutAffectation.ACTIVE.name(), StatutAffectation.ACTIVE.name());
         return affectationMissionMapper.toDto(nouvelleAffectation);
+    }
+
+    /**
+     * Prolonge ou reduit la date de fin prevue d'une mission en cours
+     * (evolution du 2026-08-26) - alternative a {@link #reaffecterPendantMissionEnCours}
+     * lorsque le besoin reel n'est pas de faire naitre une nouvelle mission
+     * (MIS-002) mais simplement d'ajuster l'echeance planifiee de la mission
+     * ACTUELLE (MIS-001 reste MIS-001).
+     *
+     * <p><strong>Portee volontairement limitee</strong> : {@link Mission#getDateFinPrevue()}
+     * est un champ de planification/reporting - il ne conditionne ni la
+     * resolution d'une affectation active ({@link #resoudreActiveADate}, qui
+     * reste ouverte tant que l'affectation est {@code ACTIVE}, independamment
+     * de cette date) ni la generation des jours de pointage d'une FIPH (qui
+     * depend exclusivement de l'affectation, voir {@code FiphVersionService#definirDateFin}).
+     * Modifier cette date ne fait donc jamais apparaitre ou disparaitre de
+     * jours de pointage par elle-meme.
+     *
+     * <p>Perimetre verifie via l'affectation ACTIVE de la mission (RG-HAB-003) -
+     * une mission sans affectation active n'a rien a prolonger/reduire.
+     */
+    public MissionDto modifierDateFinPrevueMission(Long missionId, ModifierDateFinPrevueRequest requete, Utilisateur auteur) {
+        Mission mission = missionService.chargerMission(missionId);
+        verifierMissionOuverte(mission);
+
+        AffectationMission affectationActive = affectationMissionRepository
+                .findByMission_IdOrderByDateDebutAffectationAsc(missionId).stream()
+                .filter(a -> a.getStatutAffectation() == StatutAffectation.ACTIVE)
+                .findFirst()
+                .orElseThrow(() -> new BusinessRuleViolationException("RG-MIS-012",
+                        "Cette mission n'a aucune affectation active : rien a prolonger ou reduire."));
+        verifierPerimetre(auteur, affectationActive.getAgent());
+
+        LocalDate nouvelleFin = requete.nouvelleDateFinPrevue();
+        if (nouvelleFin.isBefore(LocalDate.now())) {
+            throw new BusinessRuleViolationException("RG-MIS-013",
+                    "La nouvelle date de fin prevue (" + nouvelleFin + ") ne peut pas etre deja passee.");
+        }
+        if (nouvelleFin.isBefore(mission.getDateDebutPrevue())) {
+            throw new BusinessRuleViolationException("RG-MIS-014",
+                    "La date de fin prevue ne peut pas etre anterieure a la date de debut prevue de la mission ("
+                            + mission.getDateDebutPrevue() + ").");
+        }
+
+        LocalDate ancienneFin = mission.getDateFinPrevue();
+        boolean reduction = ancienneFin != null && nouvelleFin.isBefore(ancienneFin);
+        if (reduction) {
+            List<Pointage> pointagesBloquants = pointageRepository.trouverPointagesApresDateAvecHeures(missionId, nouvelleFin);
+            if (!pointagesBloquants.isEmpty()) {
+                String jours = pointagesBloquants.stream()
+                        .map(p -> p.getDatePointage().toString()).distinct()
+                        .collect(java.util.stream.Collectors.joining(", "));
+                throw new BusinessRuleViolationException("RG-MIS-015",
+                        "Impossible de reduire la date de fin prevue en-deca du " + nouvelleFin
+                                + " : des heures sont deja pointees pour les jours suivants : " + jours + ".");
+            }
+        }
+
+        missionService.modifierDateFinPrevue(mission, nouvelleFin);
+
+        auditService.enregistrer(EntiteAuditable.MISSION, mission.getId(), auteur, TypeActionAudit.MODIFICATION,
+                ancienneFin != null ? ancienneFin.toString() : "non definie", nouvelleFin.toString(),
+                mission.getStatut().name(), mission.getStatut().name());
+
+        notificationService.notifierMissionModifiee(mission.getId(), affectationActive.getAgent(),
+                "Mission " + mission.getCodeHN().getCode(), auteur);
+
+        return missionService.obtenirParId(missionId);
     }
 
     /**

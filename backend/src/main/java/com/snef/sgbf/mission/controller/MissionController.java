@@ -2,6 +2,8 @@ package com.snef.sgbf.mission.controller;
 
 import com.snef.sgbf.mission.dto.CreerMissionRequest;
 import com.snef.sgbf.mission.dto.MissionDto;
+import com.snef.sgbf.mission.dto.ModifierDateFinPrevueRequest;
+import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.mission.service.MissionService;
 import com.snef.sgbf.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -11,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,9 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MissionController {
 
     private final MissionService missionService;
+    private final AffectationMissionService affectationMissionService;
 
-    public MissionController(MissionService missionService) {
+    public MissionController(MissionService missionService, AffectationMissionService affectationMissionService) {
         this.missionService = missionService;
+        this.affectationMissionService = affectationMissionService;
     }
 
     @GetMapping
@@ -55,5 +60,19 @@ public class MissionController {
                                              @AuthenticationPrincipal CustomUserDetails principal) {
         MissionDto cree = missionService.creer(requete, principal.getUtilisateur());
         return ResponseEntity.status(HttpStatus.CREATED).body(cree);
+    }
+
+    /**
+     * Prolongation ou reduction de la date de fin prevue d'une mission en
+     * cours (evolution du 2026-08-26) - reservee au Charge d'Affaires/
+     * personne habilitee du service de l'agent actuellement affecte
+     * (verifie cote service, jamais uniquement ici).
+     */
+    @PatchMapping("/{id}/date-fin-prevue")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
+    public MissionDto modifierDateFinPrevue(@PathVariable Long id,
+                                             @Valid @RequestBody ModifierDateFinPrevueRequest requete,
+                                             @AuthenticationPrincipal CustomUserDetails principal) {
+        return affectationMissionService.modifierDateFinPrevueMission(id, requete, principal.getUtilisateur());
     }
 }

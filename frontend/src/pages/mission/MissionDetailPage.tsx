@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations, listerMissions, obtenirMission,
-  reaffecterPendantMissionEnCours,
+  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations, listerMissions,
+  modifierDateFinPrevueMission, obtenirMission, reaffecterPendantMissionEnCours,
 } from "../../api/missionApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerMotifsInterruption } from "../../api/referentielApi";
@@ -22,6 +22,8 @@ export default function MissionDetailPage() {
   const [dateDebut, setDateDebut] = useState("");
   const [interruption, setInterruption] = useState<{ affectationId: number; motifCode: string; commentaire: string } | null>(null);
   const [reaffectation, setReaffectation] = useState<{ agentId: number; missionCibleId: string; dateDebutAffectation: string } | null>(null);
+  const [nouvelleDateFinPrevue, setNouvelleDateFinPrevue] = useState("");
+  const [motifDateFinPrevue, setMotifDateFinPrevue] = useState("");
 
   const mission = useQuery({ queryKey: ["mission", missionId], queryFn: () => obtenirMission(missionId) });
   const affectations = useQuery({ queryKey: ["affectations", missionId], queryFn: () => listerAffectations(missionId) });
@@ -58,6 +60,18 @@ export default function MissionDetailPage() {
     onSuccess: () => { setReaffectation(null); invalider(); },
     onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de réaffecter cet agent.")),
   });
+  const modifierDateFinPrevue = useMutation({
+    mutationFn: () => modifierDateFinPrevueMission(missionId, {
+      nouvelleDateFinPrevue,
+      motif: motifDateFinPrevue || null,
+    }),
+    onSuccess: () => {
+      setNouvelleDateFinPrevue("");
+      setMotifDateFinPrevue("");
+      void queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
+    },
+    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de modifier la date de fin prévue de cette mission.")),
+  });
 
   return (
     <div>
@@ -77,6 +91,42 @@ export default function MissionDetailPage() {
       </EtatAsync>
 
       {erreur && <p role="alert">{erreur}</p>}
+
+      {peutGerer && mission.data && mission.data.statut !== "TERMINEE" && (
+        <section>
+          <h3>Prolonger ou réduire la date de fin prévue</h3>
+          <p className="dashboard-accueil">
+            La mission reste la même (son code ne change pas) : seule l'échéance planifiée est ajustée. Sans effet
+            sur les jours de pointage déjà générés — une réduction est refusée si des heures sont déjà saisies
+            au-delà de la nouvelle date.
+          </p>
+          <form
+            className="formulaire-ligne"
+            onSubmit={(e) => { e.preventDefault(); modifierDateFinPrevue.mutate(); }}
+          >
+            <label htmlFor="nouvelleDateFinPrevue">Nouvelle date de fin prévue</label>
+            <input
+              id="nouvelleDateFinPrevue"
+              type="date"
+              min={mission.data.dateDebutPrevue}
+              value={nouvelleDateFinPrevue}
+              onChange={(e) => setNouvelleDateFinPrevue(e.target.value)}
+              required
+            />
+            <label htmlFor="motifDateFinPrevue">Motif (facultatif)</label>
+            <input
+              id="motifDateFinPrevue"
+              type="text"
+              maxLength={500}
+              value={motifDateFinPrevue}
+              onChange={(e) => setMotifDateFinPrevue(e.target.value)}
+            />
+            <button type="submit" disabled={modifierDateFinPrevue.isPending || !nouvelleDateFinPrevue}>
+              {modifierDateFinPrevue.isPending ? "Enregistrement..." : "Confirmer"}
+            </button>
+          </form>
+        </section>
+      )}
 
       <h2>Affectations</h2>
       <EtatAsync chargement={affectations.isLoading} erreur={affectations.error} donnees={affectations.data}>

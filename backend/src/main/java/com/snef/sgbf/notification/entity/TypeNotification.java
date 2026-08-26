@@ -19,5 +19,7 @@ public enum TypeNotification {
     /** Agent ajoute comme personne a bord d'un bon de sortie (informe l'agent concerne, s'il dispose d'un compte). */
     PERSONNE_A_BORD_AJOUTEE,
     /** Bon de sortie valide malgre l'absence d'affectation active resolue pour l'agent (Lot 2 : avertissement, pas blocage - informe le valideur pour suivi). */
-    ANOMALIE_AFFECTATION
+    ANOMALIE_AFFECTATION,
+    /** Date de fin prevue d'une mission modifiee (prolongation ou reduction), informe l'agent affecte. */
+    MISSION_MODIFIEE
 }

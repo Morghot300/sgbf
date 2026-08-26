@@ -65,6 +65,12 @@ export interface ReaffecterMiMissionRequest {
   dateDebutAffectation: string;
 }
 
+/** Prolongation/réduction de la date de fin prévue d'une mission en cours - la mission reste la même (pas de nouvelle mission créée). */
+export interface ModifierDateFinPrevueRequest {
+  nouvelleDateFinPrevue: string;
+  motif: string | null;
+}
+
 export const LIBELLES_STATUT_MISSION: Record<StatutMission, string> = {
   PLANIFIEE: "Planifiée",
   EN_COURS: "En cours",

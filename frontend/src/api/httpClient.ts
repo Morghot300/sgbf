@@ -69,15 +69,33 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 /**
- * Rafraichissement automatique du jeton d'acces sur reponse 401.
+ * Rafraichissement automatique du jeton d'acces sur reponse 403.
  *
- * Une seule tentative de rafraichissement a la fois est autorisee (variable
+ * <p><strong>403, pas 401</strong> (bug reel corrige le 2026-08-26, decouvert
+ * en verification live d'un simple rechargement de page) : ce backend ne
+ * renvoie JAMAIS 401 pour une ressource protegee, ni pour l'absence de
+ * jeton, ni pour un jeton expire - uniquement pour un ECHEC DE CONNEXION
+ * (identifiants incorrects/compte desactive, voir {@code GlobalExceptionHandler}).
+ * Toute autre absence d'autorisation valide (aucun jeton, jeton expire,
+ * habilitation insuffisante) se traduit uniformement par {@code 403}
+ * (choix explicite anti-enumeration/anti-IDOR, {@code AccessDeniedException} ->
+ * {@code HttpStatus.FORBIDDEN}). En verifiant `=== 401`, ce rafraichissement
+ * automatique ne se declenchait donc jamais en pratique : un jeton d'acces
+ * expire (ou un simple rechargement de page, qui perd le jeton conserve
+ * uniquement en memoire) laissait l'utilisateur bloque sur la page de
+ * connexion malgre un cookie de rafraichissement pourtant toujours valide.
+ *
+ * <p>Une seule tentative de rafraichissement a la fois est autorisee (variable
  * `rafraichissementEnCours` partagee par toutes les requetes qui echouent en
  * meme temps) : sans cette mise en file, plusieurs appels API simultanement
- * en 401 declencheraient chacun leur propre appel `/auth/refresh`, et
+ * en echec declencheraient chacun leur propre appel `/auth/refresh`, et
  * comme celui-ci fait tourner le jeton de rafraichissement (voir
  * `RefreshTokenService`, rotation a usage unique), seul le premier
- * reussirait - les suivants echoueraient a tort.
+ * reussirait - les suivants echoueraient a tort. Un 403 legitime (role/
+ * perimetre insuffisant, jeton pourtant valide) declenche certes une tentative
+ * de rafraichissement inutile, mais sans consequence : le nouveau jeton ne
+ * change rien aux habilitations, la requete rejouee echoue de nouveau avec
+ * le meme 403, seulement retardee d'un aller-retour reseau.
  */
 let rafraichissementEnCours: Promise<string | null> | null = null;
 
@@ -105,8 +123,15 @@ httpClient.interceptors.response.use(
   async (erreur: AxiosError) => {
     const requeteOriginale = erreur.config as (InternalAxiosRequestConfig & { _dejaRetentee?: boolean }) | undefined;
 
-    const estAppelAuth = requeteOriginale?.url?.startsWith("/auth/");
-    if (erreur.response?.status === 401 && requeteOriginale && !requeteOriginale._dejaRetentee && !estAppelAuth) {
+    // Bug reel corrige le 2026-08-26 (avec le passage a 403 ci-dessus) : cette garde ne doit exclure
+    // du rafraichissement que login/refresh eux-memes (boucle infinie sinon) - PAS "/auth/me", qui
+    // commence pourtant aussi par "/auth/" et etait donc, par erreur, exclu de tout rafraichissement
+    // automatique alors que c'est justement l'appel qui en a le plus besoin (restauration silencieuse
+    // de la session au demarrage de l'application). Reutilise CHEMINS_SANS_JETON : les deux exclusions
+    // (jamais de jeton pose sur la requete sortante / jamais de rafraichissement tente sur l'echec)
+    // visent exactement les 2 memes chemins, pour la meme raison.
+    const estAppelLoginOuRefresh = CHEMINS_SANS_JETON.some((chemin) => requeteOriginale?.url?.startsWith(chemin));
+    if (erreur.response?.status === 403 && requeteOriginale && !requeteOriginale._dejaRetentee && !estAppelLoginOuRefresh) {
       requeteOriginale._dejaRetentee = true;
       const nouveauJeton = await rafraichirJeton();
       if (nouveauJeton) {

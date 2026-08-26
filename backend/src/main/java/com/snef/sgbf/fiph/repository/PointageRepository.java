@@ -24,4 +24,15 @@ public interface PointageRepository extends JpaRepository<Pointage, Long> {
      */
     @Query("SELECT MAX(p.datePointage) FROM Pointage p WHERE p.fiphVersion.fiph.agent.id = :agentId")
     Optional<LocalDate> trouverDernierJourPointe(@Param("agentId") Long agentId);
+
+    /**
+     * Jours deja pointes avec des heures reellement saisies, rattaches a
+     * cette mission (via l'affectation), au-dela d'une date donnee - utilise
+     * par {@code MissionService#modifierDateFinPrevue} pour refuser de
+     * reduire la date de fin prevue d'une mission en-deca d'un travail deja
+     * enregistre (meme principe anti-retroactivite que RG-MIS-011).
+     */
+    @Query("SELECT p FROM Pointage p WHERE p.affectationMission.mission.id = :missionId "
+            + "AND p.datePointage > :date AND (p.heuresNormales <> 0 OR p.heuresSup <> 0)")
+    List<Pointage> trouverPointagesApresDateAvecHeures(@Param("missionId") Long missionId, @Param("date") LocalDate date);
 }

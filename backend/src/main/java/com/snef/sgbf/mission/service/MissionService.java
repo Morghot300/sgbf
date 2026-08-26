@@ -126,6 +126,23 @@ public class MissionService {
         missionRepository.save(mission);
     }
 
+    /**
+     * Prolonge ou reduit la date de fin prevue d'une mission en cours
+     * (evolution du 2026-08-26) - simple mutation de champ, jamais appelee
+     * directement par un controleur : tous les controles metier (perimetre,
+     * date deja passee, coherence avec le travail deja pointe) sont a la
+     * charge de {@code AffectationMissionService#modifierDateFinPrevueMission},
+     * seul appelant. {@link Mission#getDateFinPrevue()} reste purement
+     * informatif/planning : elle ne conditionne ni la resolution d'une
+     * affectation active ({@link AffectationMissionService#resoudreActiveADate})
+     * ni la generation des jours de pointage d'une FIPH, qui dependent
+     * exclusivement de {@link com.snef.sgbf.mission.entity.AffectationMission}.
+     */
+    void modifierDateFinPrevue(Mission mission, java.time.LocalDate nouvelleDateFinPrevue) {
+        mission.setDateFinPrevue(nouvelleDateFinPrevue);
+        missionRepository.save(mission);
+    }
+
     Mission chargerMission(Long id) {
         return missionRepository.findById(id).orElseThrow(() -> ResourceNotFoundException.of("Mission", id));
     }

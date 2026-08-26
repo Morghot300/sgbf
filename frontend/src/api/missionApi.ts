@@ -1,7 +1,7 @@
 import { httpClient } from "./httpClient";
 import type {
   AffecterAgentRequest, AffectationMissionDto, CreerMissionRequest, InterrompreAffectationRequest,
-  MissionDto, ReaffecterMiMissionRequest, ReaffecterRequest,
+  MissionDto, ModifierDateFinPrevueRequest, ReaffecterMiMissionRequest, ReaffecterRequest,
 } from "../types/mission";
 
 export async function listerMissions(): Promise<MissionDto[]> {
@@ -15,6 +15,10 @@ export async function historiqueMission(id: number): Promise<MissionDto[]> {
 }
 export async function creerMission(requete: CreerMissionRequest): Promise<MissionDto> {
   return (await httpClient.post<MissionDto>("/missions", requete)).data;
+}
+/** Prolonge ou réduit la date de fin prévue d'une mission en cours (la mission reste la même). */
+export async function modifierDateFinPrevueMission(id: number, requete: ModifierDateFinPrevueRequest): Promise<MissionDto> {
+  return (await httpClient.patch<MissionDto>(`/missions/${id}/date-fin-prevue`, requete)).data;
 }
 
 export async function listerAffectations(missionId: number): Promise<AffectationMissionDto[]> {
