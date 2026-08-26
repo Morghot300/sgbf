@@ -264,21 +264,16 @@ public class FiphVersionService {
         }
 
         LocalDate ancienneFin = version.getDateFinPeriode();
+        boolean dateInchangee = nouvelleFin.equals(ancienneFin);
         FIPHVersion versionCible = version;
+        boolean nouvelleVersionCreee = false;
         if (version.getStatutVersion().estFigee()) {
             String motif = (requete.motifModification() == null || requete.motifModification().isBlank())
                     ? "Modification de la date de fin de la periode (" + (ancienneFin != null ? ancienneFin : "non definie")
                             + " -> " + nouvelleFin + ")"
                     : requete.motifModification();
             versionCible = fiphService.creerVersionSuivante(fiph, version, auteur, motif);
-        } else if (!version.getStatutVersion().estPointageModifiable()) {
-            StatutFiphVersion avant = version.getStatutVersion();
-            version.setStatutVersion(StatutFiphVersion.EN_COMPLEMENT);
-            fiph.setStatut(StatutFiphVersion.EN_COMPLEMENT);
-            fiphRepository.save(fiph);
-            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, version.getId(), auteur,
-                    TypeActionAudit.MODIFICATION, avant.name(), StatutFiphVersion.EN_COMPLEMENT.name(),
-                    avant.name(), StatutFiphVersion.EN_COMPLEMENT.name());
+            nouvelleVersionCreee = true;
         }
 
         // Retrecissement de la periode : une ligne de pointage hors de la nouvelle plage ne peut
@@ -300,6 +295,7 @@ public class FiphVersionService {
                             + "hors de la nouvelle periode : " + joursBloquants
                             + ". Corrigez-les avant de reduire la periode - aucune donnee de pointage saisie n'est jamais supprimee automatiquement.");
         }
+        boolean lignesSupprimees = !pointagesHorsPeriode.isEmpty();
         pointageRepository.deleteAll(pointagesHorsPeriode);
         pointagesActuels = pointagesActuels.stream().filter(p -> !pointagesHorsPeriode.contains(p)).toList();
 
@@ -307,6 +303,7 @@ public class FiphVersionService {
         fiphVersionRepository.save(versionCible);
 
         Set<LocalDate> joursExistants = pointagesActuels.stream().map(Pointage::getDatePointage).collect(Collectors.toSet());
+        int joursAjoutes = 0;
         for (LocalDate jour = debut; !jour.isAfter(nouvelleFin); jour = jour.plusDays(1)) {
             if (joursExistants.contains(jour)) {
                 continue;
@@ -323,12 +320,32 @@ public class FiphVersionService {
             nouveauJour.setHeuresNormales(BigDecimal.ZERO);
             nouveauJour.setHeuresSup(BigDecimal.ZERO);
             pointageRepository.save(nouveauJour);
+            joursAjoutes++;
+        }
+
+        // Ne fait regresser le statut (et ne journalise une modification) que si quelque chose a
+        // reellement change - jamais sur une simple re-confirmation de la meme date de fin qui ne
+        // debloque aucun jour supplementaire (cf. le retour prevu par le commentaire ci-dessus :
+        // reessayer apres qu'une affectation a ete creee entre-temps DOIT, lui, compter comme un
+        // vrai changement des que des jours sont effectivement ajoutes).
+        boolean changementReel = nouvelleVersionCreee || !dateInchangee || lignesSupprimees || joursAjoutes > 0;
+
+        if (!nouvelleVersionCreee && changementReel && !versionCible.getStatutVersion().estPointageModifiable()) {
+            StatutFiphVersion avant = versionCible.getStatutVersion();
+            versionCible.setStatutVersion(StatutFiphVersion.EN_COMPLEMENT);
+            fiph.setStatut(StatutFiphVersion.EN_COMPLEMENT);
+            fiphRepository.save(fiph);
+            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, versionCible.getId(), auteur,
+                    TypeActionAudit.MODIFICATION, avant.name(), StatutFiphVersion.EN_COMPLEMENT.name(),
+                    avant.name(), StatutFiphVersion.EN_COMPLEMENT.name());
         }
 
         fiphService.recalculerTotaux(versionCible);
-        auditService.enregistrer(EntiteAuditable.FIPH_VERSION, versionCible.getId(), auteur, TypeActionAudit.MODIFICATION,
-                ancienneFin != null ? ancienneFin.toString() : "non definie", nouvelleFin.toString(),
-                versionCible.getStatutVersion().name(), versionCible.getStatutVersion().name());
+        if (changementReel) {
+            auditService.enregistrer(EntiteAuditable.FIPH_VERSION, versionCible.getId(), auteur, TypeActionAudit.MODIFICATION,
+                    ancienneFin != null ? ancienneFin.toString() : "non definie", nouvelleFin.toString(),
+                    versionCible.getStatutVersion().name(), versionCible.getStatutVersion().name());
+        }
 
         return versDto(chargerVersion(versionCible.getId()));
     }

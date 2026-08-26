@@ -321,6 +321,45 @@ class FiphPeriodeIT {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Test 11 (correction du 2026-08-26) : re-confirmer une date de fin
+     * strictement identique - sans qu'aucun jour ne soit ajoute ou retire -
+     * ne doit rien modifier reellement : ni faire regresser le statut d'une
+     * version deja validee au niveau 2, ni ajouter d'entree d'audit "sans
+     * effet". Bug reel observe : un Charge d'Affaires qui reconfirmait la
+     * meme date de fin (par exemple en esperant que des jours nouvellement
+     * couverts par une affectation apparaissent) perdait a chaque fois sa
+     * validation de niveau 2 deja acquise, sans aucun gain.
+     */
+    @Test
+    void reconfirmerLaMemeDateDeFinNeFaitRienRegresser() throws Exception {
+        String tokenEmetteur = seConnecter(emetteurAgent.getIdentifiant());
+        String tokenCa = seConnecter(ca.getIdentifiant());
+        creerViserEtValiderBonDeSortie(tokenEmetteur, tokenCa, debut);
+        long versionId = trouverFiphDeLAgent(tokenCa, emetteurAgent.getId()).get("versionCouranteId").asLong();
+
+        LocalDate fin = debut.plusDays(2);
+        definirDateFin(tokenCa, versionId, fin, null, status().isOk());
+
+        String decisionValidee = objectMapper.writeValueAsString(new LinkedHashMap<>() {{ put("decision", "VALIDEE"); }});
+        mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/2")
+                        .header("Authorization", "Bearer " + tokenCa).contentType("application/json").content(decisionValidee))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutVersion").value("VALIDEE_NIVEAU_2"));
+
+        // Re-confirmation de la MEME date de fin, sans affectation nouvelle disponible entre-temps :
+        // aucun jour ne peut etre ajoute ou retire -> aucun changement reel.
+        JsonNode reconfirmee = definirDateFin(tokenCa, versionId, fin, null, status().isOk());
+        assertThat(reconfirmee.get("statutVersion").asText()).isEqualTo("VALIDEE_NIVEAU_2");
+        assertThat(reconfirmee.get("pointages").size()).isEqualTo(3);
+
+        // A l'inverse, une VRAIE extension (jours supplementaires reellement ajoutes) doit, elle,
+        // continuer a faire regresser le statut - la garde ne doit pas devenir trop permissive.
+        JsonNode etendue = definirDateFin(tokenCa, versionId, debut.plusDays(3), null, status().isOk());
+        assertThat(etendue.get("statutVersion").asText()).isEqualTo("EN_COMPLEMENT");
+        assertThat(etendue.get("pointages").size()).isEqualTo(4);
+    }
+
     // --- Aides de scenario ---
 
     private JsonNode definirDateFin(String token, long versionId, LocalDate dateFin, String motif,
