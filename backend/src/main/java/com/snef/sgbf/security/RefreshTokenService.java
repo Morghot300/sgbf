@@ -4,12 +4,10 @@ import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.security.entity.RefreshToken;
 import com.snef.sgbf.security.entity.RefreshTokenRepository;
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +29,16 @@ import org.springframework.transaction.annotation.Transactional;
  * reutilisation frauduleuse (jeton vole puis rejoue apres coup par son
  * proprietaire legitime - les deux tentatives ne peuvent alors plus reussir
  * toutes les deux).
+ *
+ * <p><strong>Sans expiration temporelle</strong> (evolution du 2026-08-26,
+ * tous comptes confondus) : chaque jeton emis porte {@code dateExpiration = null}
+ * ({@link RefreshToken#estValide()}) - seules une deconnexion explicite
+ * ({@link #revoquerTousPourUtilisateur}) ou une suspension/desactivation de
+ * compte (qui appelle cette meme methode, voir {@code UtilisateurService.changerStatut})
+ * terminent une session. Les autres controles de securite restent inchanges :
+ * roles/habilitations rechargees depuis la base a chaque requete (le jeton
+ * d'acces ne les porte jamais), statut de compte reverifie a chaque requete
+ * authentifiee ({@code JwtAuthenticationFilter}).
  */
 @Service
 @Transactional
@@ -40,17 +48,14 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final long dureeValiditeJours;
 
     public RefreshTokenService(RefreshTokenRepository refreshTokenRepository,
-                                PasswordEncoder passwordEncoder,
-                                @Value("${app.security.jwt.refresh-token-ttl-days}") long dureeValiditeJours) {
+                                PasswordEncoder passwordEncoder) {
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordEncoder = passwordEncoder;
-        this.dureeValiditeJours = dureeValiditeJours;
     }
 
-    /** Emet un nouveau jeton de rafraichissement pour l'utilisateur donne et retourne sa valeur complete ("id.secret"). */
+    /** Emet un nouveau jeton de rafraichissement, sans expiration temporelle, pour l'utilisateur donne et retourne sa valeur complete ("id.secret"). */
     public String emettre(Utilisateur utilisateur) {
         byte[] secretBrut = new byte[32];
         RANDOM.nextBytes(secretBrut);
@@ -60,7 +65,7 @@ public class RefreshTokenService {
         jeton.setId(UUID.randomUUID().toString());
         jeton.setUtilisateur(utilisateur);
         jeton.setTokenHash(passwordEncoder.encode(secret));
-        jeton.setDateExpiration(LocalDateTime.now().plusDays(dureeValiditeJours));
+        jeton.setDateExpiration(null);
         refreshTokenRepository.save(jeton);
 
         return jeton.getId() + "." + secret;

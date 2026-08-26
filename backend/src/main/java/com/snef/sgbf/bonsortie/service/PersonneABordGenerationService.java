@@ -10,11 +10,11 @@ import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
-import com.snef.sgbf.fiph.service.FiphService;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.notification.service.NotificationService;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -54,10 +54,20 @@ import org.springframework.transaction.annotation.Transactional;
  * actionnable et la meme notification que pour le bon principal - plus
  * jamais de blocage silencieux permanent.
  *
- * <p>Le bon de sortie individuel genere declenche a son tour, exactement
- * comme un bon de sortie principal, la generation automatique et le
- * prerempissage de la FIPH de cette personne a bord (RG-BS-007, RG-FIPH-001,
- * RG-PAB-004) via {@link FiphService#genererOuEnrichirDepuisBonSortie}.
+ * <p><strong>En attente de validation du Charge d'Affaires (evolution du
+ * 2026-08-26, section 12-15)</strong> : le bon individuel est genere au
+ * statut {@code VISE} - jamais directement {@code VALIDE} - exactement comme
+ * le visa automatique applique en {@code BonSortieService#creer} a un
+ * titulaire sans compte applicatif (meme motif : la personne a bord n'est
+ * jamais celle qui declenche elle-meme ce bon, "viser" restant par ailleurs
+ * strictement reserve au titulaire lui-meme, RG-BS-004). Ce choix reutilise
+ * integralement le circuit de validation niveau 2 deja existant, sans
+ * inventer de nouveau statut ni de nouvel endpoint : le Charge d'Affaires du
+ * service de la personne retrouve ce bon dans sa liste de travail habituelle
+ * (filtre {@code statut=VISE}) et le valide via {@code POST /{id}/valider},
+ * comme n'importe quel autre bon de sortie. La FIPH de cette personne
+ * (RG-BS-007, RG-FIPH-001, RG-PAB-004) n'est donc initialisee qu'a CE
+ * moment-la, par {@link BonSortieService#valider}, jamais avant.
  */
 @Service
 public class PersonneABordGenerationService {
@@ -65,20 +75,17 @@ public class PersonneABordGenerationService {
     private final BonSortiePersonneRepository bonSortiePersonneRepository;
     private final BonSortieRepository bonSortieRepository;
     private final AffectationMissionService affectationMissionService;
-    private final FiphService fiphService;
     private final AuditService auditService;
     private final NotificationService notificationService;
 
     public PersonneABordGenerationService(BonSortiePersonneRepository bonSortiePersonneRepository,
                                            BonSortieRepository bonSortieRepository,
                                            AffectationMissionService affectationMissionService,
-                                           FiphService fiphService,
                                            AuditService auditService,
                                            NotificationService notificationService) {
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
         this.bonSortieRepository = bonSortieRepository;
         this.affectationMissionService = affectationMissionService;
-        this.fiphService = fiphService;
         this.auditService = auditService;
         this.notificationService = notificationService;
     }
@@ -112,8 +119,12 @@ public class PersonneABordGenerationService {
         individuel.setLieu(principal.getLieu());
         individuel.setCodeAffaireSaisi(principal.getCodeAffaireSaisi());
         individuel.setMotifSortie(principal.getMotifSortie());
-        // RG-PAB-005 : statut herite, sans visa ni validation separes.
-        individuel.setStatut(StatutBonSortie.VALIDE);
+        // RG-PAB-005 (revise le 2026-08-26) : genere directement au niveau 1 (VISE),
+        // en attente de la validation niveau 2 du Charge d'Affaires du service -
+        // jamais VALIDE d'emblee (voir Javadoc de classe).
+        individuel.setStatut(StatutBonSortie.VISE);
+        individuel.setVisePar(auteur);
+        individuel.setDateVisa(LocalDateTime.now());
         individuel.setOrigine(OrigineBonSortie.PERSONNE_A_BORD);
         individuel.setBonSortiePrincipal(principal);
         individuel = bonSortieRepository.save(individuel);
@@ -123,7 +134,7 @@ public class PersonneABordGenerationService {
 
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, individuel.getId(), auteur,
                 TypeActionAudit.BS_INDIVIDUEL_AUTO_GENERE, null, individuel.getId(),
-                null, StatutBonSortie.VALIDE.name());
+                null, StatutBonSortie.VISE.name());
         if (affectationPersonne.isEmpty()) {
             auditService.enregistrer(EntiteAuditable.BON_SORTIE, individuel.getId(), auteur,
                     TypeActionAudit.ANOMALIE_AFFECTATION, null,
@@ -134,9 +145,14 @@ public class PersonneABordGenerationService {
             }
         }
 
-        // RG-BS-007 / RG-FIPH-001 / RG-PAB-004 : declenche, pour cette
-        // personne a bord, exactement la meme chaine de generation
-        // automatique de FIPH qu'un bon de sortie principal.
-        fiphService.genererOuEnrichirDepuisBonSortie(individuel, auteur);
+        // Le bon individuel est desormais "en attente de validation du Charge
+        // d'Affaires" au meme titre que n'importe quel bon vise - c'est SA
+        // validation (BonSortieService#valider), et elle seule, qui declenchera
+        // la generation/l'enrichissement de la FIPH de cette personne a bord
+        // (RG-BS-007, RG-FIPH-001, RG-PAB-004) ; rien n'est initialise ici.
+        if (personneAgent.getService() != null) {
+            notificationService.notifierBonSortieAValider(individuel.getId(), personneAgent.getService().getId(),
+                    "Bon de sortie #" + individuel.getId(), auteur);
+        }
     }
 }

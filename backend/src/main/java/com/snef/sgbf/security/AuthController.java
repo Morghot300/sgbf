@@ -48,6 +48,14 @@ import org.springframework.web.bind.annotation.RestController;
  * (roles, habilitations, perimetre par service), tous appliques en aval,
  * inchanges.
  *
+ * <p><strong>Session sans expiration d'inactivite</strong> (evolution du
+ * 2026-08-26, tous comptes) : une session (jeton de rafraichissement) ne se
+ * termine plus jamais par le seul ecoulement du temps - uniquement par une
+ * deconnexion explicite ({@code /logout}) ou par une suspension/desactivation
+ * du compte, qui revoque immediatement tous ses jetons ({@code
+ * UtilisateurService.changerStatut}). Voir {@code RefreshTokenService} pour
+ * le detail du mecanisme.
+ *
  * <p>Toutes les tentatives (reussies ou non) sont journalisees dans le
  * journal d'audit (section 26.1, 26.4).
  */
@@ -56,6 +64,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private static final String COOKIE_REFRESH = "refreshToken";
+
+    /**
+     * Duree du cookie de rafraichissement (evolution du 2026-08-26 : sessions
+     * sans expiration d'inactivite, tous comptes). Le jeton lui-meme n'expire
+     * plus jamais cote serveur ({@code RefreshTokenService.emettre}), mais un
+     * cookie HTTP reste, lui, necessairement borne dans le temps : les
+     * navigateurs recents (Chrome/Chromium en tete) plafonnent tout
+     * {@code Max-Age}/{@code Expires} a 400 jours et tronquent silencieusement
+     * toute valeur superieure. 400 jours est donc le maximum reellement
+     * utilisable - et comme ce cookie est reemis avec un nouveau delai complet
+     * a chaque connexion et a chaque rafraichissement reussi (glissant), un
+     * utilisateur qui revient au moins une fois tous les 400 jours ne voit
+     * jamais son cookie expirer.
+     */
+    private static final java.time.Duration DUREE_COOKIE_REFRESH = java.time.Duration.ofDays(400);
 
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
@@ -172,7 +195,7 @@ public class AuthController {
                 .secure(cookieSecurise)
                 .sameSite("Strict")
                 .path("/api/auth")
-                .maxAge(java.time.Duration.ofDays(7))
+                .maxAge(DUREE_COOKIE_REFRESH)
                 .build();
     }
 }

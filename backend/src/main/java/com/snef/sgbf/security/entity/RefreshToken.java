@@ -21,10 +21,16 @@ import org.hibernate.annotations.CreationTimestamp;
  * <p>Contrairement au jeton d'acces ({@link com.snef.sgbf.security.JwtService}),
  * entierement stateless, ce jeton est deliberement statefull : c'est ce qui
  * permet une deconnexion explicite ("logout") et une revocation immediate en
- * cas de compromission suspectee, sans attendre l'expiration naturelle
- * (7 jours par defaut). Le cout - une table et une verification en base a
- * chaque rafraichissement, une operation rare comparee aux appels API
- * courants - est juge largement acceptable au regard du gain de controle.
+ * cas de compromission suspectee ou de suspension d'un compte (voir
+ * {@code UtilisateurService.changerStatut}). Le cout - une table et une
+ * verification en base a chaque rafraichissement, une operation rare comparee
+ * aux appels API courants - est juge largement acceptable au regard du gain
+ * de controle.
+ *
+ * <p><strong>Sans expiration temporelle</strong> (evolution du 2026-08-26,
+ * pour tous les comptes) : {@link #dateExpiration} est desormais {@code null}
+ * a l'emission - seules une deconnexion explicite ou une revocation
+ * administrative terminent une session, jamais le seul ecoulement du temps.
  */
 @Entity
 @Table(name = "refresh_token")
@@ -44,7 +50,8 @@ public class RefreshToken {
     @Column(name = "token_hash", nullable = false, length = 255)
     private String tokenHash;
 
-    @Column(name = "date_expiration", nullable = false)
+    /** {@code null} = jeton sans expiration temporelle (evolution du 2026-08-26). */
+    @Column(name = "date_expiration")
     private LocalDateTime dateExpiration;
 
     @Column(name = "revoque", nullable = false)
@@ -55,6 +62,6 @@ public class RefreshToken {
     private LocalDateTime dateCreation;
 
     public boolean estValide() {
-        return !revoque && dateExpiration.isAfter(LocalDateTime.now());
+        return !revoque && (dateExpiration == null || dateExpiration.isAfter(LocalDateTime.now()));
     }
 }

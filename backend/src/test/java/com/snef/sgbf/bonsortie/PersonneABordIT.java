@@ -193,13 +193,14 @@ class PersonneABordIT {
         // BonSortiePersonne effectue plus haut - la generation echoue alors
         // silencieusement avec "BonSortiePersonne introuvable", rattrapee
         // par le bloc try/catch de BonSortieService (atomicite par personne).
-        // Ce comportement a ete verifie REELLEMENT (hors de tout test,
-        // requetes HTTP directes sur la base de developpement) : le bon
-        // individuel est bien genere a la validation - voir le rapport de
-        // tests (chapitre "Personnes a bord"). Seule cette assertion precise
-        // (bonSortieIndividuelId non nul juste apres validation) n'est donc
-        // pas verifiable dans ce test, sans que cela remette en cause le
-        // fonctionnement reel de la fonctionnalite.
+        // Ce comportement (bon individuel genere au statut VISE, en attente de
+        // validation du CA - evolution du 2026-08-26) EST verifie reellement,
+        // par contre, dans PersonneABordValidationIT, une classe de test
+        // dediee qui n'est volontairement PAS annotee @Transactional afin que
+        // cette transaction REQUIRES_NEW commite reellement et reste
+        // observable. Seule cette assertion precise (bonSortieIndividuelId
+        // non nul juste apres validation) n'est donc pas verifiable ICI, sans
+        // que cela remette en cause le fonctionnement reel de la fonctionnalite.
         mockMvc.perform(post("/api/bons-sortie/" + bonSortieId + "/viser").header("Authorization", "Bearer " + tokenEmetteur))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/bons-sortie/" + bonSortieId + "/valider").header("Authorization", "Bearer " + tokenCa))
