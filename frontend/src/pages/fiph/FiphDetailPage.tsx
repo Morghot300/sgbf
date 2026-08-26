@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { historiqueAuditFiph, telechargerAuditCsv, telechargerAuditPdf } from "../../api/auditApi";
 import {
   completerPointage, creerNouvelleVersionFiph, definirDateFinFiph, listerValidations, listerVersionsFiph, obtenirFiph,
@@ -134,8 +134,23 @@ export default function FiphDetailPage() {
             <tbody>
               <tr><th>Agent</th><td>{f.agentNomComplet} ({f.agentMatricule})</td></tr>
               <tr><th>Service</th><td>{f.serviceLibelle}</td></tr>
-              <tr><th>Date de début</th><td>{f.dateDebutPeriode} <span className="note">(automatique, issue du bon de sortie — non modifiable)</span></td></tr>
-              <tr><th>Origine</th><td>{f.origine === "BON_SORTIE" ? "Générée depuis un bon de sortie" : "Créée manuellement"}</td></tr>
+              <tr>
+                <th>Date de début</th>
+                <td>
+                  {f.dateDebutPeriode}{" "}
+                  <span className="note">
+                    ({f.origine === "BON_SORTIE" ? "automatique, issue du bon de sortie" : "saisie à la création"} — non modifiable)
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <th>Origine</th>
+                <td>
+                  {f.origine === "BON_SORTIE" && f.bonSortieId
+                    ? <>Générée depuis le <Link to={`/bons-sortie/${f.bonSortieId}`}>bon de sortie #{f.bonSortieId}</Link></>
+                    : f.origine === "BON_SORTIE" ? "Générée depuis un bon de sortie" : "Créée manuellement (Code Service)"}
+                </td>
+              </tr>
             </tbody>
           </table>
         )}

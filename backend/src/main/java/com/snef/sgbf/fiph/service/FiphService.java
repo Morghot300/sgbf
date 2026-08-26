@@ -4,6 +4,7 @@ import com.snef.sgbf.bonsortie.entity.BonSortie;
 import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
+import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ConflictException;
 import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
@@ -28,7 +29,6 @@ import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.IsoFields;
 import java.util.List;
@@ -141,18 +141,36 @@ public class FiphService {
      * section 2) pour un agent non concerne par une mission durant la
      * periode - reservee au Charge d'Affaires et a la personne habilitee du
      * service de l'agent (RG-FIPH-004, RG-FIPH-010).
+     *
+     * <p>Evolution du 2026-08-26 (section 7-9) : meme modele de periode
+     * flexible que les FIPH issues d'un bon de sortie - la date de debut est
+     * saisie librement (RG-FIPH-030 : elle ne peut etre posterieure a la date
+     * de fin quand celle-ci est renseignee) et la date de fin reste
+     * optionnelle a la creation, definissable/ajustable ensuite via
+     * {@code FiphVersionService#definirDateFin}, avec l'obligation de la
+     * renseigner avant toute soumission (RG-FIPH-033).
      */
     public FiphDto creerManuelle(CreerFiphManuelleRequest requete, Utilisateur auteur) {
         Utilisateur agent = utilisateurRepository.findById(requete.agentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
         verifierPerimetreGestionnaire(auteur, agent);
 
-        LocalDate lundi = lundiDeLaSemaineIso(requete.annee(), requete.numeroSemaine());
-        if (!fiphRepository.trouverChevauchements(agent.getId(), lundi, lundi.with(DayOfWeek.SUNDAY)).isEmpty()) {
-            throw new ConflictException("Une FIPH existe deja pour cet agent sur une periode qui chevauche cette semaine (RG-FIPH-002).");
+        LocalDate dateDebut = requete.dateDebut();
+        LocalDate dateFin = requete.dateFin();
+        if (dateFin != null && dateFin.isBefore(dateDebut)) {
+            throw new BusinessRuleViolationException("RG-FIPH-030",
+                    "La date de fin ne peut pas etre anterieure a la date de debut.");
         }
 
-        FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.MANUELLE, null, lundi, lundi.with(DayOfWeek.SUNDAY), auteur);
+        // Sentinelle "periode ouverte" pour la recherche de chevauchement : LocalDate.MAX depasse
+        // l'intervalle representable par le type DATE de MySQL (borne au 9999-12-31) et ferait
+        // echouer la requete au niveau JDBC.
+        LocalDate finPourChevauchement = dateFin != null ? dateFin : LocalDate.of(9999, 12, 31);
+        if (!fiphRepository.trouverChevauchements(agent.getId(), dateDebut, finPourChevauchement).isEmpty()) {
+            throw new ConflictException("Une FIPH existe deja pour cet agent sur une periode qui chevauche celle-ci (RG-FIPH-002).");
+        }
+
+        FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.MANUELLE, null, dateDebut, dateFin, auteur);
         return fiphMapper.toDto(fiph);
     }
 
@@ -436,14 +454,6 @@ public class FiphService {
         version.setTotalHN(totalHN);
         version.setTotalHS(totalHS);
         fiphVersionRepository.save(version);
-    }
-
-    /** Lundi de la semaine ISO 8601 (annee_semaine, numero_semaine) donnee. */
-    private LocalDate lundiDeLaSemaineIso(int anneeSemaine, int numeroSemaine) {
-        return LocalDate.of(anneeSemaine, 1, 4)
-                .with(IsoFields.WEEK_BASED_YEAR, anneeSemaine)
-                .with(IsoFields.WEEK_OF_WEEK_BASED_YEAR, numeroSemaine)
-                .with(DayOfWeek.MONDAY);
     }
 
     private boolean estRoleVisionGlobale(String code) {

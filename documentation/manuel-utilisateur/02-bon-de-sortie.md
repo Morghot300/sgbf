@@ -29,13 +29,13 @@
 **Objectif** — Faire progresser le bon de sortie jusqu'au statut **Validé**, seul statut qui déclenche automatiquement la génération de la FIPH correspondante et autorise l'impression.
 
 **Étapes**
-1. **Visa (niveau 1)** — L'agent titulaire du bon de sortie ouvre sa fiche et clique sur **Viser (je suis l'agent titulaire)**. Le statut passe à **Visé**.
+1. **Visa (niveau 1)** — L'agent titulaire du bon de sortie ouvre sa fiche et clique sur **Viser (je suis l'agent titulaire)**. Le statut passe à **Visé**. *(Évolution du 2026-08-26)* Un Chargé d'Affaires ou une personne habilitée du service de l'agent peut également viser à sa place, exactement comme pour la validation — utile si l'agent titulaire ne peut pas le faire lui-même.
 2. **Validation (niveau 2)** — Un Chargé d'Affaires ou une personne habilitée du service concerné ouvre la même fiche et clique sur **Valider (niveau 2)**. Le statut passe à **Validé**.
 
 **Résultat attendu** — Le bon de sortie passe au statut **Validé** ; la FIPH hebdomadaire de l'agent est générée ou complétée automatiquement, sans action supplémentaire de votre part.
 
 **Cas particuliers**
-- Le bouton **Viser** n'apparaît que si le bon de sortie est encore au statut Brouillon ; un clic par un utilisateur qui n'est pas l'agent titulaire est refusé par le serveur, même si le bouton était visible.
+- Le bouton **Viser** n'apparaît que si le bon de sortie est encore au statut Brouillon ; un clic par un utilisateur qui n'est ni l'agent titulaire, ni un Chargé d'Affaires/une personne habilitée du même service, est refusé par le serveur, même si le bouton était visible.
 - Le bouton **Valider (niveau 2)** n'apparaît qu'au statut Visé, et seulement si vous portez une habilitation Chargé d'Affaires ou personne habilitée sur le service de l'agent.
 
 ## Gérer les personnes à bord

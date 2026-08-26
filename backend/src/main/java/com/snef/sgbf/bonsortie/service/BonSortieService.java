@@ -307,13 +307,16 @@ public class BonSortieService {
         return bonSortieMapper.toDto(bonSortie);
     }
 
-    /** Visa de l'agent (niveau 1, RG-BS-004) - strictement reserve au titulaire du bon de sortie. */
+    /**
+     * Visa (niveau 1, RG-BS-004) - le titulaire du bon de sortie, ou (evolution
+     * du 2026-08-26, section 7 - "Oui, elargir aux CA/PH du service") le Charge
+     * d'Affaires/la personne habilitee de son service, exactement le meme
+     * perimetre que celui deja applique a la validation (niveau 2) et a la
+     * gestion des personnes a bord - {@link #verifierAutoServiceOuGestionnaire}.
+     */
     public BonSortieDto viser(Long bonSortieId, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
-        boolean estTitulaire = bonSortie.getAgent().getId().equals(auteur.getId());
-        if (!estTitulaire) {
-            throw new ForbiddenOperationException("Seul l'agent titulaire du bon de sortie peut le viser.");
-        }
+        verifierAutoServiceOuGestionnaire(auteur, bonSortie.getAgent());
         if (bonSortie.getStatut() != StatutBonSortie.BROUILLON) {
             throw new BusinessRuleViolationException("RG-BS-004", "Seul un bon de sortie en brouillon peut etre vise.");
         }

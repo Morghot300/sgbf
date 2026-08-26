@@ -102,12 +102,12 @@ export default function FiphListePage() {
 function SectionCreationManuelle() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [valeurs, setValeurs] = useState({ agentId: "", annee: String(new Date().getFullYear()), numeroSemaine: "" });
+  const [valeurs, setValeurs] = useState({ agentId: "", dateDebut: "", dateFin: "" });
   const [erreur, setErreur] = useState<string | null>(null);
 
   const creation = useMutation({
     mutationFn: () => creerFiphManuelle({
-      agentId: Number(valeurs.agentId), annee: Number(valeurs.annee), numeroSemaine: Number(valeurs.numeroSemaine),
+      agentId: Number(valeurs.agentId), dateDebut: valeurs.dateDebut, dateFin: valeurs.dateFin || null,
     }),
     onSuccess: (creee) => {
       void queryClient.invalidateQueries({ queryKey: ["fiph"] });
@@ -120,14 +120,18 @@ function SectionCreationManuelle() {
     <section>
       <h2>Créer une FIPH manuelle (Code Service)</h2>
       <p className="dashboard-accueil">Pour un agent non concerné par une mission durant la période (section 2 du document source).</p>
+      <p className="dashboard-accueil">
+        La date de fin est optionnelle : la période reste "ouverte" tant qu'elle n'est pas définie (ajustable ensuite),
+        mais elle devra être renseignée avant toute soumission au circuit de validation.
+      </p>
       {erreur && <p role="alert">{erreur}</p>}
       <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); creation.mutate(); }}>
         <label htmlFor="agentId">Identifiant de l'agent</label>
         <input id="agentId" type="number" value={valeurs.agentId} onChange={(e) => setValeurs({ ...valeurs, agentId: e.target.value })} required />
-        <label htmlFor="annee">Année</label>
-        <input id="annee" type="number" min={2020} max={2100} value={valeurs.annee} onChange={(e) => setValeurs({ ...valeurs, annee: e.target.value })} required />
-        <label htmlFor="numeroSemaine">Semaine (1 à 53, ISO 8601)</label>
-        <input id="numeroSemaine" type="number" min={1} max={53} value={valeurs.numeroSemaine} onChange={(e) => setValeurs({ ...valeurs, numeroSemaine: e.target.value })} required />
+        <label htmlFor="dateDebut">Date de début</label>
+        <input id="dateDebut" type="date" value={valeurs.dateDebut} onChange={(e) => setValeurs({ ...valeurs, dateDebut: e.target.value })} required />
+        <label htmlFor="dateFin">Date de fin (optionnelle)</label>
+        <input id="dateFin" type="date" value={valeurs.dateFin} onChange={(e) => setValeurs({ ...valeurs, dateFin: e.target.value })} />
         <button type="submit" disabled={creation.isPending}>{creation.isPending ? "Création..." : "Créer"}</button>
       </form>
     </section>

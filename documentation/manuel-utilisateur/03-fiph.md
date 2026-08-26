@@ -76,9 +76,11 @@ Pour une FIPH générée depuis un bon de sortie, les champs restent modifiables
 
 **Accès** — Bas de la page **FIPH** (liste), section **Créer une FIPH manuelle (Code Service)** — visible uniquement pour un Chargé d'Affaires ou une personne habilitée.
 
-**Étapes** — Renseignez l'**identifiant de l'agent**, l'**année** et le **numéro de semaine** (1 à 53, ISO 8601), puis cliquez sur **Créer**.
+**Étapes** — Renseignez l'**identifiant de l'agent** et la **date de début**, puis cliquez sur **Créer**. La **date de fin** est facultative à cette étape *(évolution du 2026-08-26 — même modèle de période flexible qu'une FIPH issue d'un bon de sortie)* : vous pouvez la laisser vide et la définir ou l'ajuster plus tard, depuis la fiche de la FIPH, tant que le circuit de validation n'a pas démarré.
 
-**Résultat attendu** — La FIPH est créée au statut Brouillon et vous êtes redirigé vers sa fiche.
+**Résultat attendu** — La FIPH est créée au statut **Signée** (le visa automatique du créateur — Chargé d'Affaires ou personne habilitée — est appliqué immédiatement, comme pour une FIPH issue d'un bon de sortie) et vous êtes redirigé vers sa fiche.
+
+**Cas particulier** — Une FIPH manuelle sans date de fin ne peut pas être soumise au circuit de validation : le bouton **Soumettre** échoue avec un message explicite tant que la date de fin n'a pas été définie sur la fiche.
 
 ## Consulter l'historique et exporter l'audit
 

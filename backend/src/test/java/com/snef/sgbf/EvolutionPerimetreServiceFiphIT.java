@@ -370,8 +370,7 @@ class EvolutionPerimetreServiceFiphIT {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
                             put("agentId", agentCentre1.getId()); // agent d'un AUTRE service que l'appelant
-                            put("annee", 2026);
-                            put("numeroSemaine", 10);
+                            put("dateDebut", LocalDate.of(2026, 3, 9).toString());
                         }})))
                 .andExpect(status().isForbidden());
     }
@@ -414,8 +413,8 @@ class EvolutionPerimetreServiceFiphIT {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
                             put("agentId", agentSansCompte.getId());
-                            put("annee", 2026);
-                            put("numeroSemaine", 15);
+                            put("dateDebut", LocalDate.of(2026, 4, 6).toString());
+                            put("dateFin", LocalDate.of(2026, 4, 12).toString());
                         }})))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.origine").value("MANUELLE"))
@@ -449,8 +448,8 @@ class EvolutionPerimetreServiceFiphIT {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
                             put("agentId", agent.getId());
-                            put("annee", 2026);
-                            put("numeroSemaine", 16);
+                            put("dateDebut", LocalDate.of(2026, 4, 13).toString());
+                            put("dateFin", LocalDate.of(2026, 4, 19).toString());
                         }})))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("SIGNEE"))
@@ -513,8 +512,8 @@ class EvolutionPerimetreServiceFiphIT {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
                             put("agentId", agent.getId());
-                            put("annee", 2026);
-                            put("numeroSemaine", (int) (20 + (agent.getId() % 20)));
+                            put("dateDebut", LocalDate.of(2026, 1, 5).plusWeeks(20 + (agent.getId() % 20)).toString());
+                            put("dateFin", LocalDate.of(2026, 1, 5).plusWeeks(20 + (agent.getId() % 20)).plusDays(6).toString());
                         }})))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

@@ -38,8 +38,9 @@ export interface FiphDto {
 
 export interface CreerFiphManuelleRequest {
   agentId: number;
-  annee: number;
-  numeroSemaine: number;
+  dateDebut: string;
+  /** Optionnelle : periode "ouverte", definissable/ajustable ensuite via /date-fin (RG-FIPH-033 avant soumission). */
+  dateFin?: string | null;
 }
 
 export interface PointageDto {
