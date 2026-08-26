@@ -1,7 +1,6 @@
 package com.snef.sgbf.notification.sse;
 
 import com.snef.sgbf.notification.dto.NotificationDto;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,7 +58,7 @@ public class SseEmitterRegistry {
         // (utile pour distinguer "connecte, en attente" d'un echec silencieux).
         try {
             emitter.send(SseEmitter.event().name("connecte").data("ok"));
-        } catch (IOException e) {
+        } catch (Exception e) {
             terminerSurEchec(utilisateurId, emitter, e);
         }
         return emitter;
@@ -86,14 +85,35 @@ public class SseEmitterRegistry {
      * {@code AccessDeniedException} alors que la reponse SSE etait deja
      * committee (rien de plus qu'un log bruyant cote serveur, mais qui merite
      * d'etre elimine a la source plutot que tolere).
+     *
+     * <p><strong>{@code catch (Exception)}, pas seulement {@code IOException}
+     * (deuxieme bug reel corrige le 2026-08-26)</strong> : {@code SseEmitter#send}
+     * peut aussi lever une {@link IllegalStateException} non verifiee (ex.
+     * "ResponseBodyEmitter is already set complete") lorsque le flux vient de
+     * passer dans un etat terminal juste avant cet appel (course normale entre
+     * la deconnexion cote client et une notification en cours d'envoi cote
+     * serveur). Comme {@link #notifier} s'execute de maniere synchrone au sein
+     * de la transaction metier qui a declenche la notification (ex. ajout
+     * d'une personne a bord), une telle exception non rattrapee remontait
+     * jusqu'a l'appelant et faisait echouer en {@code 500} une operation
+     * metier n'ayant pourtant rien a voir avec la diffusion temps reel -
+     * simple mecanisme de rattrapage "best effort" qui ne doit JAMAIS pouvoir
+     * casser son appelant (la liste REST des notifications reste la source de
+     * verite de toute facon).
      */
-    private void terminerSurEchec(Long utilisateurId, SseEmitter emitter, IOException e) {
+    private void terminerSurEchec(Long utilisateurId, SseEmitter emitter, Exception e) {
         log.debug("Emetteur SSE ferme pour l'utilisateur {} : {}", utilisateurId, e.getMessage());
         retirer(utilisateurId, emitter);
-        emitter.completeWithError(e);
+        try {
+            emitter.completeWithError(e);
+        } catch (RuntimeException ignoree) {
+            // L'emetteur est deja dans un etat terminal (cause la plus probable de l'echec
+            // ci-dessus) : rien de plus a faire, surtout pas remonter cette seconde exception.
+            log.debug("completeWithError sans effet (emetteur deja termine) pour l'utilisateur {}", utilisateurId);
+        }
     }
 
-    /** Pousse une notification a toutes les connexions actives du destinataire (aucune si non connecte - rattrapage par la liste REST). */
+    /** Pousse une notification a toutes les connexions actives du destinataire (aucune si non connecte - rattrapage par la liste REST). Ne propage jamais d'exception : un echec de diffusion temps reel ne doit jamais faire echouer l'operation metier qui l'a declenchee. */
     public void notifier(Long utilisateurId, NotificationDto notification) {
         List<SseEmitter> liste = emettersParUtilisateur.get(utilisateurId);
         if (liste == null || liste.isEmpty()) {
@@ -102,7 +122,7 @@ public class SseEmitterRegistry {
         for (SseEmitter emitter : List.copyOf(liste)) {
             try {
                 emitter.send(SseEmitter.event().name("notification").data(notification));
-            } catch (IOException e) {
+            } catch (Exception e) {
                 terminerSurEchec(utilisateurId, emitter, e);
             }
         }

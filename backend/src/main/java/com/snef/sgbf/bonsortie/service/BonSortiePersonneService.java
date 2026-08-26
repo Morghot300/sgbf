@@ -102,7 +102,7 @@ public class BonSortiePersonneService {
         notificationService.notifierPersonneABordAjoutee(bonSortiePrincipalId, personneAgent, auteur);
 
         if (principal.getStatut() == StatutBonSortie.VALIDE) {
-            bonSortieService.genererPourPersonnesABordEnAttente(bonSortiePrincipalId, auteur);
+            declencherGenerationApresCommit(bonSortiePrincipalId, auteur);
         }
 
         return bonSortiePersonneMapper.toDto(association);
@@ -152,9 +152,43 @@ public class BonSortiePersonneService {
         }
 
         if (principal.getStatut() == StatutBonSortie.VALIDE && !resultats.isEmpty()) {
-            bonSortieService.genererPourPersonnesABordEnAttente(bonSortiePrincipalId, auteur);
+            declencherGenerationApresCommit(bonSortiePrincipalId, auteur);
         }
         return resultats;
+    }
+
+    /**
+     * Bug reel corrige le 2026-08-26 (observe en conditions reelles, pas
+     * seulement en test - contrairement a ce que supposait a tort le
+     * commentaire historique de {@code PersonneABordIT}) : {@code ajouter}/
+     * {@code ajouterEnLot} s'executent dans une seule transaction (niveau
+     * classe), qui n'est pas encore commitee au moment de cet appel. Appeler
+     * {@link BonSortieService#genererPourPersonnesABordEnAttente} directement
+     * ici declenchait alors {@link PersonneABordGenerationService#genererPourAssociation}
+     * (annotee {@code REQUIRES_NEW}, connexion physiquement separee) AVANT
+     * que l'association venant d'etre inseree ne soit visible pour cette
+     * nouvelle transaction - echec systematique ("BonSortiePersonne
+     * introuvable"), rattrape silencieusement par l'atomicite-par-personne
+     * (aucune erreur visible), mais sans jamais generer le bon individuel ni
+     * la FIPH attendus pour un ajout tardif (RG-PAB-006).
+     *
+     * <p>Reporte donc le declenchement a APRES le commit reel de cette
+     * transaction (meme motif et meme mecanisme que {@code NotificationService}
+     * pour la diffusion SSE) : la transaction REQUIRES_NEW voit alors
+     * l'association sans ambiguite.
+     */
+    private void declencherGenerationApresCommit(Long bonSortiePrincipalId, Utilisateur auteur) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            bonSortieService.genererPourPersonnesABordEnAttente(bonSortiePrincipalId, auteur);
+                        }
+                    });
+        } else {
+            bonSortieService.genererPourPersonnesABordEnAttente(bonSortiePrincipalId, auteur);
+        }
     }
 
     /**

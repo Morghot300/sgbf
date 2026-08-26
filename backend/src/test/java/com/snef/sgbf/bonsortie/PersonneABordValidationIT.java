@@ -92,6 +92,7 @@ class PersonneABordValidationIT {
     private Utilisateur emetteur;
     private Utilisateur ca;
     private Utilisateur personneA;
+    private Utilisateur personneB;
 
     @BeforeEach
     void construireJeuDeDonnees() {
@@ -103,6 +104,7 @@ class PersonneABordValidationIT {
         emetteur = creerPersonneAvecCompte("EMT" + (suffixe % 100_000L), "Test", "Emetteur", "emetteur_val_" + suffixe, service);
         long court = suffixe % 100_000L;
         personneA = utilisateurRepository.save(nouvelAgent("PXV" + court, "Ateba", "Alice", service));
+        personneB = utilisateurRepository.save(nouvelAgent("PXW" + court, "Bikoro", "Bruno", service));
         ca = creerUtilisateurAvecHabilitation("ca_val_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
 
         Mission mission = new Mission();
@@ -115,6 +117,7 @@ class PersonneABordValidationIT {
 
         affecterSurMission(emetteur, mission);
         affecterSurMission(personneA, mission);
+        affecterSurMission(personneB, mission);
     }
 
     private void affecterSurMission(Utilisateur agent, Mission mission) {
@@ -207,6 +210,78 @@ class PersonneABordValidationIT {
         // C'est SEULEMENT maintenant que la FIPH de cette personne est initialisee.
         List<FIPH> fiphsPersonneA = fiphRepository.findByAgent_Id(personneA.getId());
         assertThat(fiphsPersonneA).hasSize(1);
+    }
+
+    /**
+     * Bug reel corrige le 2026-08-26 (observe en conditions reelles, pas
+     * seulement suppose par un commentaire de test) : ajouter une personne a
+     * bord APRES que le bon principal soit deja VALIDE (RG-PAB-006, "ajout
+     * tardif") declenchait la generation dans la MEME transaction que
+     * l'insertion de l'association, avant que celle-ci ne soit commitee - la
+     * transaction REQUIRES_NEW de generation ne la voyait donc jamais, et
+     * echouait silencieusement (rattrapee par l'atomicite-par-personne, sans
+     * erreur visible, mais sans jamais generer le bon individuel ni la FIPH).
+     * Necessite, comme le premier test de cette classe, de vrais commits
+     * (pas de {@code @Transactional}) pour observer le comportement reel.
+     */
+    @Test
+    void ajoutTardifApresValidationGenereReellementLeBonIndividuelEtLaFiph() throws Exception {
+        String tokenEmetteur = seConnecter(emetteur.getIdentifiant());
+        String tokenCa = seConnecter(ca.getIdentifiant());
+
+        String reponseBs = mockMvc.perform(post("/api/bons-sortie")
+                        .header("Authorization", "Bearer " + tokenEmetteur)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("moyenUtilise", MoyenUtilise.OMNIUM_SERVICE.name());
+                            put("kilometrage", 30);
+                            put("dateSortie", LocalDate.now().toString());
+                            put("heureSortie", "08:00:00");
+                            put("lieu", "Chantier de test");
+                            put("codeAffaireSaisi", "CODE-TEST");
+                            put("motifSortie", "Test ajout tardif personne a bord");
+                        }})))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long bonSortiePrincipalId = objectMapper.readTree(reponseBs).get("id").asLong();
+
+        // Le bon principal est valide AVANT que personneB ne soit ajoutee - c'est precisement
+        // le chemin "ajout tardif" (RG-PAB-006) qui declenchait le bug.
+        mockMvc.perform(post("/api/bons-sortie/" + bonSortiePrincipalId + "/viser")
+                        .header("Authorization", "Bearer " + tokenEmetteur))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/bons-sortie/" + bonSortiePrincipalId + "/valider")
+                        .header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VALIDE"));
+
+        mockMvc.perform(post("/api/bons-sortie/" + bonSortiePrincipalId + "/personnes-a-bord")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("agentId", personneB.getId());
+                        }})))
+                .andExpect(status().isCreated());
+
+        // Avant le correctif, l'association restait indefiniment sans bon individuel (echec
+        // silencieux de la generation) - ici, la generation differee jusqu'apres le commit doit
+        // avoir reellement eu lieu.
+        BonSortiePersonne association = bonSortiePersonneRepository
+                .findByBonSortiePrincipal_IdAndAgent_Id(bonSortiePrincipalId, personneB.getId())
+                .orElseThrow();
+        assertThat(association.getBonSortieIndividuel()).isNotNull();
+        long bonIndividuelId = association.getBonSortieIndividuel().getId();
+
+        mockMvc.perform(get("/api/bons-sortie/" + bonIndividuelId).header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VISE"));
+
+        mockMvc.perform(post("/api/bons-sortie/" + bonIndividuelId + "/valider")
+                        .header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VALIDE"));
+
+        assertThat(fiphRepository.findByAgent_Id(personneB.getId())).hasSize(1);
     }
 
     // --- Aides ---
