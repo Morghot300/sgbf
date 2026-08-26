@@ -33,6 +33,7 @@ import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.fiph.repository.SignatureRepository;
 import com.snef.sgbf.fiph.repository.ValidationRepository;
+import com.snef.sgbf.identite.entity.Habilitation;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
@@ -605,6 +606,15 @@ public class FiphVersionService {
         }
     }
 
+    /**
+     * <strong>Exception Super Administrateur (evolution du 2026-08-26)</strong> :
+     * voir la Javadoc equivalente dans {@code BonSortieService.verifierPerimetreGestionnaire} -
+     * reconnu comme habilite a valider n'importe quel niveau, sur n'importe
+     * quel service, sans passer par la "prise en main" (chaque niveau reste a
+     * declencher explicitement, un a la fois). RG-HAB-004 (separation des
+     * responsabilites, {@link #verifierSeparationResponsabilites}) continue
+     * de s'appliquer normalement, y compris pour le Super Administrateur.
+     */
     private void verifierRoleNiveau(Utilisateur auteur, FIPHVersion version, int niveau) {
         CodeRoleMetier roleAttendu = switch (niveau) {
             case 2 -> CodeRoleMetier.CHARGE_AFFAIRES;
@@ -612,8 +622,12 @@ public class FiphVersionService {
             case 4 -> CodeRoleMetier.DIRECTION;
             default -> throw new BusinessRuleViolationException("section-12", "Niveau de validation invalide : " + niveau);
         };
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        if (habilitationsAuteur.stream().anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()))) {
+            return;
+        }
         Long serviceId = version.getFiph().getService().getId();
-        boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+        boolean habilite = habilitationsAuteur.stream()
                 .filter(h -> h.getService() != null && h.getService().getId().equals(serviceId))
                 .anyMatch(h -> roleAttendu.name().equals(h.getRoleMetier().getCode())
                         // Niveau 2 accepte aussi la personne habilitee, au meme titre que le Charge d'Affaires (RG-FIPH-010, RG-HAB-003).

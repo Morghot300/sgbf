@@ -402,10 +402,17 @@ public class AffectationMissionService {
      * d'habilitations cumulees par ailleurs (RG-HAB-002). Un identifiant
      * d'affectation syntaxiquement valide mais hors perimetre produit un
      * refus d'acces (403), jamais un comportement silencieusement degrade.
+     *
+     * <p><strong>Exception Super Administrateur (evolution du 2026-08-26)</strong> :
+     * voir la Javadoc equivalente dans {@code BonSortieService.verifierPerimetreGestionnaire}.
      */
     private void verifierPerimetre(Utilisateur auteur, Utilisateur agent) {
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        if (habilitationsAuteur.stream().anyMatch(this::estSuperAdministrateur)) {
+            return;
+        }
         Long serviceAgentId = agent.getService().getId();
-        boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+        boolean habilite = habilitationsAuteur.stream()
                 .anyMatch(h -> estRoleGestionnaire(h) && h.getService() != null
                         && h.getService().getId().equals(serviceAgentId));
         if (!habilite) {
@@ -418,6 +425,10 @@ public class AffectationMissionService {
         String code = habilitation.getRoleMetier().getCode();
         return CodeRoleMetier.CHARGE_AFFAIRES.name().equals(code)
                 || CodeRoleMetier.PERSONNE_HABILITEE.name().equals(code);
+    }
+
+    private boolean estSuperAdministrateur(Habilitation habilitation) {
+        return CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(habilitation.getRoleMetier().getCode());
     }
 
     private void verifierMissionOuverte(Mission mission) {

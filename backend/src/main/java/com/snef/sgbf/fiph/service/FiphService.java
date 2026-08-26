@@ -463,10 +463,22 @@ public class FiphService {
         return estRoleGestionnaire(code) || CodeRoleMetier.RESPONSABLE_ACTIVITE.name().equals(code);
     }
 
-    /** RG-HAB-003 / RG-FIPH-010 : creation/modification bornee au perimetre (service) de l'habilitation active. */
+    /**
+     * RG-HAB-003 / RG-FIPH-010 : creation/modification bornee au perimetre
+     * (service) de l'habilitation active.
+     *
+     * <p><strong>Exception Super Administrateur (evolution du 2026-08-26)</strong> :
+     * voir la Javadoc equivalente dans {@code BonSortieService.verifierPerimetreGestionnaire} -
+     * meme raisonnement, meme portee (validateur legitime niveau par niveau
+     * sur n'importe quel service, sans passer par la "prise en main").
+     */
     void verifierPerimetreGestionnaire(Utilisateur auteur, Utilisateur agent) {
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        if (habilitationsAuteur.stream().anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()))) {
+            return;
+        }
         Long serviceAgentId = agent.getService().getId();
-        boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+        boolean habilite = habilitationsAuteur.stream()
                 .anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
                         && h.getService() != null && h.getService().getId().equals(serviceAgentId));
         if (!habilite) {

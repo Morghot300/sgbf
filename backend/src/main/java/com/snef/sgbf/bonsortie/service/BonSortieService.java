@@ -446,16 +446,37 @@ public class BonSortieService {
                 || CodeRoleMetier.PERSONNE_HABILITEE.name().equals(code);
     }
 
-    /** RG-HAB-003 / RG-SEC-002 : seul un gestionnaire du service de l'agent peut valider son bon de sortie. */
+    /**
+     * RG-HAB-003 / RG-SEC-002 : seul un gestionnaire du service de l'agent
+     * peut valider son bon de sortie.
+     *
+     * <p><strong>Exception Super Administrateur (evolution du 2026-08-26)</strong> :
+     * son habilitation porte toujours un perimetre global ({@code service == null},
+     * imposee des l'attribution - voir {@code HabilitationService.validerCoherencePerimetre}),
+     * qui ne peut donc jamais satisfaire la comparaison de service ci-dessous par
+     * construction. Reconnu ici explicitement comme validateur legitime sur
+     * n'importe quel service - decision assumee, distincte de la "prise en main"
+     * (qui saute directement a l'etat final) : ici, chaque niveau/etape reste a
+     * declencher explicitement par le Super Administrateur, exactement comme un
+     * gestionnaire ordinaire du service concerne.
+     */
     private void verifierPerimetreGestionnaire(Utilisateur auteur, Utilisateur agent) {
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        if (habilitationsAuteur.stream().anyMatch(BonSortieService::estSuperAdministrateur)) {
+            return;
+        }
         Long serviceAgentId = agent.getService().getId();
-        boolean habilite = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
+        boolean habilite = habilitationsAuteur.stream()
                 .anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
                         && h.getService() != null && h.getService().getId().equals(serviceAgentId));
         if (!habilite) {
             throw new ForbiddenOperationException(
                     "Vous n'etes pas habilite a gerer les bons de sortie des agents de ce service.");
         }
+    }
+
+    private static boolean estSuperAdministrateur(Habilitation habilitation) {
+        return CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(habilitation.getRoleMetier().getCode());
     }
 
     /**

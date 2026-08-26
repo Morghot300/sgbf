@@ -114,10 +114,28 @@ public class SecurityConfig {
      * comparent directement le code de role et doivent donc lister
      * SUPER_ADMINISTRATEUR explicitement, ce qui est fait a chaque endroit
      * pertinent.
+     *
+     * <p><strong>Extension du 2026-08-26</strong> : SUPER_ADMINISTRATEUR
+     * herite desormais aussi de CHARGE_AFFAIRES, PERSONNE_HABILITEE,
+     * RESPONSABLE_ACTIVITE et DIRECTION - indispensable pour qu'il puisse
+     * seulement franchir le premier filtrage grossier par role des
+     * controleurs (viser/valider un bon de sortie, soumettre/valider une
+     * FIPH a n'importe quel niveau, gerer une affectation) ; le controle FIN
+     * de perimetre par service, dans la couche service, le reconnait
+     * separement et explicitement comme validateur legitime sur N'IMPORTE
+     * QUEL service (voir {@code BonSortieService.verifierPerimetreGestionnaire}
+     * et les methodes equivalentes) - les deux couches devaient etre
+     * etendues ensemble, l'une sans l'autre restant insuffisante.
      */
     @Bean
     static RoleHierarchy roleHierarchy() {
-        return RoleHierarchyImpl.fromHierarchy("ROLE_SUPER_ADMINISTRATEUR > ROLE_ADMINISTRATEUR");
+        return RoleHierarchyImpl.fromHierarchy("""
+                ROLE_SUPER_ADMINISTRATEUR > ROLE_ADMINISTRATEUR
+                ROLE_SUPER_ADMINISTRATEUR > ROLE_CHARGE_AFFAIRES
+                ROLE_SUPER_ADMINISTRATEUR > ROLE_PERSONNE_HABILITEE
+                ROLE_SUPER_ADMINISTRATEUR > ROLE_RESPONSABLE_ACTIVITE
+                ROLE_SUPER_ADMINISTRATEUR > ROLE_DIRECTION
+                """);
     }
 
     @Bean
