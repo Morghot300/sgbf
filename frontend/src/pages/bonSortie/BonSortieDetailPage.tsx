@@ -10,6 +10,7 @@ import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutBonSortie } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
 import { LIBELLES_MOYEN_UTILISE, LIBELLES_STATUT_BON_SORTIE } from "../../types/bonSortie";
+import { CorrectionBonSortie } from "./CorrectionBonSortie";
 import { SelectionPersonnesABord } from "./SelectionPersonnesABord";
 
 /** Detail d'un bon de sortie : consultation, visa (titulaire), validation (CA/personne habilitee), personnes a bord, impression. */
@@ -76,6 +77,8 @@ export default function BonSortieDetailPage() {
             )}
 
             {erreurAction && <p role="alert">{erreurAction}</p>}
+
+            <CorrectionBonSortie bonSortie={bs} onCorrigeAvecSucces={invalider} />
 
             <div className="barre-actions">
               {bs.statut === "BROUILLON" && (

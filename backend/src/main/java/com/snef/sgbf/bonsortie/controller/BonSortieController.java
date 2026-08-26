@@ -3,7 +3,7 @@ package com.snef.sgbf.bonsortie.controller;
 import com.snef.sgbf.bonsortie.dto.AgentEligibleDto;
 import com.snef.sgbf.bonsortie.dto.BonSortieDto;
 import com.snef.sgbf.bonsortie.dto.CreerBonSortieRequest;
-import com.snef.sgbf.bonsortie.dto.ModifierRetourRequest;
+import com.snef.sgbf.bonsortie.dto.ModifierBonSortieRequest;
 import com.snef.sgbf.bonsortie.entity.StatutBonSortie;
 import com.snef.sgbf.bonsortie.service.BonSortiePdfService;
 import com.snef.sgbf.bonsortie.service.BonSortiePersonneService;
@@ -109,10 +109,16 @@ public class BonSortieController {
         return ResponseEntity.status(HttpStatus.CREATED).body(cree);
     }
 
-    @PutMapping("/{id}/retour")
-    public BonSortieDto renseignerRetour(@PathVariable Long id, @Valid @RequestBody ModifierRetourRequest requete,
-                                          @AuthenticationPrincipal CustomUserDetails principal) {
-        return bonSortieService.renseignerRetour(id, requete, principal.getUtilisateur());
+    /**
+     * Correction des champs du bon de sortie (evolution du 2026-08-26) -
+     * remplace l'ancien endpoint {@code /retour}, jamais expose cote
+     * frontend. Reservee au titulaire ou a un gestionnaire de son service,
+     * bloquee des que le bon est {@code VALIDE} (RG-VER-001).
+     */
+    @PutMapping("/{id}")
+    public BonSortieDto modifier(@PathVariable Long id, @Valid @RequestBody ModifierBonSortieRequest requete,
+                                  @AuthenticationPrincipal CustomUserDetails principal) {
+        return bonSortieService.modifier(id, requete, principal.getUtilisateur());
     }
 
     /** Visa de l'agent (niveau 1) - reserve au titulaire, verifie en service. */

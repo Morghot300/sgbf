@@ -49,8 +49,18 @@ export interface CreerBonSortieRequest {
   motifSortie: string;
 }
 
-export interface ModifierRetourRequest {
-  heureRetour: string;
+export interface ModifierBonSortieRequest {
+  vehiculeId: number | null;
+  moyenUtilise: MoyenUtilise;
+  precisionVehicule: string | null;
+  lt: string | null;
+  kilometrage: number;
+  dateSortie: string;
+  heureSortie: string;
+  heureRetour: string | null;
+  lieu: string;
+  codeAffaireSaisi: string;
+  motifSortie: string;
   lockVersion: number;
 }
 

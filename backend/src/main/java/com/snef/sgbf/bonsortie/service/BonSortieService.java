@@ -2,7 +2,7 @@ package com.snef.sgbf.bonsortie.service;
 
 import com.snef.sgbf.bonsortie.dto.BonSortieDto;
 import com.snef.sgbf.bonsortie.dto.CreerBonSortieRequest;
-import com.snef.sgbf.bonsortie.dto.ModifierRetourRequest;
+import com.snef.sgbf.bonsortie.dto.ModifierBonSortieRequest;
 import com.snef.sgbf.bonsortie.entity.BonSortie;
 import com.snef.sgbf.bonsortie.entity.OrigineBonSortie;
 import com.snef.sgbf.bonsortie.entity.MoyenUtilise;
@@ -286,8 +286,15 @@ public class BonSortieService {
         return cible;
     }
 
-    /** Renseigne l'heure de retour (verrouillage optimiste - RG-SEC-001). */
-    public BonSortieDto renseignerRetour(Long bonSortieId, ModifierRetourRequest requete, Utilisateur auteur) {
+    /**
+     * Correction des champs d'un bon de sortie deja cree (evolution du
+     * 2026-08-26 - "ajoute la correction des bon de sortie"), y compris
+     * l'heure de retour (remplace l'ancien endpoint dedie {@code /retour},
+     * jamais expose cote frontend et donc jamais utilisable en pratique).
+     * Meme perimetre que le visa/la validation, bloquee des que le bon est
+     * {@code VALIDE} (RG-VER-001), verrouillage optimiste (RG-SEC-001).
+     */
+    public BonSortieDto modifier(Long bonSortieId, ModifierBonSortieRequest requete, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
         verifierAutoServiceOuGestionnaire(auteur, bonSortie.getAgent());
         if (bonSortie.getStatut() == StatutBonSortie.VALIDE) {
@@ -302,9 +309,35 @@ public class BonSortieService {
             throw new com.snef.sgbf.common.exception.ConflictException(
                     "Ce bon de sortie a ete modifie entre-temps. Rechargez-le avant de reessayer.");
         }
+        verifierPrecisionVehicule(requete.moyenUtilise(), requete.precisionVehicule());
+
+        BonSortieDto avant = bonSortieMapper.toDto(bonSortie);
+        if (requete.vehiculeId() != null) {
+            bonSortie.setVehicule(vehiculeRepository.findById(requete.vehiculeId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Vehicule", requete.vehiculeId())));
+        } else {
+            bonSortie.setVehicule(null);
+        }
+        bonSortie.setMoyenUtilise(requete.moyenUtilise());
+        bonSortie.setPrecisionVehicule(requete.moyenUtilise() == MoyenUtilise.AUTRE ? requete.precisionVehicule() : null);
+        bonSortie.setLt(requete.lt());
+        bonSortie.setKilometrage(requete.kilometrage());
+        bonSortie.setDateSortie(requete.dateSortie());
+        bonSortie.setHeureSortie(requete.heureSortie());
         bonSortie.setHeureRetour(requete.heureRetour());
-        bonSortie = bonSortieRepository.save(bonSortie);
-        return bonSortieMapper.toDto(bonSortie);
+        bonSortie.setLieu(requete.lieu());
+        bonSortie.setCodeAffaireSaisi(requete.codeAffaireSaisi());
+        bonSortie.setMotifSortie(requete.motifSortie());
+        // saveAndFlush (plutot que save) : le @Version JPA (lockVersion) n'est incremente par
+        // Hibernate qu'au moment du flush, qui n'aurait sinon lieu qu'a la fin de la transaction -
+        // APRES la construction du DTO retourne ci-dessous. Sans flush explicite ici, le client
+        // recevrait un lockVersion perime, et sa PROCHAINE correction serait alors a tort rejetee
+        // comme un conflit de concurrence (RG-SEC-001) alors que personne d'autre n'a rien modifie.
+        bonSortie = bonSortieRepository.saveAndFlush(bonSortie);
+
+        auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur, TypeActionAudit.MODIFICATION,
+                avant, bonSortieMapper.toDto(bonSortie), bonSortie.getStatut().name(), bonSortie.getStatut().name());
+        return avecAvertissementAffectation(bonSortieMapper.toDto(bonSortie), bonSortie);
     }
 
     /**

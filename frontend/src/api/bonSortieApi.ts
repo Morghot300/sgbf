@@ -1,7 +1,7 @@
 import { httpClient } from "./httpClient";
 import type {
   AgentEligibleDto, AjouterPersonneABordRequest, AjouterPersonnesABordEnLotRequest,
-  BonSortieDto, BonSortiePersonneDto, CreerBonSortieRequest, ModifierRetourRequest,
+  BonSortieDto, BonSortiePersonneDto, CreerBonSortieRequest, ModifierBonSortieRequest,
 } from "../types/bonSortie";
 
 export interface FiltresBonSortie {
@@ -21,8 +21,8 @@ export async function obtenirBonSortie(id: number): Promise<BonSortieDto> {
 export async function creerBonSortie(requete: CreerBonSortieRequest): Promise<BonSortieDto> {
   return (await httpClient.post<BonSortieDto>("/bons-sortie", requete)).data;
 }
-export async function renseignerRetour(id: number, requete: ModifierRetourRequest): Promise<BonSortieDto> {
-  return (await httpClient.put<BonSortieDto>(`/bons-sortie/${id}/retour`, requete)).data;
+export async function modifierBonSortie(id: number, requete: ModifierBonSortieRequest): Promise<BonSortieDto> {
+  return (await httpClient.put<BonSortieDto>(`/bons-sortie/${id}`, requete)).data;
 }
 export async function viserBonSortie(id: number): Promise<BonSortieDto> {
   return (await httpClient.post<BonSortieDto>(`/bons-sortie/${id}/viser`)).data;
