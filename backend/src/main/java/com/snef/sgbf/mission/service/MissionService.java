@@ -3,6 +3,7 @@ package com.snef.sgbf.mission.service;
 import com.snef.sgbf.common.audit.AuditService;
 import com.snef.sgbf.common.audit.EntiteAuditable;
 import com.snef.sgbf.common.audit.TypeActionAudit;
+import com.snef.sgbf.common.exception.BusinessRuleViolationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.dto.CreerMissionRequest;
@@ -15,6 +16,7 @@ import com.snef.sgbf.referentiel.entity.Chantier;
 import com.snef.sgbf.referentiel.entity.CodeHN;
 import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,26 +82,79 @@ public class MissionService {
     }
 
     public MissionDto creer(CreerMissionRequest requete, Utilisateur auteur) {
-        CodeHN codeHN = codeHNRepository.findById(requete.codeHNId())
-                .orElseThrow(() -> ResourceNotFoundException.of("CodeHN", requete.codeHNId()));
-        Chantier chantier = chantierRepository.findById(requete.chantierId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Chantier", requete.chantierId()));
+        Mission missionPrecedente = requete.missionPrecedenteId() != null
+                ? chargerMission(requete.missionPrecedenteId())
+                : null;
+        Mission mission = creerMission(requete.codeChantier(), requete.libelleChantier(),
+                requete.codeMission(), requete.libelleCodeMission(),
+                requete.dateDebutPrevue(), requete.dateFinPrevue(), missionPrecedente, auteur);
+        return missionMapper.toDto(mission);
+    }
+
+    /**
+     * Creation partagee d'une mission a partir de codes chantier/mission
+     * saisis librement (evolution du 2026-08-26, section "les mission et
+     * code mission ne seront pas des liste deroulante mais une zone texte") -
+     * reutilisee par {@link #creer} (creation directe) et par
+     * {@link com.snef.sgbf.mission.service.AffectationMissionService#reaffecterPendantMissionEnCours}
+     * (une reaffectation "vers une nouvelle mission" fait naitre, par
+     * definition, une mission neuve - jamais la reutilisation d'une mission
+     * existante prise dans une liste).
+     */
+    Mission creerMission(String codeChantier, String libelleChantier, String codeMission, String libelleCodeMission,
+                          LocalDate dateDebutPrevue, LocalDate dateFinPrevue, Mission missionPrecedente, Utilisateur auteur) {
+        Chantier chantier = resoudreOuCreerChantier(codeChantier, libelleChantier);
+        CodeHN codeHN = resoudreOuCreerCodeHN(codeMission, libelleCodeMission, chantier);
 
         Mission mission = new Mission();
         mission.setCodeHN(codeHN);
         mission.setChantier(chantier);
-        mission.setDateDebutPrevue(requete.dateDebutPrevue());
-        mission.setDateFinPrevue(requete.dateFinPrevue());
+        mission.setDateDebutPrevue(dateDebutPrevue);
+        mission.setDateFinPrevue(dateFinPrevue);
         mission.setStatut(StatutMission.PLANIFIEE);
-
-        if (requete.missionPrecedenteId() != null) {
-            mission.setMissionPrecedente(chargerMission(requete.missionPrecedenteId()));
-        }
+        mission.setMissionPrecedente(missionPrecedente);
 
         mission = missionRepository.save(mission);
         auditService.enregistrer(EntiteAuditable.MISSION, mission.getId(), auteur,
                 TypeActionAudit.CREATION, null, missionMapper.toDto(mission), null, mission.getStatut().name());
-        return missionMapper.toDto(mission);
+        return mission;
+    }
+
+    /** Reutilise le chantier existant portant ce code, ou en cree un nouveau (libelle repris du code si non fourni). */
+    private Chantier resoudreOuCreerChantier(String codeChantier, String libelleChantier) {
+        return chantierRepository.findByCodeAffaire(codeChantier).orElseGet(() -> {
+            Chantier nouveau = new Chantier();
+            nouveau.setCodeAffaire(codeChantier);
+            nouveau.setLibelle(libelleChantier != null && !libelleChantier.isBlank() ? libelleChantier : codeChantier);
+            nouveau.setActif(true);
+            return chantierRepository.save(nouveau);
+        });
+    }
+
+    /**
+     * Reutilise le code mission existant portant ce code, ou en cree un
+     * nouveau rattache au chantier resolu ci-dessus. {@code CodeHN.code} est
+     * unique pour toute l'application (pas seulement par chantier) : un code
+     * deja utilise sous un AUTRE chantier est refuse plutot que d'etre
+     * silencieusement rattache au mauvais chantier.
+     */
+    private CodeHN resoudreOuCreerCodeHN(String codeMission, String libelleCodeMission, Chantier chantier) {
+        return codeHNRepository.findByCode(codeMission)
+                .map(existant -> {
+                    if (!existant.getChantier().getId().equals(chantier.getId())) {
+                        throw new BusinessRuleViolationException("RG-MIS-015",
+                                "Le code mission \"" + codeMission + "\" existe deja pour le chantier \""
+                                        + existant.getChantier().getLibelle() + "\" - il ne peut pas etre reutilise pour un autre chantier.");
+                    }
+                    return existant;
+                })
+                .orElseGet(() -> {
+                    CodeHN nouveau = new CodeHN();
+                    nouveau.setCode(codeMission);
+                    nouveau.setLibelle(libelleCodeMission != null && !libelleCodeMission.isBlank() ? libelleCodeMission : codeMission);
+                    nouveau.setChantier(chantier);
+                    return codeHNRepository.save(nouveau);
+                });
     }
 
     /**

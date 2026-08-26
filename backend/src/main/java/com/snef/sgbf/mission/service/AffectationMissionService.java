@@ -265,9 +265,6 @@ public class AffectationMissionService {
                         "Cet agent n'a aucune affectation active a reaffecter. "
                                 + "Utilisez la creation d'affectation initiale (POST /affectations-mission)."));
 
-        Mission missionCible = missionService.chargerMission(requete.missionCibleId());
-        verifierMissionOuverte(missionCible);
-
         LocalDate nouvelleDateDebut = requete.dateDebutAffectation();
         if (!nouvelleDateDebut.isAfter(affectationActive.getDateDebutAffectation())) {
             throw new BusinessRuleViolationException("RG-MIS-010",
@@ -282,6 +279,13 @@ public class AffectationMissionService {
                             + " : un pointage existe deja jusqu'au " + dernierJourPointe.get()
                             + ". La reaffectation ne peut porter que sur des jours non encore pointes.");
         }
+
+        // La mission cible (et son chantier/code mission, trouves ou crees a la volee - evolution
+        // du 2026-08-26) n'est creee qu'une fois toutes les gardes ci-dessus validees, pour ne
+        // jamais laisser de donnees referentielles orphelines si la reaffectation echoue.
+        Mission missionCible = missionService.creerMission(requete.codeChantier(), requete.libelleChantier(),
+                requete.codeMission(), requete.libelleCodeMission(),
+                requete.dateDebutPrevueMission(), requete.dateFinPrevueMission(), null, auteur);
 
         LocalDate dateInterruption = nouvelleDateDebut.minusDays(1);
         MotifInterruptionMission motif = motifInterruptionMissionRepository.findAll().stream()

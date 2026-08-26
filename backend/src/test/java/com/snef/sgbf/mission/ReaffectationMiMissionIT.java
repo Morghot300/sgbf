@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
@@ -110,7 +111,7 @@ class ReaffectationMiMissionIT {
 
         debutMission1 = LocalDate.now();
         String tokenCa = seConnecter(ca.getIdentifiant());
-        mis001Id = creerMission(tokenCa, codeMis001.getId(), debutMission1, debutMission1.plusDays(20));
+        mis001Id = creerMission(tokenCa, codeMis001, debutMission1, debutMission1.plusDays(20));
         final LocalDate debutAffectation1 = debutMission1;
         String reponseAffectation = mockMvc.perform(post("/api/affectations-mission")
                         .header("Authorization", "Bearer " + tokenCa)
@@ -135,23 +136,19 @@ class ReaffectationMiMissionIT {
     void reaffectationAuMilieuDeLaMissionScindeLaPeriodeAutomatiquement() throws Exception {
         String tokenCa = seConnecter(ca.getIdentifiant());
         LocalDate pointDeScission = debutMission1.plusDays(10);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), pointDeScission, debutMission1.plusDays(30));
 
         String reponse = mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", pointDeScission.toString());
-                        }})))
+                        .content(corpsReaffectation(agent.getId(), codeMis002, pointDeScission, debutMission1.plusDays(30), pointDeScission)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statutAffectation").value("ACTIVE"))
-                .andExpect(jsonPath("$.missionId").value(mis002Id))
                 .andExpect(jsonPath("$.dateDebutAffectation").value(pointDeScission.toString()))
                 .andExpect(jsonPath("$.affectationPrecedenteId").value(affectationMis001Id))
                 .andReturn().getResponse().getContentAsString();
-        long nouvelleAffectationId = objectMapper.readTree(reponse).get("id").asLong();
+        JsonNode nouvelleAffectation = objectMapper.readTree(reponse);
+        long nouvelleAffectationId = nouvelleAffectation.get("id").asLong();
+        long mis002Id = nouvelleAffectation.get("missionId").asLong();
 
         LocalDate finMission1Attendue = pointDeScission.minusDays(1);
 
@@ -181,16 +178,11 @@ class ReaffectationMiMissionIT {
     void reaffectationDesLeLendemainDuDebutEstAcceptee() throws Exception {
         String tokenCa = seConnecter(ca.getIdentifiant());
         LocalDate lendemain = debutMission1.plusDays(1);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), lendemain, debutMission1.plusDays(30));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", lendemain.toString());
-                        }})))
+                        .content(corpsReaffectation(agent.getId(), codeMis002, lendemain, debutMission1.plusDays(30), lendemain)))
                 .andExpect(status().isCreated());
     }
 
@@ -198,16 +190,12 @@ class ReaffectationMiMissionIT {
     @Test
     void reaffectationAvantOuAuDebutDeLAffectationActiveEstRefusee() throws Exception {
         String tokenCa = seConnecter(ca.getIdentifiant());
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), debutMission1.plusDays(5), debutMission1.plusDays(30));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", debutMission1.toString()); // egale au debut, pas strictement posterieure
-                        }})))
+                        // egale au debut, pas strictement posterieure
+                        .content(corpsReaffectation(agent.getId(), codeMis002, debutMission1.plusDays(5), debutMission1.plusDays(30), debutMission1)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codeRegle").value("RG-MIS-010"));
     }
@@ -218,16 +206,11 @@ class ReaffectationMiMissionIT {
         String tokenCa = seConnecter(ca.getIdentifiant());
         Utilisateur autreAgent = utilisateurRepository.save(nouvelAgent("MAT2-" + suffixe, "Sans", "Affectation", service));
         LocalDate dateReaffectation = debutMission1.plusDays(10);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), dateReaffectation, debutMission1.plusDays(30));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", autreAgent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", dateReaffectation.toString());
-                        }})))
+                        .content(corpsReaffectation(autreAgent.getId(), codeMis002, dateReaffectation, debutMission1.plusDays(30), dateReaffectation)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codeRegle").value("RG-MIS-009"));
     }
@@ -236,18 +219,12 @@ class ReaffectationMiMissionIT {
     @Test
     void reaffectationHorsPerimetreEstRefusee() throws Exception {
         String tokenCaAutreService = seConnecter(caAutreService.getIdentifiant());
-        String tokenCa = seConnecter(ca.getIdentifiant());
         LocalDate dateReaffectation = debutMission1.plusDays(10);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), dateReaffectation, debutMission1.plusDays(30));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCaAutreService)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", dateReaffectation.toString());
-                        }})))
+                        .content(corpsReaffectation(agent.getId(), codeMis002, dateReaffectation, debutMission1.plusDays(30), dateReaffectation)))
                 .andExpect(status().isForbidden());
     }
 
@@ -264,16 +241,11 @@ class ReaffectationMiMissionIT {
 
         String tokenCa = seConnecter(ca.getIdentifiant());
         LocalDate dateReaffectation = debutMission1.plusDays(11);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), dateReaffectation, debutMission1.plusDays(31));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", dateReaffectation.toString());
-                        }})))
+                        .content(corpsReaffectation(agent.getId(), codeMis002, dateReaffectation, debutMission1.plusDays(31), dateReaffectation)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codeRegle").value("RG-MIS-011"));
     }
@@ -286,16 +258,11 @@ class ReaffectationMiMissionIT {
 
         String tokenCa = seConnecter(ca.getIdentifiant());
         LocalDate dateReaffectation = debutMission1.plusDays(11);
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), dateReaffectation, debutMission1.plusDays(31));
 
         mockMvc.perform(post("/api/affectations-mission/reaffecter-mi-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
-                            put("missionCibleId", mis002Id);
-                            put("dateDebutAffectation", dateReaffectation.toString());
-                        }})))
+                        .content(corpsReaffectation(agent.getId(), codeMis002, dateReaffectation, debutMission1.plusDays(31), dateReaffectation)))
                 .andExpect(status().isCreated());
     }
 
@@ -340,13 +307,15 @@ class ReaffectationMiMissionIT {
         pointageRepository.save(pointage);
     }
 
-    private long creerMission(String token, Long codeHNId, LocalDate debut, LocalDate fin) throws Exception {
+    private long creerMission(String token, CodeHN codeHN, LocalDate debut, LocalDate fin) throws Exception {
         String reponse = mockMvc.perform(post("/api/missions")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("codeHNId", codeHNId);
-                            put("chantierId", chantier.getId());
+                            put("codeChantier", chantier.getCodeAffaire());
+                            put("libelleChantier", chantier.getLibelle());
+                            put("codeMission", codeHN.getCode());
+                            put("libelleCodeMission", codeHN.getLibelle());
                             put("dateDebutPrevue", debut.toString());
                             put("dateFinPrevue", fin.toString());
                             put("missionPrecedenteId", null);
@@ -354,6 +323,21 @@ class ReaffectationMiMissionIT {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(reponse).get("id").asLong();
+    }
+
+    /** Corps JSON de {@code /reaffecter-mi-mission} - la mission cible n'est plus choisie dans une liste mais saisie librement (evolution du 2026-08-26). */
+    private String corpsReaffectation(long agentId, CodeHN codeMissionCible, LocalDate dateDebutPrevueMission,
+                                       LocalDate dateFinPrevueMission, LocalDate dateDebutAffectation) throws Exception {
+        return objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+            put("agentId", agentId);
+            put("codeChantier", chantier.getCodeAffaire());
+            put("libelleChantier", chantier.getLibelle());
+            put("codeMission", codeMissionCible.getCode());
+            put("libelleCodeMission", codeMissionCible.getLibelle());
+            put("dateDebutPrevueMission", dateDebutPrevueMission.toString());
+            put("dateFinPrevueMission", dateFinPrevueMission.toString());
+            put("dateDebutAffectation", dateDebutAffectation.toString());
+        }});
     }
 
     private String seConnecter(String identifiant) throws Exception {

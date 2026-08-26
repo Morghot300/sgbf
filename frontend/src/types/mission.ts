@@ -17,8 +17,10 @@ export interface MissionDto {
 }
 
 export interface CreerMissionRequest {
-  codeHNId: number;
-  chantierId: number;
+  codeChantier: string;
+  libelleChantier: string | null;
+  codeMission: string;
+  libelleCodeMission: string | null;
   dateDebutPrevue: string;
   dateFinPrevue: string;
   missionPrecedenteId: number | null;
@@ -61,7 +63,12 @@ export interface ReaffecterRequest {
 
 export interface ReaffecterMiMissionRequest {
   agentId: number;
-  missionCibleId: number;
+  codeChantier: string;
+  libelleChantier: string | null;
+  codeMission: string;
+  libelleCodeMission: string | null;
+  dateDebutPrevueMission: string;
+  dateFinPrevueMission: string;
   dateDebutAffectation: string;
 }
 

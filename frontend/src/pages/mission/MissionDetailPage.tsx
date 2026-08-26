@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations, listerMissions,
+  affecterAgent, historiqueMission, interrompreAffectation, listerAffectations,
   modifierDateFinPrevueMission, obtenirMission, reaffecterPendantMissionEnCours,
 } from "../../api/missionApi";
 import { extraireMessageErreur } from "../../api/httpClient";
-import { listerMotifsInterruption } from "../../api/referentielApi";
+import { listerChantiers, listerCodesHN, listerMotifsInterruption } from "../../api/referentielApi";
 import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutAffectation, BadgeStatutMission } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
@@ -21,7 +21,10 @@ export default function MissionDetailPage() {
   const [agentId, setAgentId] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [interruption, setInterruption] = useState<{ affectationId: number; motifCode: string; commentaire: string } | null>(null);
-  const [reaffectation, setReaffectation] = useState<{ agentId: number; missionCibleId: string; dateDebutAffectation: string } | null>(null);
+  const [reaffectation, setReaffectation] = useState<{
+    agentId: number; codeChantier: string; libelleChantier: string; codeMission: string; libelleCodeMission: string;
+    dateDebutPrevueMission: string; dateFinPrevueMission: string; dateDebutAffectation: string;
+  } | null>(null);
   const [nouvelleDateFinPrevue, setNouvelleDateFinPrevue] = useState("");
   const [motifDateFinPrevue, setMotifDateFinPrevue] = useState("");
 
@@ -29,7 +32,8 @@ export default function MissionDetailPage() {
   const affectations = useQuery({ queryKey: ["affectations", missionId], queryFn: () => listerAffectations(missionId) });
   const motifs = useQuery({ queryKey: ["motifs-interruption"], queryFn: listerMotifsInterruption });
   const historique = useQuery({ queryKey: ["mission-historique", missionId], queryFn: () => historiqueMission(missionId) });
-  const toutesMissions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: reaffectation !== null });
+  const chantiers = useQuery({ queryKey: ["chantiers"], queryFn: listerChantiers, enabled: reaffectation !== null });
+  const codesHN = useQuery({ queryKey: ["codes-hn"], queryFn: listerCodesHN, enabled: reaffectation !== null });
 
   const peutGerer = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE");
 
@@ -54,10 +58,20 @@ export default function MissionDetailPage() {
   const reaffecterMiMission = useMutation({
     mutationFn: () => reaffecterPendantMissionEnCours({
       agentId: reaffectation!.agentId,
-      missionCibleId: Number(reaffectation!.missionCibleId),
+      codeChantier: reaffectation!.codeChantier,
+      libelleChantier: reaffectation!.libelleChantier.trim() || null,
+      codeMission: reaffectation!.codeMission,
+      libelleCodeMission: reaffectation!.libelleCodeMission.trim() || null,
+      dateDebutPrevueMission: reaffectation!.dateDebutPrevueMission,
+      dateFinPrevueMission: reaffectation!.dateFinPrevueMission,
       dateDebutAffectation: reaffectation!.dateDebutAffectation,
     }),
-    onSuccess: () => { setReaffectation(null); invalider(); },
+    onSuccess: () => {
+      setReaffectation(null);
+      invalider();
+      void queryClient.invalidateQueries({ queryKey: ["chantiers"] });
+      void queryClient.invalidateQueries({ queryKey: ["codes-hn"] });
+    },
     onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de réaffecter cet agent.")),
   });
   const modifierDateFinPrevue = useMutation({
@@ -149,7 +163,13 @@ export default function MissionDetailPage() {
                             Interrompre
                           </button>
                           {" "}
-                          <button type="button" onClick={() => setReaffectation({ agentId: a.agentId, missionCibleId: "", dateDebutAffectation: "" })}>
+                          <button
+                            type="button"
+                            onClick={() => setReaffectation({
+                              agentId: a.agentId, codeChantier: "", libelleChantier: "", codeMission: "", libelleCodeMission: "",
+                              dateDebutPrevueMission: "", dateFinPrevueMission: "", dateDebutAffectation: "",
+                            })}
+                          >
                             Réaffecter vers une nouvelle mission
                           </button>
                         </>
@@ -185,19 +205,74 @@ export default function MissionDetailPage() {
           <h3>Réaffecter l'agent vers une nouvelle mission</h3>
           <p className="dashboard-accueil">
             L'affectation actuelle se termine automatiquement la veille de la date de début choisie ci-dessous ;
-            elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent.
+            elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent. Le chantier et le code
+            mission sont saisis librement : un code déjà existant est réutilisé tel quel, un code inédit crée une
+            nouvelle mission à la volée.
           </p>
-          <label htmlFor="missionCibleId">Mission cible</label>
-          <select
-            id="missionCibleId"
-            value={reaffectation.missionCibleId}
-            onChange={(e) => setReaffectation({ ...reaffectation, missionCibleId: e.target.value })}
-          >
-            <option value="">— Sélectionner —</option>
-            {toutesMissions.data?.filter((m) => m.id !== missionId).map((m) => (
-              <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle}</option>
-            ))}
-          </select>
+          <label htmlFor="codeChantierReaffectation">Code chantier</label>
+          <input
+            id="codeChantierReaffectation"
+            type="text"
+            maxLength={30}
+            list="chantiers-existants-reaffectation"
+            value={reaffectation.codeChantier}
+            onChange={(e) => setReaffectation({ ...reaffectation, codeChantier: e.target.value })}
+          />
+          <datalist id="chantiers-existants-reaffectation">
+            {chantiers.data?.map((c) => <option key={c.id} value={c.codeAffaire}>{c.libelle}</option>)}
+          </datalist>
+          {reaffectation.codeChantier && !chantiers.data?.some((c) => c.codeAffaire === reaffectation.codeChantier) && (
+            <>
+              <label htmlFor="libelleChantierReaffectation">Libellé du chantier (nouveau code - facultatif)</label>
+              <input
+                id="libelleChantierReaffectation"
+                type="text"
+                maxLength={150}
+                value={reaffectation.libelleChantier}
+                onChange={(e) => setReaffectation({ ...reaffectation, libelleChantier: e.target.value })}
+              />
+            </>
+          )}
+
+          <label htmlFor="codeMissionReaffectation">Code mission</label>
+          <input
+            id="codeMissionReaffectation"
+            type="text"
+            maxLength={30}
+            list="codes-mission-existants-reaffectation"
+            value={reaffectation.codeMission}
+            onChange={(e) => setReaffectation({ ...reaffectation, codeMission: e.target.value })}
+          />
+          <datalist id="codes-mission-existants-reaffectation">
+            {codesHN.data?.map((c) => <option key={c.id} value={c.code}>{c.libelle}</option>)}
+          </datalist>
+          {reaffectation.codeMission && !codesHN.data?.some((c) => c.code === reaffectation.codeMission) && (
+            <>
+              <label htmlFor="libelleCodeMissionReaffectation">Libellé du code mission (nouveau code - facultatif)</label>
+              <input
+                id="libelleCodeMissionReaffectation"
+                type="text"
+                maxLength={150}
+                value={reaffectation.libelleCodeMission}
+                onChange={(e) => setReaffectation({ ...reaffectation, libelleCodeMission: e.target.value })}
+              />
+            </>
+          )}
+
+          <label htmlFor="dateDebutPrevueMissionReaffectation">Date de début prévue de la nouvelle mission</label>
+          <input
+            id="dateDebutPrevueMissionReaffectation"
+            type="date"
+            value={reaffectation.dateDebutPrevueMission}
+            onChange={(e) => setReaffectation({ ...reaffectation, dateDebutPrevueMission: e.target.value })}
+          />
+          <label htmlFor="dateFinPrevueMissionReaffectation">Date de fin prévue de la nouvelle mission</label>
+          <input
+            id="dateFinPrevueMissionReaffectation"
+            type="date"
+            value={reaffectation.dateFinPrevueMission}
+            onChange={(e) => setReaffectation({ ...reaffectation, dateFinPrevueMission: e.target.value })}
+          />
           <label htmlFor="dateDebutReaffectation">Date de début de la nouvelle affectation</label>
           <input
             id="dateDebutReaffectation"
@@ -209,7 +284,8 @@ export default function MissionDetailPage() {
             <button
               type="button"
               onClick={() => reaffecterMiMission.mutate()}
-              disabled={reaffecterMiMission.isPending || !reaffectation.missionCibleId || !reaffectation.dateDebutAffectation}
+              disabled={reaffecterMiMission.isPending || !reaffectation.codeChantier || !reaffectation.codeMission
+                || !reaffectation.dateDebutPrevueMission || !reaffectation.dateFinPrevueMission || !reaffectation.dateDebutAffectation}
             >
               Confirmer la réaffectation
             </button>

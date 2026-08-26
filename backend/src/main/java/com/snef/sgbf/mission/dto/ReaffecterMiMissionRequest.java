@@ -1,6 +1,9 @@
 package com.snef.sgbf.mission.dto;
 
+import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 /**
@@ -12,14 +15,40 @@ import java.time.LocalDate;
  * celle-ci (a la veille de {@link #dateDebutAffectation}) est calculee et
  * appliquee automatiquement par le service, en une seule operation
  * atomique.
+ *
+ * <p>Evolution du 2026-08-26 - "les mission et code mission ne seront pas
+ * des liste deroulante mais une zone texte" : la mission cible n'est plus
+ * choisie dans une liste deroulante de missions existantes ({@code
+ * missionCibleId}) mais nait toujours d'une creation a la volee a partir de
+ * {@link #codeChantier}/{@link #codeMission} saisis librement (chantier et
+ * code mission reutilises s'ils existent deja, crees sinon) - coherent avec
+ * le nom meme de l'action ("reaffecter vers une NOUVELLE mission").
  */
 public record ReaffecterMiMissionRequest(
 
         @NotNull(message = "L'agent est obligatoire.")
         Long agentId,
 
-        @NotNull(message = "La mission cible est obligatoire.")
-        Long missionCibleId,
+        @NotBlank(message = "Le code chantier est obligatoire.")
+        @Size(max = 30)
+        String codeChantier,
+
+        @Size(max = 150)
+        String libelleChantier,
+
+        @NotBlank(message = "Le code mission est obligatoire.")
+        @Size(max = 30)
+        String codeMission,
+
+        @Size(max = 150)
+        String libelleCodeMission,
+
+        @NotNull(message = "La date de debut prevue de la nouvelle mission est obligatoire.")
+        LocalDate dateDebutPrevueMission,
+
+        @NotNull(message = "La date de fin prevue de la nouvelle mission est obligatoire.")
+        @FutureOrPresent(message = "La date de fin prevue ne peut pas etre dans le passe.")
+        LocalDate dateFinPrevueMission,
 
         @NotNull(message = "La date de debut de la nouvelle affectation est obligatoire.")
         LocalDate dateDebutAffectation

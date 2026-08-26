@@ -97,7 +97,7 @@ class MissionAffectationIT {
         String tokenCa = seConnecter(ca.getIdentifiant());
 
         // 1. Creation de MIS-001.
-        long mis001Id = creerMission(tokenCa, codeMis001.getId(), null);
+        long mis001Id = creerMission(tokenCa, codeMis001, null);
 
         // 2. Affectation de l'agent sur MIS-001.
         String reponseAffectation = mockMvc.perform(post("/api/affectations-mission")
@@ -119,7 +119,7 @@ class MissionAffectationIT {
                 .andExpect(jsonPath("$.statut").value("EN_COURS"));
 
         // 4. Une seconde affectation active pour le meme agent est refusee (conflit).
-        long mis002IdPourConflit = creerMission(tokenCa, codeMis002.getId(), null);
+        long mis002IdPourConflit = creerMission(tokenCa, codeMis002, null);
         mockMvc.perform(post("/api/affectations-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
@@ -143,7 +143,7 @@ class MissionAffectationIT {
                 .andExpect(jsonPath("$.statutAffectation").value("INTERROMPUE"));
 
         // 6. Creation de MIS-002, chainee a MIS-001 via missionPrecedenteId.
-        long mis002Id = creerMission(tokenCa, codeMis002.getId(), mis001Id);
+        long mis002Id = creerMission(tokenCa, codeMis002, mis001Id);
 
         // 7. Reaffectation de l'agent, de l'affectation interrompue vers MIS-002.
         String reponseReaffectation = mockMvc.perform(post("/api/affectations-mission/" + affectationMis001Id + "/reaffecter")
@@ -199,7 +199,7 @@ class MissionAffectationIT {
     @Test
     void interruptionAvecMotifAutreExigeUnCommentaire() throws Exception {
         String tokenCa = seConnecter(ca.getIdentifiant());
-        long missionId = creerMission(tokenCa, codeMis001.getId(), null);
+        long missionId = creerMission(tokenCa, codeMis001, null);
         String reponseAffectation = mockMvc.perform(post("/api/affectations-mission")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
@@ -225,13 +225,15 @@ class MissionAffectationIT {
 
     // --- Aides de scenario ---
 
-    private long creerMission(String token, Long codeHNId, Long missionPrecedenteId) throws Exception {
+    private long creerMission(String token, CodeHN codeHN, Long missionPrecedenteId) throws Exception {
         String reponse = mockMvc.perform(post("/api/missions")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("codeHNId", codeHNId);
-                            put("chantierId", chantier.getId());
+                            put("codeChantier", chantier.getCodeAffaire());
+                            put("libelleChantier", chantier.getLibelle());
+                            put("codeMission", codeHN.getCode());
+                            put("libelleCodeMission", codeHN.getLibelle());
                             put("dateDebutPrevue", LocalDate.now().toString());
                             put("dateFinPrevue", LocalDate.now().plusMonths(1).toString());
                             put("missionPrecedenteId", missionPrecedenteId);

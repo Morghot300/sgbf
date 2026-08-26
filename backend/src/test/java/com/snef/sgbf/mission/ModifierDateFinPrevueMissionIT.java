@@ -106,7 +106,7 @@ class ModifierDateFinPrevueMissionIT {
         debut = LocalDate.now();
         finInitiale = debut.plusDays(20);
         String tokenCa = seConnecter(ca.getIdentifiant());
-        missionId = creerMission(tokenCa, codeHN.getId(), debut, finInitiale);
+        missionId = creerMission(tokenCa, codeHN, debut, finInitiale);
 
         mockMvc.perform(post("/api/affectations-mission")
                         .header("Authorization", "Bearer " + tokenCa)
@@ -206,7 +206,7 @@ class ModifierDateFinPrevueMissionIT {
         String tokenCa = seConnecter(ca.getIdentifiant());
         CodeHN codeHNFutur = codeHNRepository.save(nouveauCodeHN("MISFUT" + suffixe, chantier));
         LocalDate debutFutur = LocalDate.now().plusDays(5);
-        long missionFutureId = creerMission(tokenCa, codeHNFutur.getId(), debutFutur, debutFutur.plusDays(20));
+        long missionFutureId = creerMission(tokenCa, codeHNFutur, debutFutur, debutFutur.plusDays(20));
         Utilisateur agentFutur = utilisateurRepository.save(nouvelAgentAvecCompte(
                 "MATF" + suffixe, "Futur", "Agent", "agent_futur_" + suffixe, service));
         mockMvc.perform(post("/api/affectations-mission")
@@ -236,7 +236,7 @@ class ModifierDateFinPrevueMissionIT {
         Utilisateur autreAgent = utilisateurRepository.save(nouvelAgentAvecCompte(
                 "MAT2-" + suffixe, "Sans", "Affectation", "sans_affect_" + suffixe, service));
         CodeHN autreCodeHN = codeHNRepository.save(nouveauCodeHN("MISNA" + suffixe, chantier));
-        long missionSansAffectationId = creerMission(tokenCa, autreCodeHN.getId(), debut, finInitiale);
+        long missionSansAffectationId = creerMission(tokenCa, autreCodeHN, debut, finInitiale);
 
         mockMvc.perform(patch("/api/missions/" + missionSansAffectationId + "/date-fin-prevue")
                         .header("Authorization", "Bearer " + tokenCa)
@@ -305,13 +305,15 @@ class ModifierDateFinPrevueMissionIT {
         pointageRepository.save(pointage);
     }
 
-    private long creerMission(String token, Long codeHNId, LocalDate debutMission, LocalDate finMission) throws Exception {
+    private long creerMission(String token, CodeHN codeHN, LocalDate debutMission, LocalDate finMission) throws Exception {
         String reponse = mockMvc.perform(post("/api/missions")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("codeHNId", codeHNId);
-                            put("chantierId", chantier.getId());
+                            put("codeChantier", chantier.getCodeAffaire());
+                            put("libelleChantier", chantier.getLibelle());
+                            put("codeMission", codeHN.getCode());
+                            put("libelleCodeMission", codeHN.getLibelle());
                             put("dateDebutPrevue", debutMission.toString());
                             put("dateFinPrevue", finMission.toString());
                             put("missionPrecedenteId", null);
