@@ -23,6 +23,16 @@ import java.time.LocalDate;
  * {@link #codeChantier}/{@link #codeMission} saisis librement (chantier et
  * code mission reutilises s'ils existent deja, crees sinon) - coherent avec
  * le nom meme de l'action ("reaffecter vers une NOUVELLE mission").
+ *
+ * <p>Evolution du 2026-08-27 (brief "Evolution avancee du module Bon de
+ * Sortie, Missions et FIPH", section 18-22) : {@link #dateFinAffectation}
+ * (facultative) borne desormais la nouvelle affectation dans le temps -
+ * "definir une date de fin" signifie "diversion temporaire" : la mission
+ * precedente reprend AUTOMATIQUEMENT le jour suivant, jusqu'a son propre
+ * terme d'origine (ou indefiniment si elle etait ouverte), sans aucune
+ * action manuelle supplementaire. Laisser ce champ vide reproduit
+ * exactement le comportement d'origine (bascule permanente, jamais de
+ * reprise).
  */
 public record ReaffecterMiMissionRequest(
 
@@ -51,6 +61,8 @@ public record ReaffecterMiMissionRequest(
         LocalDate dateFinPrevueMission,
 
         @NotNull(message = "La date de debut de la nouvelle affectation est obligatoire.")
-        LocalDate dateDebutAffectation
+        LocalDate dateDebutAffectation,
+
+        LocalDate dateFinAffectation
 ) {
 }

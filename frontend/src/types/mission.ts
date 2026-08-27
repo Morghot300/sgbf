@@ -70,6 +70,8 @@ export interface ReaffecterMiMissionRequest {
   dateDebutPrevueMission: string;
   dateFinPrevueMission: string;
   dateDebutAffectation: string;
+  /** Facultative (évolution du 2026-08-27) : si renseignée, la mission précédente reprend automatiquement le lendemain, jusqu'à son propre terme. Laisser vide = bascule permanente (comportement d'origine). */
+  dateFinAffectation?: string | null;
 }
 
 /** Prolongation/réduction de la date de fin prévue d'une mission en cours - la mission reste la même (pas de nouvelle mission créée). */

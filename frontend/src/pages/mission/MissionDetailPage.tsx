@@ -23,7 +23,7 @@ export default function MissionDetailPage() {
   const [interruption, setInterruption] = useState<{ affectationId: number; motifCode: string; commentaire: string } | null>(null);
   const [reaffectation, setReaffectation] = useState<{
     agentId: number; codeChantier: string; libelleChantier: string; codeMission: string; libelleCodeMission: string;
-    dateDebutPrevueMission: string; dateFinPrevueMission: string; dateDebutAffectation: string;
+    dateDebutPrevueMission: string; dateFinPrevueMission: string; dateDebutAffectation: string; dateFinAffectation: string;
   } | null>(null);
   const [nouvelleDateFinPrevue, setNouvelleDateFinPrevue] = useState("");
   const [motifDateFinPrevue, setMotifDateFinPrevue] = useState("");
@@ -65,6 +65,7 @@ export default function MissionDetailPage() {
       dateDebutPrevueMission: reaffectation!.dateDebutPrevueMission,
       dateFinPrevueMission: reaffectation!.dateFinPrevueMission,
       dateDebutAffectation: reaffectation!.dateDebutAffectation,
+      dateFinAffectation: reaffectation!.dateFinAffectation || null,
     }),
     onSuccess: () => {
       setReaffectation(null);
@@ -167,7 +168,7 @@ export default function MissionDetailPage() {
                             type="button"
                             onClick={() => setReaffectation({
                               agentId: a.agentId, codeChantier: "", libelleChantier: "", codeMission: "", libelleCodeMission: "",
-                              dateDebutPrevueMission: "", dateFinPrevueMission: "", dateDebutAffectation: "",
+                              dateDebutPrevueMission: "", dateFinPrevueMission: "", dateDebutAffectation: "", dateFinAffectation: "",
                             })}
                           >
                             Réaffecter vers une nouvelle mission
@@ -208,6 +209,12 @@ export default function MissionDetailPage() {
             elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent. Le chantier et le code
             mission sont saisis librement : un code déjà existant est réutilisé tel quel, un code inédit crée une
             nouvelle mission à la volée.
+          </p>
+          <p className="dashboard-accueil">
+            <strong>Date de fin (facultative)</strong> : si renseignée, la mission précédente reprend
+            automatiquement le lendemain jusqu'à son propre terme — utile pour une diversion temporaire (ex. mission
+            A du lundi au vendredi, diversion vers B du mercredi au jeudi, reprise de A le vendredi). Laissée vide,
+            la bascule est permanente : la mission précédente ne reprend jamais.
           </p>
           <label htmlFor="codeChantierReaffectation">Code chantier</label>
           <input
@@ -279,6 +286,14 @@ export default function MissionDetailPage() {
             type="date"
             value={reaffectation.dateDebutAffectation}
             onChange={(e) => setReaffectation({ ...reaffectation, dateDebutAffectation: e.target.value })}
+          />
+          <label htmlFor="dateFinReaffectation">Date de fin de la nouvelle affectation (facultative — reprise automatique de l'ancienne mission sinon absente)</label>
+          <input
+            id="dateFinReaffectation"
+            type="date"
+            min={reaffectation.dateDebutAffectation || undefined}
+            value={reaffectation.dateFinAffectation}
+            onChange={(e) => setReaffectation({ ...reaffectation, dateFinAffectation: e.target.value })}
           />
           <div className="barre-actions">
             <button

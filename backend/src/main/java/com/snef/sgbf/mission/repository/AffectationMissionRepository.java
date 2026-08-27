@@ -34,4 +34,23 @@ public interface AffectationMissionRepository extends JpaRepository<AffectationM
             + "AND (a.dateFinAffectation IS NULL OR a.dateFinAffectation >= :date) "
             + "ORDER BY a.dateDebutAffectation DESC")
     List<AffectationMission> trouverActivesAgentADate(@Param("agentId") Long agentId, @Param("date") LocalDate date);
+
+    /**
+     * Affectations d'un agent (autres que {@code excluAffectationId}) dont la
+     * periode chevaucherait [debut, fin] - evolution du 2026-08-27 (V16) :
+     * remplace le controle par index unique "une seule ACTIVE par agent",
+     * desormais trop grossier pour permettre le decoupage de missions
+     * chevauchantes (une reprise planifiee, elle aussi ACTIVE, ne chevauche
+     * jamais reellement la periode de l'affectation en cours).
+     */
+    @Query("SELECT a FROM AffectationMission a "
+            + "WHERE a.agent.id = :agentId AND a.id <> :excluAffectationId "
+            + "AND a.dateDebutAffectation <= :fin AND (a.dateFinAffectation IS NULL OR a.dateFinAffectation >= :debut)")
+    List<AffectationMission> trouverChevauchements(@Param("agentId") Long agentId, @Param("excluAffectationId") Long excluAffectationId,
+                                                    @Param("debut") LocalDate debut, @Param("fin") LocalDate fin);
+
+    /** Variante utilisee a la creation (aucune affectation existante a exclure). */
+    default List<AffectationMission> trouverChevauchements(Long agentId, LocalDate debut, LocalDate fin) {
+        return trouverChevauchements(agentId, 0L, debut, fin);
+    }
 }

@@ -63,6 +63,8 @@ public class AffectationMissionService {
 
     private static final String CODE_MOTIF_AUTRE = "AUTRE";
     private static final String CODE_MOTIF_NOUVELLE_MISSION = "NOUVELLE_MISSION";
+    /** Sentinelle "periode ouverte" pour la recherche de chevauchement - bornee au type DATE de MySQL (9999-12-31), jamais LocalDate.MAX. */
+    private static final LocalDate DATE_MAX_CHEVAUCHEMENT = LocalDate.of(9999, 12, 31);
 
     private final AffectationMissionRepository affectationMissionRepository;
     private final UtilisateurRepository utilisateurRepository;
@@ -127,7 +129,7 @@ public class AffectationMissionService {
 
         verifierPerimetre(auteur, agent);
         verifierMissionOuverte(mission);
-        verifierAucuneAffectationActive(agent.getId());
+        verifierAucunChevauchementDate(agent.getId(), requete.dateDebutAffectation(), null, null);
 
         AffectationMission affectation = new AffectationMission();
         affectation.setAgent(agent);
@@ -208,7 +210,11 @@ public class AffectationMissionService {
 
         Mission missionCible = missionService.chargerMission(requete.missionCibleId());
         verifierMissionOuverte(missionCible);
-        verifierAucuneAffectationActive(affectationPrecedente.getAgent().getId());
+        // Exclut l'affectation precedente elle-meme : sa date de fin (le jour de l'interruption)
+        // peut coincider avec le jour de reprise choisi ici, une passation le meme jour restant
+        // toleree (comportement deja etabli avant l'evolution du 2026-08-27).
+        verifierAucunChevauchementDate(affectationPrecedente.getAgent().getId(), requete.dateDebutAffectation(), null,
+                affectationPrecedente.getId());
 
         AffectationMission nouvelleAffectation = new AffectationMission();
         nouvelleAffectation.setAgent(affectationPrecedente.getAgent());
@@ -236,36 +242,60 @@ public class AffectationMissionService {
      * l'affectation active est automatiquement close a la veille de
      * {@link ReaffecterMiMissionRequest#dateDebutAffectation}, motif fixe
      * {@value #CODE_MOTIF_NOUVELLE_MISSION}, puis la nouvelle affectation est
-     * creee - reproduisant exactement l'exemple du brief (mission 1 du 01/08
-     * au 20/08, nouvelle affectation le 11/08 -&gt; mission 1 se termine le
-     * 10/08, mission 2 commence le 11/08).
+     * creee.
+     *
+     * <p><strong>Decoupage complet d'un chevauchement (evolution du
+     * 2026-08-27, section 18-22 du brief "Evolution avancee du module Bon de
+     * Sortie, Missions et FIPH" - decision confirmee explicitement)</strong> :
+     * si {@link ReaffecterMiMissionRequest#dateFinAffectation} est renseignee
+     * ET que l'affectation d'origine s'etendait au-dela (ou etait ouverte),
+     * la mission precedente REPREND automatiquement le lendemain, jusqu'a son
+     * propre terme d'origine - reproduisant exactement l'exemple du brief
+     * (mission A du lundi au vendredi, mission B du mercredi au jeudi -&gt;
+     * mission A devient lundi+mardi (avant, cette methode) PUIS vendredi
+     * (apres, reprise automatique), mission B devient mercredi+jeudi).
+     * Necessite qu'un agent puisse porter plusieurs affectations ACTIVE
+     * simultanees (V16, {@link #verifierAucunChevauchementDate}) - le
+     * controle d'integrite reel se fait desormais sur les PERIODES, jamais
+     * sur le seul statut. Laisser {@code dateFinAffectation} vide reproduit
+     * exactement le comportement d'origine (bascule permanente vers B,
+     * jamais de reprise de A).
      *
      * <p><strong>Retroactivite refusee (decision confirmee)</strong> : la
      * nouvelle date de debut doit etre strictement posterieure au dernier
      * jour deja pointe pour cet agent ({@link PointageRepository#trouverDernierJourPointe}),
      * toutes FIPH confondues - jamais de reecriture silencieuse d'un
      * pointage deja valide via un bon de sortie, en coherence avec le
-     * principe de non-ecrasement deja applique ailleurs (RG-MIS-003/006).
+     * principe de non-ecrasement deja applique ailleurs (RG-MIS-003/006). La
+     * reprise eventuelle de la mission precedente porte necessairement sur
+     * des jours strictement posterieurs a la nouvelle date de fin, donc
+     * toujours au-dela de ce meme controle.
      *
      * <p><strong>Aucun recalcul FIPH necessaire</strong> : chaque jour est
      * rattache a l'affectation active CE JOUR-LA au moment ou son bon de
      * sortie est valide, jamais retroactivement en bloc (voir Javadoc de
      * {@link com.snef.sgbf.fiph.entity.Pointage}) - les bons de sortie
      * valides a partir de la nouvelle date se rattacheront donc
-     * naturellement, un par un, a la nouvelle affectation.
+     * naturellement, un par un, a la bonne affectation (nouvelle mission ou
+     * reprise de l'ancienne).
      */
     public AffectationMissionDto reaffecterPendantMissionEnCours(ReaffecterMiMissionRequest requete, Utilisateur auteur) {
         Utilisateur agent = utilisateurRepository.findById(requete.agentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
         verifierPerimetre(auteur, agent);
 
-        AffectationMission affectationActive = affectationMissionRepository
-                .findByAgent_IdAndStatutAffectation(agent.getId(), StatutAffectation.ACTIVE)
+        LocalDate nouvelleDateDebut = requete.dateDebutAffectation();
+        // Resolue par PERIODE (evolution du 2026-08-27, V16) plutot que par le seul statut ACTIVE :
+        // un agent peut desormais porter plusieurs affectations ACTIVE simultanees (reprise
+        // planifiee incluse) - celle qui nous interesse ici est celle qui couvre deja la nouvelle
+        // date de debut elle-meme (et non la veille : si la nouvelle date coincide avec le debut
+        // de l'affectation en cours ou lui est anterieure, RG-MIS-010 ci-dessous doit la refuser
+        // avec un message clair, plutot que RG-MIS-009 par une resolution qui ne la trouverait pas).
+        AffectationMission affectationActive = resoudreActiveADate(agent.getId(), nouvelleDateDebut)
                 .orElseThrow(() -> new BusinessRuleViolationException("RG-MIS-009",
                         "Cet agent n'a aucune affectation active a reaffecter. "
                                 + "Utilisez la creation d'affectation initiale (POST /affectations-mission)."));
 
-        LocalDate nouvelleDateDebut = requete.dateDebutAffectation();
         if (!nouvelleDateDebut.isAfter(affectationActive.getDateDebutAffectation())) {
             throw new BusinessRuleViolationException("RG-MIS-010",
                     "La nouvelle affectation doit debuter apres le debut de l'affectation en cours ("
@@ -279,6 +309,13 @@ public class AffectationMissionService {
                             + " : un pointage existe deja jusqu'au " + dernierJourPointe.get()
                             + ". La reaffectation ne peut porter que sur des jours non encore pointes.");
         }
+
+        // Evolution du 2026-08-27 (section 18-22, decoupage des missions chevauchantes) : une date
+        // de fin facultative borne la nouvelle affectation - au-dela, la mission precedente reprend
+        // automatiquement (voir javadoc de la classe). Verifie qu'aucune AUTRE affectation de cet
+        // agent (reprise anterieure comprise) ne chevauche deja cette nouvelle periode.
+        LocalDate nouvelleDateFin = requete.dateFinAffectation();
+        verifierAucunChevauchementDate(agent.getId(), nouvelleDateDebut, nouvelleDateFin, affectationActive.getId());
 
         // La mission cible (et son chantier/code mission, trouves ou crees a la volee - evolution
         // du 2026-08-26) n'est creee qu'une fois toutes les gardes ci-dessus validees, pour ne
@@ -294,29 +331,29 @@ public class AffectationMissionService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Motif d'interruption '" + CODE_MOTIF_NOUVELLE_MISSION + "' introuvable ou inactif en base."));
 
+        // "Avant" : l'affectation en cours est tronquee (comme avant l'evolution du 2026-08-27),
+        // jamais supprimee ni ecrasee (RG-MIS-003).
+        Mission missionPrecedente = affectationActive.getMission();
+        LocalDate dateFinOriginaleA = affectationActive.getDateFinAffectation(); // null = periode ouverte
         StatutAffectation statutAvant = affectationActive.getStatutAffectation();
         affectationActive.setDateFinAffectation(dateInterruption);
         affectationActive.setStatutAffectation(StatutAffectation.INTERROMPUE);
         affectationActive.setMotifInterruption(motif);
         affectationActive.setCommentaireInterruption("Reaffectation automatique vers la mission "
                 + missionCible.getCodeHN().getCode() + " a partir du " + nouvelleDateDebut + ".");
-        // saveAndFlush (et non save) : l'index unique uq_affectation_agent_actif
-        // (au plus une affectation ACTIVE par agent, voir migration) doit voir
-        // cette ligne repassee a INTERROMPUE AVANT l'insertion de la nouvelle
-        // ligne ACTIVE ci-dessous - Hibernate ordonnance par defaut les INSERT
-        // avant les UPDATE au sein d'un meme flush, ce qui violerait sinon
-        // transitoirement la contrainte (deux lignes ACTIVE simultanees).
         affectationMissionRepository.saveAndFlush(affectationActive);
-        missionService.interrompre(affectationActive.getMission(), dateInterruption);
+        missionService.interrompre(missionPrecedente, dateInterruption);
 
         auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, affectationActive.getId(), auteur,
                 TypeActionAudit.INTERRUPTION, statutAvant, StatutAffectation.INTERROMPUE,
                 statutAvant.name(), StatutAffectation.INTERROMPUE.name());
 
+        // "Pendant" : la nouvelle affectation, bornee si une date de fin a ete fournie.
         AffectationMission nouvelleAffectation = new AffectationMission();
         nouvelleAffectation.setAgent(agent);
         nouvelleAffectation.setMission(missionCible);
         nouvelleAffectation.setDateDebutAffectation(nouvelleDateDebut);
+        nouvelleAffectation.setDateFinAffectation(nouvelleDateFin);
         nouvelleAffectation.setStatutAffectation(StatutAffectation.ACTIVE);
         nouvelleAffectation.setAffectationPrecedente(affectationActive);
         nouvelleAffectation.setCreePar(auteur);
@@ -327,6 +364,31 @@ public class AffectationMissionService {
         auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, nouvelleAffectation.getId(), auteur,
                 TypeActionAudit.REAFFECTATION, affectationActive.getId(), affectationMissionMapper.toDto(nouvelleAffectation),
                 StatutAffectation.ACTIVE.name(), StatutAffectation.ACTIVE.name());
+
+        // "Apres" : reprise automatique de la mission precedente au lendemain de la date de fin de
+        // la nouvelle affectation, si celle-ci se terminait avant le propre terme (ou l'ouverture)
+        // de l'affectation d'origine - decoupage complet du chevauchement (section 18-22, decision
+        // confirmee explicitement). Une nouvelle date de fin absente sur la nouvelle affectation
+        // (diversion permanente) reproduit exactement le comportement d'origine : aucune reprise.
+        boolean reprisePossible = nouvelleDateFin != null && (dateFinOriginaleA == null || dateFinOriginaleA.isAfter(nouvelleDateFin));
+        if (reprisePossible) {
+            AffectationMission reprise = new AffectationMission();
+            reprise.setAgent(agent);
+            reprise.setMission(missionPrecedente);
+            reprise.setDateDebutAffectation(nouvelleDateFin.plusDays(1));
+            reprise.setDateFinAffectation(dateFinOriginaleA);
+            reprise.setStatutAffectation(StatutAffectation.ACTIVE);
+            reprise.setAffectationPrecedente(affectationActive);
+            reprise.setCreePar(auteur);
+            reprise = affectationMissionRepository.save(reprise);
+
+            missionService.demarrerOuReprendre(missionPrecedente);
+
+            auditService.enregistrer(EntiteAuditable.AFFECTATION_MISSION, reprise.getId(), auteur,
+                    TypeActionAudit.REAFFECTATION, affectationActive.getId(), affectationMissionMapper.toDto(reprise),
+                    StatutAffectation.INTERROMPUE.name(), StatutAffectation.ACTIVE.name());
+        }
+
         return affectationMissionMapper.toDto(nouvelleAffectation);
     }
 
@@ -449,15 +511,24 @@ public class AffectationMissionService {
     }
 
     /**
-     * Double controle (applicatif ici, index unique en base - voir
-     * migration) : au plus une affectation ACTIVE par agent a un instant
-     * donne. Le controle applicatif permet un message clair ; l'index
-     * unique reste le filet de securite reel (section 20.1).
+     * Empeche un agent d'etre affecte a deux missions sur des jours qui se
+     * chevauchent - controle par PERIODE reelle (evolution du 2026-08-27, V16),
+     * et non plus par le seul statut ACTIVE : depuis le decoupage des
+     * missions chevauchantes (section 18-22 du brief "Evolution avancee..."),
+     * un agent peut legitimement porter deux affectations ACTIVE simultanees
+     * (l'une en cours, une reprise planifiee plus tard) tant que leurs
+     * periodes ne se recouvrent jamais reellement.
      */
-    private void verifierAucuneAffectationActive(Long agentId) {
-        if (affectationMissionRepository.findByAgent_IdAndStatutAffectation(agentId, StatutAffectation.ACTIVE).isPresent()) {
-            throw new ConflictException("Cet agent possede deja une affectation active. "
-                    + "Interrompez-la avant d'en creer une nouvelle.");
+    private void verifierAucunChevauchementDate(Long agentId, LocalDate debut, LocalDate fin, Long exclureAffectationId) {
+        LocalDate finEffective = fin != null ? fin : DATE_MAX_CHEVAUCHEMENT;
+        List<AffectationMission> chevauchements = affectationMissionRepository.trouverChevauchements(
+                agentId, exclureAffectationId != null ? exclureAffectationId : 0L, debut, finEffective);
+        if (!chevauchements.isEmpty()) {
+            AffectationMission conflit = chevauchements.get(0);
+            throw new ConflictException("Cet agent possede deja une affectation sur une periode qui chevauche celle-ci ("
+                    + conflit.getDateDebutAffectation() + " - "
+                    + (conflit.getDateFinAffectation() != null ? conflit.getDateFinAffectation() : "en cours")
+                    + "). Interrompez-la ou ajustez les dates avant d'en creer une nouvelle.");
         }
     }
 
