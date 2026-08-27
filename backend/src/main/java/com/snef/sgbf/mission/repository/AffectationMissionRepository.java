@@ -18,6 +18,15 @@ public interface AffectationMissionRepository extends JpaRepository<AffectationM
     List<AffectationMission> findByMission_IdOrderByDateDebutAffectationAsc(Long missionId);
 
     /**
+     * Signale (evolution du 2026-08-27, section 15 : "coherence
+     * service/personne/mission") si cet agent a deja ete affecte, un jour ou
+     * l'autre, a cette mission - utilise pour un avertissement non bloquant
+     * a la creation d'une FIPH avec Mission choisie (voir
+     * {@code FiphService#creerManuelle}), jamais pour bloquer la creation.
+     */
+    boolean existsByAgent_IdAndMission_Id(Long agentId, Long missionId);
+
+    /**
      * Resout l'affectation d'un agent active a une date precise - operation
      * executee a chaque creation de bon de sortie et a chaque controle de
      * coherence (RG-FIPH-025), recommandation d'index explicite section 30

@@ -17,5 +17,9 @@ public interface FiphMapper {
     @Mapping(target = "bonSortieId", source = "bonSortie.id")
     @Mapping(target = "versionCouranteId", source = "versionCourante.id")
     @Mapping(target = "versionCouranteNumero", source = "versionCourante.numeroVersion")
+    @Mapping(target = "missionId", source = "mission.id")
+    @Mapping(target = "missionCodeHN", source = "mission.codeHN.code")
+    @Mapping(target = "missionChantierLibelle", source = "mission.chantier.libelle")
+    @Mapping(target = "avertissementMission", ignore = true)
     FiphDto toDto(FIPH fiph);
 }

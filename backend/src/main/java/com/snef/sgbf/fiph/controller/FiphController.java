@@ -1,7 +1,9 @@
 package com.snef.sgbf.fiph.controller;
 
+import com.snef.sgbf.bonsortie.dto.AgentEligibleDto;
 import com.snef.sgbf.fiph.dto.CreerFiphManuelleRequest;
 import com.snef.sgbf.fiph.dto.FiphDto;
+import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto;
 import com.snef.sgbf.fiph.entity.StatutFiphVersion;
 import com.snef.sgbf.fiph.service.FiphService;
 import com.snef.sgbf.security.CustomUserDetails;
@@ -46,9 +48,12 @@ public class FiphController {
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateDebut,
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateFin,
                                  @RequestParam(required = false) @Nullable StatutFiphVersion statut,
+                                 @RequestParam(required = false) @Nullable List<StatutFiphVersion> statuts,
                                  @RequestParam(required = false) @Nullable Long serviceId,
-                                 @RequestParam(required = false) @Nullable String nomComplet) {
-        return fiphService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId, nomComplet);
+                                 @RequestParam(required = false) @Nullable String nomComplet,
+                                 @RequestParam(required = false) @Nullable String mission) {
+        return fiphService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, statuts,
+                serviceId, nomComplet, mission);
     }
 
     @GetMapping("/{id}")
@@ -58,9 +63,20 @@ public class FiphController {
 
     @PostMapping("/manuelle")
     @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')")
-    public ResponseEntity<FiphDto> creerManuelle(@Valid @RequestBody CreerFiphManuelleRequest requete,
-                                                  @AuthenticationPrincipal CustomUserDetails principal) {
-        FiphDto creee = fiphService.creerManuelle(requete, principal.getUtilisateur());
-        return ResponseEntity.status(HttpStatus.CREATED).body(creee);
+    public ResponseEntity<ResultatCreationFiphDto> creerManuelle(@Valid @RequestBody CreerFiphManuelleRequest requete,
+                                                                  @AuthenticationPrincipal CustomUserDetails principal) {
+        ResultatCreationFiphDto resultat = fiphService.creerManuelle(requete, principal.getUtilisateur());
+        return ResponseEntity.status(HttpStatus.CREATED).body(resultat);
+    }
+
+    /**
+     * Personnel d'un service, propose par cases a cocher pour la creation
+     * manuelle d'une FIPH (evolution du 2026-08-27, section 2-3) - voir
+     * {@code FiphService#listerPersonnelPourCreation}.
+     */
+    @GetMapping("/personnel-service/{serviceId}")
+    public List<AgentEligibleDto> personnelDuService(@PathVariable Long serviceId,
+                                                      @AuthenticationPrincipal CustomUserDetails principal) {
+        return fiphService.listerPersonnelPourCreation(serviceId, principal.getUtilisateur());
     }
 }

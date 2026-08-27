@@ -257,25 +257,21 @@ button:disabled {
   padding: 0;
 }
 
-.app-nav {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  flex: 1;
+/* Bouton bascule du menu lateral (section 22) - masque par defaut, visible uniquement
+   sous le point de rupture mobile (voir media query plus bas). */
+.app-header__bascule-menu {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--texte-principal);
+  font-size: 1.2rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  line-height: 1;
 }
 
-.app-nav a {
-  color: var(--texte-secondaire);
-  text-decoration: none;
-  padding: 0.4rem 0.2rem;
-  border-bottom: 2px solid transparent;
-  font-size: var(--taille-petite);
-  font-weight: 600;
-}
-.app-nav a.active,
-.app-nav a[aria-current="page"] {
-  color: var(--texte-principal);
-  border-bottom-color: var(--brand-2-text);
+.app-header__marque {
+  flex: 1;
 }
 
 .app-header__utilisateur {
@@ -288,6 +284,71 @@ button:disabled {
 .app-header__utilisateur button {
   padding: 0.4rem 0.75rem;
   font-size: var(--taille-petite);
+}
+
+/* ==========================================================================
+ * Menu lateral (evolution du 2026-08-27, brief "Evolution du module FIPH",
+ * section 19-22) - remplace l'ancienne barre de navigation horizontale.
+ * ========================================================================== */
+.app-body {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 220px;
+  flex-shrink: 0;
+  padding: 1rem 0.75rem;
+  background: var(--surface-entete);
+  border-right: 1px solid var(--bordure-defaut);
+  align-self: stretch;
+}
+
+.app-sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--texte-secondaire);
+  text-decoration: none;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--rayon-defaut);
+  font-size: var(--taille-petite);
+  font-weight: 600;
+}
+.app-sidebar a:hover {
+  background: var(--surface-survol);
+}
+.app-sidebar a.active,
+.app-sidebar a[aria-current="page"] {
+  color: var(--brand-2-text);
+  background: var(--statut-info-fond);
+}
+.app-sidebar svg {
+  flex-shrink: 0;
+}
+
+.app-sidebar__groupe {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-sidebar__sous-menu {
+  list-style: none;
+  margin: 0.1rem 0 0.3rem 1.9rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--bordure-defaut);
+}
+.app-sidebar__sous-menu a {
+  padding: 0.35rem 0.6rem;
+  font-weight: 400;
+  font-size: 0.78rem;
 }
 
 /* ==========================================================================
@@ -588,9 +649,13 @@ button:disabled {
  * ========================================================================== */
 @media (max-width: 640px) {
   .app-header {
-    flex-direction: column;
-    align-items: stretch;
     gap: 0.75rem;
+  }
+  .app-header__bascule-menu {
+    display: block;
+  }
+  .app-header__utilisateur span {
+    display: none;
   }
   .app-content {
     padding: 1rem;
@@ -598,5 +663,25 @@ button:disabled {
   .page-entete {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* Menu lateral replie par defaut sous ce point de rupture (section 22) : le bouton
+     bascule de l'en-tete (visible uniquement ici) le fait apparaitre en superposition,
+     jamais un simple demontage - les liens restent toujours dans le DOM. */
+  .app-body {
+    position: relative;
+  }
+  .app-sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    height: 100%;
+    box-shadow: var(--ombre-carte);
+    transform: translateX(-100%);
+    transition: transform 0.15s ease-out;
+  }
+  .app-sidebar--ouverte {
+    transform: translateX(0);
   }
 }

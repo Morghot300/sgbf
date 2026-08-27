@@ -1,33 +1,45 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { listerPersonnelDuService } from "../../api/bonSortieApi";
-import { extraireMessageErreur } from "../../api/httpClient";
+import { extraireMessageErreur } from "../api/httpClient";
+import type { AgentEligibleDto } from "../types/bonSortie";
 
 /**
  * Sélection du personnel d'un service par cases à cocher, filtrable par nom
  * (évolution du 2026-08-27, brief "Evolution avancée du module Bon de
  * Sortie, Missions et FIPH", section 3-4-30) — utilisée AVANT même la
- * création du bon de sortie, pour la "Personne principale" (sélection
- * unique) et les "Personnes à bord" (sélection multiple). Remplace la simple
- * saisie libre d'un identifiant numérique, qui ne permettait ni recherche ni
- * vérification visuelle du nom.
+ * création du document, pour une sélection unique ou multiple parmi le
+ * personnel d'un service. Remplace la simple saisie libre d'un identifiant
+ * numérique, qui ne permettait ni recherche ni vérification visuelle du nom.
  *
  * <p>Le filtre de recherche n'affecte jamais la sélection déjà faite : une
  * personne cochée reste sélectionnée même si elle disparaît temporairement
  * de la liste filtrée (la sélection est un état séparé de l'affichage).
+ *
+ * <p>Composant partagé (évolution du 2026-08-27, brief "Evolution du module
+ * FIPH", section 2-3-31) : {@link #chargerPersonnel} est injecté par
+ * l'appelant plutôt que codé en dur, chaque module (Bon de Sortie, FIPH)
+ * ayant son propre périmètre d'accès réel au personnel d'un service (vérifié
+ * côté serveur dans les deux cas, jamais seulement ici) — évite de dupliquer
+ * ce composant pour une différence qui ne tient qu'à l'endpoint appelé.
  */
-export function SelectionPersonnelService({ serviceId, mode, selection, onChange, exclureIds }: {
+export function SelectionPersonnelService({ serviceId, mode, selection, onChange, exclureIds, chargerPersonnel }: {
   serviceId: number | null;
   mode: "unique" | "multiple";
   selection: Set<number>;
   onChange: (selection: Set<number>) => void;
   /** Identifiants à exclure de la liste (ex. la personne principale déjà choisie, pour éviter un doublon avec les personnes à bord). */
   exclureIds?: Set<number>;
+  /** Fonction de chargement du personnel d'un service — propre à chaque module appelant (périmètre vérifié côté serveur). */
+  chargerPersonnel: (serviceId: number) => Promise<AgentEligibleDto[]>;
 }) {
   const [recherche, setRecherche] = useState("");
+  // `chargerPersonnel` est volontairement EXCLUE de la clé de cache (react-query) : une fonction
+  // passée inline par l'appelant changerait de reference a chaque rendu, invalidant le cache a
+  // chaque fois. Le serviceId seul suffit a distinguer les requetes (une page donnee n'utilise
+  // jamais deux chargeurs differents pour le meme service).
   const personnel = useQuery({
     queryKey: ["personnel-service", serviceId],
-    queryFn: () => listerPersonnelDuService(serviceId as number),
+    queryFn: () => chargerPersonnel(serviceId as number),
     enabled: serviceId !== null,
   });
 

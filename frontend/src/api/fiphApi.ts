@@ -1,8 +1,10 @@
 import { ouvrirBlobPdf } from "./bonSortieApi";
 import { httpClient } from "./httpClient";
+import type { AgentEligibleDto } from "../types/bonSortie";
 import type {
   CompleterPointageRequest, CreerFiphManuelleRequest, CreerNouvelleVersionRequest, DefinirDateFinRequest,
-  FiphDto, FiphVersionDto, PriseEnMainSuperAdminRequest, ValiderFiphRequest, ValidationDto,
+  FiphDto, FiphVersionDto, PriseEnMainSuperAdminRequest, ResultatCreationFiphDto, StatutFiphVersion,
+  ValiderFiphRequest, ValidationDto,
 } from "../types/fiph";
 
 export interface FiltresFiph {
@@ -10,18 +12,33 @@ export interface FiltresFiph {
   dateDebut?: string;
   dateFin?: string;
   statut?: string;
+  /** Regroupement par sous-menu (section 16-18) — plusieurs statuts combinés en un seul filtre. */
+  statuts?: StatutFiphVersion[];
   serviceId?: number;
   nomComplet?: string;
+  /** Recherche par Code Mission ou nom textuel de la mission (section 25). */
+  mission?: string;
 }
-/** Filtres combinables (date exacte, période, statut, service) - évolution du 2026-08-18. */
+/** Filtres combinables (date exacte, période, statut(s), service, nom, mission) - évolution du 2026-08-18/2026-08-27. */
 export async function listerFiph(filtres: FiltresFiph = {}): Promise<FiphDto[]> {
-  return (await httpClient.get<FiphDto[]>("/fiph", { params: filtres })).data;
+  // `statuts` est envoyé comme une SEULE valeur separee par des virgules plutot que de compter sur
+  // la serialisation de tableau d'axios (ambigue selon la version) : Spring lie nativement une
+  // chaine unique separee par des virgules a un `List<Enum>` (conversion standard), sans ambiguite.
+  const { statuts, ...reste } = filtres;
+  return (await httpClient.get<FiphDto[]>("/fiph", {
+    params: { ...reste, statuts: statuts && statuts.length > 0 ? statuts.join(",") : undefined },
+  })).data;
 }
 export async function obtenirFiph(id: number): Promise<FiphDto> {
   return (await httpClient.get<FiphDto>(`/fiph/${id}`)).data;
 }
-export async function creerFiphManuelle(requete: CreerFiphManuelleRequest): Promise<FiphDto> {
-  return (await httpClient.post<FiphDto>("/fiph/manuelle", requete)).data;
+/** Création manuelle en lot (évolution du 2026-08-27) — un FiphDto par agent réussi, un motif d'échec par agent refusé. */
+export async function creerFiphManuelle(requete: CreerFiphManuelleRequest): Promise<ResultatCreationFiphDto> {
+  return (await httpClient.post<ResultatCreationFiphDto>("/fiph/manuelle", requete)).data;
+}
+/** Personnel d'un service proposé pour la création manuelle d'une FIPH (section 2-3) — périmètre propre à la FIPH, vérifié côté serveur. */
+export async function listerPersonnelDuServicePourFiph(serviceId: number): Promise<AgentEligibleDto[]> {
+  return (await httpClient.get<AgentEligibleDto[]>(`/fiph/personnel-service/${serviceId}`)).data;
 }
 
 export async function obtenirFiphVersion(id: number): Promise<FiphVersionDto> {

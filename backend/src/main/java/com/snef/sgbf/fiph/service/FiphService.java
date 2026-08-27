@@ -10,6 +10,8 @@ import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.dto.CreerFiphManuelleRequest;
 import com.snef.sgbf.fiph.dto.FiphDto;
+import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto;
+import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto.EchecCreationFiphDto;
 import com.snef.sgbf.fiph.entity.FIPH;
 import com.snef.sgbf.fiph.entity.FIPHVersion;
 import com.snef.sgbf.fiph.entity.JourSemaine;
@@ -24,13 +26,19 @@ import com.snef.sgbf.fiph.repository.FiphVersionRepository;
 import com.snef.sgbf.fiph.repository.PointageRepository;
 import com.snef.sgbf.fiph.repository.SignatureRepository;
 import com.snef.sgbf.identite.entity.Habilitation;
+import com.snef.sgbf.identite.entity.StatutCompte;
 import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
+import com.snef.sgbf.mission.entity.Mission;
+import com.snef.sgbf.mission.repository.AffectationMissionRepository;
+import com.snef.sgbf.mission.repository.MissionRepository;
 import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
+import com.snef.sgbf.bonsortie.dto.AgentEligibleDto;
 import java.time.LocalDate;
 import java.time.temporal.IsoFields;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -62,11 +70,14 @@ public class FiphService {
     private final FiphMapper fiphMapper;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final MissionRepository missionRepository;
+    private final AffectationMissionRepository affectationMissionRepository;
 
     public FiphService(FiphRepository fiphRepository, FiphVersionRepository fiphVersionRepository,
                         PointageRepository pointageRepository, UtilisateurRepository utilisateurRepository,
                         HabilitationRepository habilitationRepository, SignatureRepository signatureRepository,
-                        FiphMapper fiphMapper, AuditService auditService, NotificationService notificationService) {
+                        FiphMapper fiphMapper, AuditService auditService, NotificationService notificationService,
+                        MissionRepository missionRepository, AffectationMissionRepository affectationMissionRepository) {
         this.fiphRepository = fiphRepository;
         this.fiphVersionRepository = fiphVersionRepository;
         this.pointageRepository = pointageRepository;
@@ -76,13 +87,37 @@ public class FiphService {
         this.fiphMapper = fiphMapper;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.missionRepository = missionRepository;
+        this.affectationMissionRepository = affectationMissionRepository;
     }
 
     @Transactional(readOnly = true)
     public FiphDto obtenirParId(Long id, Utilisateur courant) {
         FIPH fiph = chargerFiph(id);
         verifierPerimetreLecture(courant, fiph);
-        return fiphMapper.toDto(fiph);
+        return avecAvertissementMission(fiphMapper.toDto(fiph), fiph);
+    }
+
+    /**
+     * Section 15 ("coherence service/personne/mission") : signale, sans
+     * jamais bloquer, qu'aucune affectation connue de cet agent sur la
+     * mission choisie n'existe - un controle bloquant supposerait un ordre
+     * strict (mission creee et affectation posee AVANT la FIPH), que ce
+     * brief ne garantit pas explicitement (une FIPH manuelle peut tres bien
+     * anticiper une affectation pas encore creee).
+     */
+    private FiphDto avecAvertissementMission(FiphDto dto, FIPH fiph) {
+        if (fiph.getMission() == null) {
+            return dto;
+        }
+        boolean coherente = affectationMissionRepository.existsByAgent_IdAndMission_Id(
+                fiph.getAgent().getId(), fiph.getMission().getId());
+        if (coherente) {
+            return dto;
+        }
+        return dto.avecAvertissementMission(
+                "Aucune affectation connue de cet agent sur la mission " + fiph.getMission().getCodeHN().getCode()
+                        + " - verifiez la coherence avant validation.");
     }
 
     /**
@@ -97,9 +132,12 @@ public class FiphService {
      */
     @Transactional(readOnly = true)
     public List<FiphDto> listerVisibles(Utilisateur courant, java.time.LocalDate date, java.time.LocalDate dateDebut,
-                                         java.time.LocalDate dateFin, StatutFiphVersion statut, Long serviceId,
-                                         String nomComplet) {
+                                         java.time.LocalDate dateFin, StatutFiphVersion statut,
+                                         List<StatutFiphVersion> statuts, Long serviceId, String nomComplet,
+                                         String mission) {
         String termeRecherche = nomComplet != null && !nomComplet.isBlank() ? nomComplet.trim().toLowerCase() : null;
+        String termeMission = mission != null && !mission.isBlank() ? mission.trim().toLowerCase() : null;
+        List<StatutFiphVersion> statutsRetenus = statuts != null && !statuts.isEmpty() ? statuts : null;
         return entitesVisibles(courant).stream()
                 // La date de fin vit desormais sur la version courante et peut etre nulle
                 // (periode encore "ouverte", evolution du 2026-08-21) - traitee alors comme
@@ -110,9 +148,16 @@ public class FiphService {
                         || !f.getVersionCourante().getDateFinPeriode().isBefore(dateDebut))
                 .filter(f -> dateFin == null || !f.getDateDebutPeriode().isAfter(dateFin))
                 .filter(f -> statut == null || statut == f.getStatut())
+                // Regroupement par categorie de sous-menu (evolution du 2026-08-27, section 16-18) :
+                // plusieurs statuts reellement atteignables peuvent partager une meme categorie visible
+                // (ex. "Brouillons" = BROUILLON + EN_COMPLEMENT) - voir LIBELLES_CATEGORIE_FIPH cote frontend.
+                .filter(f -> statutsRetenus == null || statutsRetenus.contains(f.getStatut()))
                 .filter(f -> serviceId == null || serviceId.equals(f.getService().getId()))
                 .filter(f -> termeRecherche == null || f.getAgent().getNomComplet().toLowerCase().contains(termeRecherche))
-                .map(fiphMapper::toDto)
+                .filter(f -> termeMission == null || (f.getMission() != null
+                        && (f.getMission().getCodeHN().getCode().toLowerCase().contains(termeMission)
+                                || f.getMission().getChantier().getLibelle().toLowerCase().contains(termeMission))))
+                .map(f -> avecAvertissementMission(fiphMapper.toDto(f), f))
                 .toList();
     }
 
@@ -156,17 +201,62 @@ public class FiphService {
      * {@code FiphVersionService#definirDateFin}, avec l'obligation de la
      * renseigner avant toute soumission (RG-FIPH-033).
      */
-    public FiphDto creerManuelle(CreerFiphManuelleRequest requete, Utilisateur auteur) {
-        Utilisateur agent = utilisateurRepository.findById(requete.agentId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", requete.agentId()));
-        verifierPerimetreGestionnaire(auteur, agent);
-
+    public ResultatCreationFiphDto creerManuelle(CreerFiphManuelleRequest requete, Utilisateur auteur) {
         LocalDate dateDebut = requete.dateDebut();
         LocalDate dateFin = requete.dateFin();
         if (dateFin != null && dateFin.isBefore(dateDebut)) {
             throw new BusinessRuleViolationException("RG-FIPH-030",
                     "La date de fin ne peut pas etre anterieure a la date de debut.");
         }
+
+        Mission mission = null;
+        if (requete.missionId() != null) {
+            // RG (section 7) : un Code Mission qui ne correspond a aucune mission existante doit etre
+            // clairement rejete - jamais d'association silencieuse a une mission inexistante.
+            mission = missionRepository.findById(requete.missionId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Mission", requete.missionId()));
+        }
+
+        // Un seul agent selectionne (cas le plus courant, et strictement equivalent a l'ancien
+        // comportement a agent unique) : aucune tolerance a appliquer sur un lot d'un seul element -
+        // toute erreur remonte directement en erreur HTTP (404/409/422...), exactement comme avant
+        // cette evolution (agentId singulier).
+        if (requete.agentIds().size() == 1) {
+            FiphDto creee = creerManuellePourUnAgent(requete.agentIds().get(0), dateDebut, dateFin, mission, auteur);
+            return new ResultatCreationFiphDto(List.of(creee), List.of());
+        }
+
+        // Plusieurs agents selectionnes (section 2-3-4-14, cases a cocher) : creation independante
+        // par agent - l'echec de l'un pour une raison METIER/DONNEES (ex. periode deja couverte,
+        // RG-FIPH-002 ; agent introuvable) n'empeche jamais la creation des autres, meme philosophie
+        // de tolerance que PersonneABordGenerationService pour les personnes a bord d'un bon de sortie.
+        //
+        // Volontairement DIFFERENT pour une violation de PERIMETRE (ForbiddenOperationException,
+        // RG-SEC-002) : jamais rattrapee ici, elle remonte et fait echouer - et annule (rollback,
+        // @Transactional de classe) - la creation en lot TOUT ENTIERE, y compris les agents deja
+        // traites avec succes dans cette meme requete. Un identifiant hors perimetre glisse dans
+        // la selection ne devrait jamais survenir depuis l'interface normale (la liste proposee est
+        // deja filtree par service cote serveur) - sa seule origine plausible est une requete API
+        // directe/manipulee, qui doit echouer bruyamment plutot que degrader silencieusement en un
+        // simple echec partiel parmi d'autres.
+        List<FiphDto> creees = new ArrayList<>();
+        List<EchecCreationFiphDto> echecs = new ArrayList<>();
+        for (Long agentId : requete.agentIds()) {
+            try {
+                creees.add(creerManuellePourUnAgent(agentId, dateDebut, dateFin, mission, auteur));
+            } catch (BusinessRuleViolationException | ConflictException | ResourceNotFoundException e) {
+                String nomAgent = utilisateurRepository.findById(agentId).map(Utilisateur::getNomComplet).orElse(null);
+                echecs.add(new EchecCreationFiphDto(agentId, nomAgent, e.getMessage()));
+            }
+        }
+        return new ResultatCreationFiphDto(creees, echecs);
+    }
+
+    private FiphDto creerManuellePourUnAgent(Long agentId, LocalDate dateDebut, LocalDate dateFin, Mission mission,
+                                              Utilisateur auteur) {
+        Utilisateur agent = utilisateurRepository.findById(agentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", agentId));
+        verifierPerimetreGestionnaire(auteur, agent);
 
         // Sentinelle "periode ouverte" pour la recherche de chevauchement : LocalDate.MAX depasse
         // l'intervalle representable par le type DATE de MySQL (borne au 9999-12-31) et ferait
@@ -177,7 +267,47 @@ public class FiphService {
         }
 
         FIPH fiph = creerFiphEtVersionInitiale(agent, OrigineFiph.MANUELLE, null, dateDebut, dateFin, auteur);
-        return fiphMapper.toDto(fiph);
+        if (mission != null) {
+            fiph.setMission(mission);
+            fiph = fiphRepository.save(fiph);
+        }
+        return avecAvertissementMission(fiphMapper.toDto(fiph), fiph);
+    }
+
+    /**
+     * Personnel d'un service propose pour la creation manuelle d'une FIPH
+     * (evolution du 2026-08-27, section 2-3) - meme principe ergonomique que
+     * {@code BonSortiePersonneService#listerPersonnelDuService}, mais avec le
+     * perimetre reellement applicable a la CREATION d'une FIPH (Charge
+     * d'Affaires/personne habilitee du service, RH et Super Administrateur a
+     * perimetre global - {@link #verifierPerimetreGestionnaire}), volontairement
+     * distinct et plus strict que celui du Bon de Sortie (qui autorise en plus
+     * tout agent a consulter son PROPRE service, un cas qui n'existe pas ici :
+     * une FIPH manuelle est toujours creee par un CA/PH/RH/Super Admin pour le
+     * compte d'un tiers, jamais par l'agent lui-meme).
+     */
+    @Transactional(readOnly = true)
+    public List<AgentEligibleDto> listerPersonnelPourCreation(Long serviceId, Utilisateur auteur) {
+        verifierPerimetreServiceCreation(auteur, serviceId);
+        return utilisateurRepository.findByService_Id(serviceId).stream()
+                .filter(u -> u.getStatutCompte() == StatutCompte.ACTIF || u.getStatutCompte() == StatutCompte.VERROUILLE)
+                .map(u -> new AgentEligibleDto(u.getId(), u.getNomComplet(), u.getMatricule(),
+                        u.getService() != null ? u.getService().getLibelle() : null, u.getStatutCompte(), false))
+                .toList();
+    }
+
+    /** Meme ensemble de roles que {@link #verifierPerimetreGestionnaire}, mais a partir d'un service directement (avant meme qu'un agent precis soit choisi). */
+    private void verifierPerimetreServiceCreation(Utilisateur auteur, Long serviceId) {
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        boolean autorise = habilitationsAuteur.stream()
+                .anyMatch(h -> CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode())
+                        || CodeRoleMetier.RH.name().equals(h.getRoleMetier().getCode())
+                        || (estRoleGestionnaire(h.getRoleMetier().getCode())
+                                && h.getService() != null && h.getService().getId().equals(serviceId)));
+        if (!autorise) {
+            throw new ForbiddenOperationException(
+                    "Vous n'etes pas habilite a consulter le personnel de ce service pour creer une FIPH.");
+        }
     }
 
     /**

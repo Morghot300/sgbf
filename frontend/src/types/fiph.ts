@@ -34,13 +34,38 @@ export interface FiphDto {
   statut: StatutFiphVersion;
   versionCouranteId: number;
   versionCouranteNumero: number;
+  /** Mission choisie à la création (évolution du 2026-08-27, section 6-8) — null si non renseignée. */
+  missionId: number | null;
+  missionCodeHN: string | null;
+  missionChantierLibelle: string | null;
+  /** Non bloquant : signale qu'aucune affectation connue de l'agent sur cette mission n'a été trouvée. */
+  avertissementMission: string | null;
 }
 
+/**
+ * Création manuelle EN LOT (évolution du 2026-08-27, section 2-3-4-14) : un
+ * agent par case cochée, jamais une saisie libre d'identifiant. L'échec pour
+ * l'un d'eux (période chevauchante, RG-FIPH-002) n'empêche jamais la
+ * création pour les autres — voir {@link ResultatCreationFiphDto}.
+ */
 export interface CreerFiphManuelleRequest {
-  agentId: number;
+  agentIds: number[];
   dateDebut: string;
   /** Optionnelle : periode "ouverte", definissable/ajustable ensuite via /date-fin (RG-FIPH-033 avant soumission). */
   dateFin?: string | null;
+  /** Mission choisie (Code Mission, section 6-7) — optionnelle, purement associative/descriptive. */
+  missionId?: number | null;
+}
+
+export interface EchecCreationFiphDto {
+  agentId: number;
+  agentNomComplet: string | null;
+  motif: string;
+}
+
+export interface ResultatCreationFiphDto {
+  creees: FiphDto[];
+  echecs: EchecCreationFiphDto[];
 }
 
 export interface PointageDto {
@@ -170,3 +195,50 @@ export function estPointageModifiable(statut: StatutFiphVersion): boolean {
 export function estFiphFigee(statut: StatutFiphVersion): boolean {
   return statut === "VALIDEE_DEFINITIVEMENT";
 }
+
+/**
+ * Sous-menus FIPH par catégorie (évolution du 2026-08-27, section 16-18) —
+ * construits à partir des statuts RÉELLEMENT atteignables par le circuit de
+ * validation (voir {@code FiphVersionService}), et non d'une liste
+ * arbitraire : {@code RETOUR_POUR_CORRECTION}, {@code ANNULEE} et
+ * {@code EN_REVISION} existent dans l'énumération mais ne sont jamais
+ * effectivement produits par aucune transition du circuit actuel (le
+ * document source les marque lui-même "proposés, à valider" — voir la
+ * Javadoc de {@code StatutFiphVersion}) ; ils sont donc volontairement
+ * absents de ce regroupement plutôt que de promettre une catégorie qui ne se
+ * peuplera jamais.
+ *
+ * <p>Chaque catégorie correspond à un regroupement de statuts partageant la
+ * même signification pour l'utilisateur métier :
+ * <ul>
+ *   <li>{@code BROUILLONS} : contenu encore en cours de saisie/complément ;</li>
+ *   <li>{@code VISEES} : visa déjà acquis (automatique dans ce système),
+ *       en attente de la décision du Chargé d'Affaires/de la Personne
+ *       habilitée (niveau 2) ;</li>
+ *   <li>{@code VALIDEES_NIVEAU_2} : en attente du Responsable d'Activité
+ *       (niveau 3) ;</li>
+ *   <li>{@code VALIDEES_NIVEAU_3} : en attente de la Direction (niveau 4) ;</li>
+ *   <li>{@code VALIDEES_DEFINITIVEMENT} : circuit complet, document figé ;</li>
+ *   <li>{@code REJETEES} : décision de rejet à un niveau quelconque.</li>
+ * </ul>
+ */
+export type CategorieFiph = "BROUILLONS" | "VISEES" | "VALIDEES_NIVEAU_2" | "VALIDEES_NIVEAU_3"
+  | "VALIDEES_DEFINITIVEMENT" | "REJETEES";
+
+export const STATUTS_PAR_CATEGORIE: Record<CategorieFiph, StatutFiphVersion[]> = {
+  BROUILLONS: ["BROUILLON", "EN_COMPLEMENT"],
+  VISEES: ["SIGNEE", "SOUMISE"],
+  VALIDEES_NIVEAU_2: ["VALIDEE_NIVEAU_2"],
+  VALIDEES_NIVEAU_3: ["VALIDEE_NIVEAU_3"],
+  VALIDEES_DEFINITIVEMENT: ["VALIDEE_DEFINITIVEMENT"],
+  REJETEES: ["REJETEE"],
+};
+
+export const LIBELLES_CATEGORIE_FIPH: Record<CategorieFiph, string> = {
+  BROUILLONS: "Brouillons",
+  VISEES: "Visées (à valider niv. 2)",
+  VALIDEES_NIVEAU_2: "Validées niv. 2 (à valider niv. 3)",
+  VALIDEES_NIVEAU_3: "Validées niv. 3 (à valider niv. 4)",
+  VALIDEES_DEFINITIVEMENT: "Validées définitivement",
+  REJETEES: "Rejetées",
+};

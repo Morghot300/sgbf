@@ -22,6 +22,7 @@ import com.snef.sgbf.referentiel.repository.ServiceRepository;
 import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -234,7 +235,7 @@ class EvolutionDroitsCaPhBonSortieFiphIT {
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
+                            put("agentIds", List.of(agent.getId()));
                             put("dateDebut", LocalDate.of(2026, 7, 10).toString());
                             put("dateFin", LocalDate.of(2026, 7, 5).toString());
                         }})))
@@ -253,7 +254,7 @@ class EvolutionDroitsCaPhBonSortieFiphIT {
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
+                            put("agentIds", List.of(agent.getId()));
                             put("dateDebut", LocalDate.of(2027, 1, 1).toString());
                         }})))
                 .andExpect(status().isConflict());
@@ -261,19 +262,21 @@ class EvolutionDroitsCaPhBonSortieFiphIT {
 
     // --- Aides ---
 
+    /** Cree une FIPH manuelle pour un seul agent et retourne son FiphDto (deballe de "creees[0]" - reponse en lot depuis l'evolution du 2026-08-27). */
     private JsonNode creerFiphManuelle(String token, Long agentId, LocalDate dateDebut, LocalDate dateFin,
                                         org.springframework.test.web.servlet.ResultMatcher statutAttendu) throws Exception {
         String reponse = mockMvc.perform(post("/api/fiph/manuelle")
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agentId);
+                            put("agentIds", List.of(agentId));
                             put("dateDebut", dateDebut.toString());
                             put("dateFin", dateFin != null ? dateFin.toString() : null);
                         }})))
                 .andExpect(statutAttendu)
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(reponse);
+        JsonNode racine = objectMapper.readTree(reponse);
+        return racine.has("creees") ? racine.get("creees").get(0) : racine;
     }
 
     private JsonNode obtenirVersion(String token, long versionId) throws Exception {

@@ -169,7 +169,7 @@ class AuthentificationSimpleIT {
 
         // Endpoint reserve par @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE')").
         String corpsFiph = objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
-            put("agentId", 999999);
+            put("agentIds", java.util.List.of(999999));
             put("dateDebut", java.time.LocalDate.of(2026, 1, 5).toString());
         }});
         mockMvc.perform(post("/api/fiph/manuelle")

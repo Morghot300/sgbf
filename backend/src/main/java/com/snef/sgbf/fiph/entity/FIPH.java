@@ -2,6 +2,7 @@ package com.snef.sgbf.fiph.entity;
 
 import com.snef.sgbf.bonsortie.entity.BonSortie;
 import com.snef.sgbf.identite.entity.Utilisateur;
+import com.snef.sgbf.mission.entity.Mission;
 import com.snef.sgbf.referentiel.entity.Service;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -70,6 +71,20 @@ public class FIPH {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "bon_sortie_id")
     private BonSortie bonSortie;
+
+    /**
+     * Mission explicitement choisie a la creation de la FIPH (evolution du
+     * 2026-08-27, section 6-8) - "Code Mission" + nom textuel (via
+     * {@code mission.codeHN}), purement associatif/descriptif. Ne remplace
+     * jamais la resolution par-jour deja portee par chaque
+     * {@link Pointage#getAffectationMission()} (granularite journaliere,
+     * section 6.4 du document source d'origine) : une FIPH couvre parfois
+     * plusieurs missions successives sur sa periode, ce champ ne pretend
+     * decrire que la mission principale associee des la creation.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "mission_id")
+    private Mission mission;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cree_par")

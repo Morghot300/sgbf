@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { ajouterPersonnesABordEnLot, creerBonSortie } from "../../api/bonSortieApi";
+import { ajouterPersonnesABordEnLot, creerBonSortie, listerPersonnelDuService } from "../../api/bonSortieApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerMissions } from "../../api/missionApi";
 import { listerServices, listerVehicules } from "../../api/referentielApi";
 import { useAuth } from "../../auth/AuthContext";
+import { SelectionPersonnelService } from "../../components/SelectionPersonnelService";
 import { LIBELLES_MOYEN_UTILISE, type MoyenUtilise } from "../../types/bonSortie";
-import { SelectionPersonnelService } from "./SelectionPersonnelService";
 
 /**
  * Formulaire de creation d'un bon de sortie (section 3, RG-BS-001/002),
@@ -124,6 +124,7 @@ export default function BonSortieNouveauPage() {
               mode="unique"
               selection={personnePrincipale}
               onChange={setPersonnePrincipale}
+              chargerPersonnel={listerPersonnelDuService}
             />
           </>
         )}
@@ -195,6 +196,7 @@ export default function BonSortieNouveauPage() {
           selection={personnesABord}
           onChange={setPersonnesABord}
           exclureIds={personnePrincipale}
+          chargerPersonnel={listerPersonnelDuService}
         />
 
         {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, "Impossible de créer le bon de sortie.")}</p>}

@@ -370,7 +370,7 @@ class EvolutionPerimetreServiceFiphIT {
                         .header("Authorization", "Bearer " + tokenCaLittoral)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agentCentre1.getId()); // agent d'un AUTRE service que l'appelant
+                            put("agentIds", List.of(agentCentre1.getId())); // agent d'un AUTRE service que l'appelant
                             put("dateDebut", LocalDate.of(2026, 3, 9).toString());
                         }})))
                 .andExpect(status().isForbidden());
@@ -413,19 +413,20 @@ class EvolutionPerimetreServiceFiphIT {
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agentSansCompte.getId());
+                            put("agentIds", List.of(agentSansCompte.getId()));
                             put("dateDebut", LocalDate.of(2026, 4, 6).toString());
                             put("dateFin", LocalDate.of(2026, 4, 12).toString());
                         }})))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.origine").value("MANUELLE"))
-                .andExpect(jsonPath("$.statut").value("SIGNEE"))
-                .andExpect(jsonPath("$.serviceId").value(littoral.getId()))
+                .andExpect(jsonPath("$.creees[0].origine").value("MANUELLE"))
+                .andExpect(jsonPath("$.creees[0].statut").value("SIGNEE"))
+                .andExpect(jsonPath("$.creees[0].serviceId").value(littoral.getId()))
                 .andReturn().getResponse().getContentAsString();
-        long fiphId = objectMapper.readTree(reponse).get("id").asLong();
+        JsonNode fipheCreee = objectMapper.readTree(reponse).get("creees").get(0);
+        long fiphId = fipheCreee.get("id").asLong();
 
         // Directement eligible au niveau 2, sans jamais avoir besoin d'un compte agent pour signer.
-        long versionId = objectMapper.readTree(reponse).get("versionCouranteId").asLong();
+        long versionId = fipheCreee.get("versionCouranteId").asLong();
         mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/2")
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json").content(decisionValidee()))
@@ -448,14 +449,14 @@ class EvolutionPerimetreServiceFiphIT {
                         .header("Authorization", "Bearer " + tokenPh)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
+                            put("agentIds", List.of(agent.getId()));
                             put("dateDebut", LocalDate.of(2026, 4, 13).toString());
                             put("dateFin", LocalDate.of(2026, 4, 19).toString());
                         }})))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.statut").value("SIGNEE"))
+                .andExpect(jsonPath("$.creees[0].statut").value("SIGNEE"))
                 .andReturn().getResponse().getContentAsString();
-        long versionId = objectMapper.readTree(reponse).get("versionCouranteId").asLong();
+        long versionId = objectMapper.readTree(reponse).get("creees").get(0).get("versionCouranteId").asLong();
 
         mockMvc.perform(get("/api/fiph-versions/" + versionId).header("Authorization", "Bearer " + tokenPh))
                 .andExpect(status().isOk())
@@ -512,13 +513,13 @@ class EvolutionPerimetreServiceFiphIT {
                         .header("Authorization", "Bearer " + token)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
-                            put("agentId", agent.getId());
+                            put("agentIds", List.of(agent.getId()));
                             put("dateDebut", LocalDate.of(2026, 1, 5).plusWeeks(20 + (agent.getId() % 20)).toString());
                             put("dateFin", LocalDate.of(2026, 1, 5).plusWeeks(20 + (agent.getId() % 20)).plusDays(6).toString());
                         }})))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(reponse).get("id").asLong();
+        return objectMapper.readTree(reponse).get("creees").get(0).get("id").asLong();
     }
 
     private long versionCouranteDe(Utilisateur lecteurAutorise, long fiphId) throws Exception {

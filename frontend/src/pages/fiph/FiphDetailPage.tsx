@@ -151,10 +151,20 @@ export default function FiphDetailPage() {
                     : f.origine === "BON_SORTIE" ? "Générée depuis un bon de sortie" : "Créée manuellement (Code Service)"}
                 </td>
               </tr>
+              <tr>
+                <th>Mission</th>
+                <td>
+                  {f.missionCodeHN ? `${f.missionCodeHN} — ${f.missionChantierLibelle}` : "Non renseignée"}
+                </td>
+              </tr>
             </tbody>
           </table>
         )}
       </EtatAsync>
+
+      {fiph.data?.avertissementMission && (
+        <p role="alert" className="avertissement">{fiph.data.avertissementMission}</p>
+      )}
 
       {fiph.data?.origine === "BON_SORTIE" && (
         <p className="note">
