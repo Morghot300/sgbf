@@ -18,7 +18,7 @@ const STATUTS = Object.keys(LIBELLES_STATUT_FIPH) as StatutFiphVersion[];
  * en React.
  */
 export default function FiphListePage() {
-  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "", nomComplet: "" });
   const services = useQuery({ queryKey: ["services"], queryFn: listerServices });
   const requete = useQuery({
     queryKey: ["fiph", filtres],
@@ -28,12 +28,13 @@ export default function FiphListePage() {
       dateFin: filtres.dateFin || undefined,
       statut: filtres.statut || undefined,
       serviceId: filtres.serviceId ? Number(filtres.serviceId) : undefined,
+      nomComplet: filtres.nomComplet || undefined,
     }),
   });
   const { aLeRole } = useAuth();
 
   function reinitialiserFiltres() {
-    setFiltres({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+    setFiltres({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "", nomComplet: "" });
   }
 
   return (
@@ -47,6 +48,14 @@ export default function FiphListePage() {
         <input id="filtreDateDebutFiph" type="date" value={filtres.dateDebut} onChange={(e) => setFiltres({ ...filtres, dateDebut: e.target.value, date: "" })} />
         <label htmlFor="filtreDateFinFiph">Au</label>
         <input id="filtreDateFinFiph" type="date" value={filtres.dateFin} onChange={(e) => setFiltres({ ...filtres, dateFin: e.target.value, date: "" })} />
+        <label htmlFor="filtreNomCompletFiph">Nom complet</label>
+        <input
+          id="filtreNomCompletFiph"
+          type="text"
+          placeholder="Rechercher un agent..."
+          value={filtres.nomComplet}
+          onChange={(e) => setFiltres({ ...filtres, nomComplet: e.target.value })}
+        />
         <label htmlFor="filtreStatutFiph">Statut</label>
         <select id="filtreStatutFiph" value={filtres.statut} onChange={(e) => setFiltres({ ...filtres, statut: e.target.value })}>
           <option value="">— Tous —</option>

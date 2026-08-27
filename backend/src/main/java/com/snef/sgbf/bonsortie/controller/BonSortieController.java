@@ -71,8 +71,9 @@ public class BonSortieController {
                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateDebut,
                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateFin,
                                       @RequestParam(required = false) @Nullable StatutBonSortie statut,
-                                      @RequestParam(required = false) @Nullable Long serviceId) {
-        return bonSortieService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId);
+                                      @RequestParam(required = false) @Nullable Long serviceId,
+                                      @RequestParam(required = false) @Nullable String nomComplet) {
+        return bonSortieService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId, nomComplet);
     }
 
     @GetMapping("/{id}")
@@ -112,8 +113,10 @@ public class BonSortieController {
     /**
      * Correction des champs du bon de sortie (evolution du 2026-08-26) -
      * remplace l'ancien endpoint {@code /retour}, jamais expose cote
-     * frontend. Reservee au titulaire ou a un gestionnaire de son service,
-     * bloquee des que le bon est {@code VALIDE} (RG-VER-001).
+     * frontend. Reservee au titulaire ou a un gestionnaire de son service tant
+     * que le bon n'est pas {@code VALIDE} ; une fois valide, reservee au seul
+     * gestionnaire du service (ou au Super Administrateur) - evolution du
+     * 2026-08-27, RG-VER-001 desormais inversee sur decision explicite.
      */
     @PutMapping("/{id}")
     public BonSortieDto modifier(@PathVariable Long id, @Valid @RequestBody ModifierBonSortieRequest requete,

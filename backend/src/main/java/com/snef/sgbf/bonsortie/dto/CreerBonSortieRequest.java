@@ -25,6 +25,14 @@ public record CreerBonSortieRequest(
 
         Long agentId,
 
+        /**
+         * Mission choisie explicitement (evolution du 2026-08-27, "Code
+         * Mission") - facultative, comme la resolution automatique par
+         * agent+date qui reste appliquee tant qu'aucune mission n'est
+         * choisie ici. Voir Javadoc de {@code BonSortie#mission}.
+         */
+        Long missionId,
+
         Long vehiculeId,
 
         @NotNull(message = "Le moyen utilise est obligatoire.")

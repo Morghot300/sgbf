@@ -14,6 +14,10 @@ export interface BonSortieDto {
   vehiculeImmatriculation: string | null;
   affectationMissionId: number | null;
   missionCodeHN: string | null;
+  /** Mission choisie explicitement à la création/correction (évolution du 2026-08-27, "Code Mission") - distincte de missionCodeHN ci-dessus, qui reste la résolution automatique par agent+date à la validation. */
+  missionSelectionneeId: number | null;
+  missionSelectionneeCodeHN: string | null;
+  missionSelectionneeChantierLibelle: string | null;
   moyenUtilise: MoyenUtilise;
   precisionVehicule: string | null;
   lt: string | null;
@@ -37,6 +41,10 @@ export interface BonSortieDto {
 }
 
 export interface CreerBonSortieRequest {
+  /** Personne principale (évolution du 2026-08-27) : `null` pour la création en libre-service habituelle ; renseigné pour créer POUR LE COMPTE d'un tiers - réservé au CA/PH du service ou au Super Administrateur, vérifié côté serveur. */
+  agentId?: number | null;
+  /** Mission choisie explicitement (évolution du 2026-08-27, "Code Mission") - facultative. */
+  missionId?: number | null;
   vehiculeId: number | null;
   moyenUtilise: MoyenUtilise;
   precisionVehicule: string | null;
@@ -50,6 +58,8 @@ export interface CreerBonSortieRequest {
 }
 
 export interface ModifierBonSortieRequest {
+  /** Mission choisie explicitement (évolution du 2026-08-27, "Code Mission") - facultative. */
+  missionId: number | null;
   vehiculeId: number | null;
   moyenUtilise: MoyenUtilise;
   precisionVehicule: string | null;

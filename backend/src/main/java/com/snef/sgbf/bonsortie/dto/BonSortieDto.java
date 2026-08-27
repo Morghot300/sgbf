@@ -17,6 +17,16 @@ public record BonSortieDto(
         String vehiculeImmatriculation,
         Long affectationMissionId,
         String missionCodeHN,
+        /**
+         * Mission choisie explicitement a la creation/correction du bon de
+         * sortie (evolution du 2026-08-27, "Code Mission") - distincte de
+         * {@link #affectationMissionId}/{@link #missionCodeHN} ci-dessus, qui
+         * restent la resolution automatique par agent+date, effectuee
+         * uniquement a la validation.
+         */
+        Long missionSelectionneeId,
+        String missionSelectionneeCodeHN,
+        String missionSelectionneeChantierLibelle,
         MoyenUtilise moyenUtilise,
         String precisionVehicule,
         String lt,
@@ -48,7 +58,8 @@ public record BonSortieDto(
     /** Reconstruit ce DTO avec l'avertissement d'affectation calcule (voir BonSortieService). */
     public BonSortieDto avecAvertissementAffectation(String avertissement) {
         return new BonSortieDto(id, agentId, agentNomComplet, agentMatricule, vehiculeId, vehiculeImmatriculation,
-                affectationMissionId, missionCodeHN, moyenUtilise, precisionVehicule, lt, kilometrage, dateSortie,
+                affectationMissionId, missionCodeHN, missionSelectionneeId, missionSelectionneeCodeHN,
+                missionSelectionneeChantierLibelle, moyenUtilise, precisionVehicule, lt, kilometrage, dateSortie,
                 heureSortie, heureRetour, lieu, codeAffaireSaisi, motifSortie, statut, origine, bonSortiePrincipalId,
                 viseParIdentifiant, dateVisa, valideParIdentifiant, dateValidation, lockVersion, avertissement);
     }

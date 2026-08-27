@@ -46,8 +46,9 @@ public class FiphController {
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateDebut,
                                  @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) @Nullable LocalDate dateFin,
                                  @RequestParam(required = false) @Nullable StatutFiphVersion statut,
-                                 @RequestParam(required = false) @Nullable Long serviceId) {
-        return fiphService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId);
+                                 @RequestParam(required = false) @Nullable Long serviceId,
+                                 @RequestParam(required = false) @Nullable String nomComplet) {
+        return fiphService.listerVisibles(principal.getUtilisateur(), date, dateDebut, dateFin, statut, serviceId, nomComplet);
     }
 
     @GetMapping("/{id}")

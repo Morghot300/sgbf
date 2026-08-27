@@ -1,8 +1,8 @@
 package com.snef.sgbf.bonsortie.entity;
 
 import com.snef.sgbf.identite.entity.Utilisateur;
-import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.mission.entity.AffectationMission;
+import com.snef.sgbf.mission.entity.Mission;
 import com.snef.sgbf.referentiel.entity.Vehicule;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -69,6 +69,20 @@ public class BonSortie {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "affectation_mission_id")
     private AffectationMission affectationMission;
+
+    /**
+     * Mission choisie explicitement a la creation ou a une correction
+     * ulterieure (evolution du 2026-08-27, "Code Mission" du brief
+     * "Evolution du module Bon de Sortie") - facultative. Lorsqu'elle est
+     * renseignee, elle devient prioritaire sur la resolution automatique par
+     * date a la validation ({@link com.snef.sgbf.bonsortie.service.BonSortieService#valider}) :
+     * seule une {@link AffectationMission} de l'agent portant EXACTEMENT
+     * cette mission est retenue, jamais une autre resolue par simple
+     * coincidence de date.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "mission_id")
+    private Mission mission;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "moyen_utilise", nullable = false, length = 20)

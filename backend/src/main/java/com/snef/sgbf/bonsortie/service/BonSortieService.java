@@ -22,6 +22,8 @@ import com.snef.sgbf.identite.entity.Utilisateur;
 import com.snef.sgbf.identite.repository.HabilitationRepository;
 import com.snef.sgbf.identite.repository.UtilisateurRepository;
 import com.snef.sgbf.mission.entity.AffectationMission;
+import com.snef.sgbf.mission.entity.Mission;
+import com.snef.sgbf.mission.repository.MissionRepository;
 import com.snef.sgbf.mission.service.AffectationMissionService;
 import com.snef.sgbf.notification.service.NotificationService;
 import com.snef.sgbf.referentiel.entity.CodeRoleMetier;
@@ -61,6 +63,7 @@ public class BonSortieService {
     private final BonSortiePersonneRepository bonSortiePersonneRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final VehiculeRepository vehiculeRepository;
+    private final MissionRepository missionRepository;
     private final HabilitationRepository habilitationRepository;
     private final AffectationMissionService affectationMissionService;
     private final PersonneABordGenerationService personneABordGenerationService;
@@ -73,6 +76,7 @@ public class BonSortieService {
                              BonSortiePersonneRepository bonSortiePersonneRepository,
                              UtilisateurRepository utilisateurRepository,
                              VehiculeRepository vehiculeRepository,
+                             MissionRepository missionRepository,
                              HabilitationRepository habilitationRepository,
                              AffectationMissionService affectationMissionService,
                              PersonneABordGenerationService personneABordGenerationService,
@@ -84,6 +88,7 @@ public class BonSortieService {
         this.bonSortiePersonneRepository = bonSortiePersonneRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.vehiculeRepository = vehiculeRepository;
+        this.missionRepository = missionRepository;
         this.habilitationRepository = habilitationRepository;
         this.affectationMissionService = affectationMissionService;
         this.personneABordGenerationService = personneABordGenerationService;
@@ -110,10 +115,13 @@ public class BonSortieService {
 
     /**
      * Liste des bons de sortie visibles par l'utilisateur courant, avec
-     * filtres optionnels combinables (evolution du 2026-08-18, section 1) :
-     * date exacte, periode (bornes incluses), statut, service. Un filtre ne
-     * peut jamais elargir la visibilite : tous sont appliques APRES le
-     * filtrage de perimetre (RG-SEC-002), jamais a sa place.
+     * filtres optionnels combinables (evolution du 2026-08-18, section 1 ;
+     * nomComplet ajoute le 2026-08-27, brief "Evolution du module Bon de
+     * Sortie", section 13-15) : date exacte, periode (bornes incluses),
+     * statut, service, nom complet de l'agent (recherche partielle,
+     * insensible a la casse). Un filtre ne peut jamais elargir la
+     * visibilite : tous sont appliques APRES le filtrage de perimetre
+     * (RG-SEC-002), jamais a sa place.
      *
      * <p>Perimetre : tous les bons pour la RH/Direction/Administrateur/Super
      * Administrateur (lecture globale), ceux du perimetre de service pour un
@@ -124,7 +132,8 @@ public class BonSortieService {
      */
     @Transactional(readOnly = true)
     public List<BonSortieDto> listerVisibles(Utilisateur courant, LocalDate date, LocalDate dateDebut, LocalDate dateFin,
-                                              StatutBonSortie statut, Long serviceId) {
+                                              StatutBonSortie statut, Long serviceId, String nomComplet) {
+        String termeRecherche = nomComplet != null && !nomComplet.isBlank() ? nomComplet.trim().toLowerCase() : null;
         return entitesVisibles(courant).stream()
                 .filter(bs -> date == null || date.equals(bs.getDateSortie()))
                 .filter(bs -> dateDebut == null || !bs.getDateSortie().isBefore(dateDebut))
@@ -132,6 +141,7 @@ public class BonSortieService {
                 .filter(bs -> statut == null || statut == bs.getStatut())
                 .filter(bs -> serviceId == null
                         || (bs.getAgent().getService() != null && serviceId.equals(bs.getAgent().getService().getId())))
+                .filter(bs -> termeRecherche == null || bs.getAgent().getNomComplet().toLowerCase().contains(termeRecherche))
                 .map(bs -> avecAvertissementAffectation(bonSortieMapper.toDto(bs), bs))
                 .toList();
     }
@@ -146,22 +156,46 @@ public class BonSortieService {
      * encore valide, ce champ est toujours nul par construction (resolu
      * seulement a la validation, voir {@link #valider}) - sans resolution
      * live ici, aucun avertissement ne serait jamais visible avant coup.
+     *
+     * <p>Evolution du 2026-08-27 ("Code Mission") : lorsqu'une mission a ete
+     * choisie explicitement sur le bon de sortie ({@link BonSortie#getMission()}),
+     * seule une affectation portant EXACTEMENT cette mission compte comme
+     * resolue - une affectation active de l'agent sur une AUTRE mission a
+     * cette date ne doit jamais etre silencieusement acceptee a sa place.
      */
     private BonSortieDto avecAvertissementAffectation(BonSortieDto dto, BonSortie bonSortie) {
         if (bonSortie.getAffectationMission() != null) {
             return dto;
         }
-        boolean resoluble = affectationMissionService
-                .resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie())
-                .isPresent();
-        if (resoluble) {
+        Optional<AffectationMission> resolue = resoudreAffectationPourValidation(bonSortie);
+        if (resolue.isPresent()) {
             return dto;
         }
-        String avertissement = "Aucune affectation active trouvee pour " + bonSortie.getAgent().getNomComplet()
-                + " a la date du " + bonSortie.getDateSortie() + " (code affaire saisi : "
-                + (bonSortie.getCodeAffaireSaisi() != null ? bonSortie.getCodeAffaireSaisi() : "non renseigne")
-                + "). Verifiez l'affectation de l'agent ou corrigez le code affaire avant de valider.";
+        String avertissement = bonSortie.getMission() != null
+                ? "L'agent " + bonSortie.getAgent().getNomComplet() + " n'a aucune affectation active sur la mission "
+                        + bonSortie.getMission().getCodeHN().getCode() + " a la date du " + bonSortie.getDateSortie()
+                        + ". Verifiez l'affectation de l'agent ou corrigez la mission choisie avant de valider."
+                : "Aucune affectation active trouvee pour " + bonSortie.getAgent().getNomComplet()
+                        + " a la date du " + bonSortie.getDateSortie() + " (code affaire saisi : "
+                        + (bonSortie.getCodeAffaireSaisi() != null ? bonSortie.getCodeAffaireSaisi() : "non renseigne")
+                        + "). Verifiez l'affectation de l'agent ou corrigez le code affaire avant de valider.";
         return dto.avecAvertissementAffectation(avertissement);
+    }
+
+    /**
+     * Resolution de l'affectation a retenir pour ce bon de sortie (avertissement
+     * live comme a la validation, voir {@link #valider}) : par agent+date, sauf
+     * si une mission a ete choisie explicitement sur le bon (evolution du
+     * 2026-08-27), auquel cas elle devient prioritaire - seule une affectation
+     * portant exactement cette mission est retenue.
+     */
+    private Optional<AffectationMission> resoudreAffectationPourValidation(BonSortie bonSortie) {
+        Optional<AffectationMission> parDate = affectationMissionService
+                .resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
+        if (bonSortie.getMission() == null) {
+            return parDate;
+        }
+        return parDate.filter(a -> a.getMission().getId().equals(bonSortie.getMission().getId()));
     }
 
     private List<BonSortie> entitesVisibles(Utilisateur courant) {
@@ -218,6 +252,10 @@ public class BonSortieService {
 
         BonSortie bonSortie = new BonSortie();
         bonSortie.setAgent(titulaire);
+        if (requete.missionId() != null) {
+            bonSortie.setMission(missionRepository.findById(requete.missionId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Mission", requete.missionId())));
+        }
         if (requete.vehiculeId() != null) {
             bonSortie.setVehicule(vehiculeRepository.findById(requete.vehiculeId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Vehicule", requete.vehiculeId())));
@@ -265,11 +303,17 @@ public class BonSortieService {
 
     /**
      * Resout le titulaire reel du bon de sortie a creer. {@code null} ou egal
-     * a l'auteur : creation en libre-service habituelle. Different de
-     * l'auteur : creation POUR LE COMPTE d'un tiers, reservee a
-     * l'Administrateur/Super Administrateur (portee globale) ou au Charge
-     * d'Affaires/personne habilitee du MEME service que le tiers (evolution
-     * du 2026-08-19).
+     * a l'auteur : creation en libre-service habituelle, ouverte a tous.
+     * Different de l'auteur : creation POUR LE COMPTE d'un tiers avec
+     * selection explicite de la "personne principale" - reservee au Charge
+     * d'Affaires/personne habilitee du MEME service que le tiers, ou au
+     * Super Administrateur (portee globale).
+     *
+     * <p>Evolution du 2026-08-27 (brief "Evolution du module Bon de Sortie",
+     * section 3) : l'Administrateur simple n'est plus habilite a creer un bon
+     * de sortie pour le compte d'un tiers - seuls CA/PH/Super Administrateur
+     * le sont desormais (auparavant, l'Administrateur beneficiait d'un
+     * contournement au meme titre que le Super Administrateur).
      */
     private Utilisateur resoudreTitulaire(Long agentIdDemande, Utilisateur auteur) {
         if (agentIdDemande == null || agentIdDemande.equals(auteur.getId())) {
@@ -277,12 +321,7 @@ public class BonSortieService {
         }
         Utilisateur cible = utilisateurRepository.findById(agentIdDemande)
                 .orElseThrow(() -> ResourceNotFoundException.of("Utilisateur", agentIdDemande));
-        boolean auteurEstAdministrateur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId()).stream()
-                .anyMatch(h -> CodeRoleMetier.ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode())
-                        || CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(h.getRoleMetier().getCode()));
-        if (!auteurEstAdministrateur) {
-            verifierPerimetreGestionnaire(auteur, cible);
-        }
+        verifierPerimetreGestionnaire(auteur, cible);
         return cible;
     }
 
@@ -291,15 +330,33 @@ public class BonSortieService {
      * 2026-08-26 - "ajoute la correction des bon de sortie"), y compris
      * l'heure de retour (remplace l'ancien endpoint dedie {@code /retour},
      * jamais expose cote frontend et donc jamais utilisable en pratique).
-     * Meme perimetre que le visa/la validation, bloquee des que le bon est
-     * {@code VALIDE} (RG-VER-001), verrouillage optimiste (RG-SEC-001).
+     *
+     * <p><strong>Perimetre selon le statut (evolution du 2026-08-27, "Evolution
+     * du module Bon de Sortie" - RG-VER-001 desormais inversee sur decision
+     * explicite)</strong> : tant que le bon n'est pas encore {@code VALIDE},
+     * le titulaire ou un gestionnaire (Charge d'Affaires/personne habilitee)
+     * de son service peuvent corriger, comme pour le visa. Une fois
+     * {@code VALIDE}, la correction reste possible mais se restreint au seul
+     * gestionnaire du service (ou au Super Administrateur, bypass deja inclus
+     * dans {@link #verifierPerimetreGestionnaire}) - le simple titulaire, s'il
+     * n'est pas lui-meme gestionnaire, ne peut alors plus corriger son propre
+     * bon une fois valide.
+     *
+     * <p><strong>FIPH deja scellee (section 12 du meme brief)</strong> : si
+     * une FIPH couvrant la date de sortie de l'agent est deja
+     * {@code VALIDEE_DEFINITIVEMENT}, la correction est refusee - ses jours de
+     * pointage sont scelles, une correction du bon de sortie source ne doit
+     * jamais pouvoir la contredire silencieusement. Si la FIPH existe mais
+     * n'est pas encore scellee, la correction reste autorisee sans aucune
+     * synchronisation automatique (le Charge d'Affaires/la personne habilitee
+     * ajuste alors la FIPH manuellement si necessaire).
      */
     public BonSortieDto modifier(Long bonSortieId, ModifierBonSortieRequest requete, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
-        verifierAutoServiceOuGestionnaire(auteur, bonSortie.getAgent());
         if (bonSortie.getStatut() == StatutBonSortie.VALIDE) {
-            throw new BusinessRuleViolationException("RG-VER-001",
-                    "Un bon de sortie valide ne peut plus etre modifie.");
+            verifierPerimetreGestionnaire(auteur, bonSortie.getAgent());
+        } else {
+            verifierAutoServiceOuGestionnaire(auteur, bonSortie.getAgent());
         }
         // L'@Version JPA (lockVersion) rejette automatiquement l'ecriture si
         // la valeur soumise diverge de celle persistee (OptimisticLockingFailureException,
@@ -310,8 +367,15 @@ public class BonSortieService {
                     "Ce bon de sortie a ete modifie entre-temps. Rechargez-le avant de reessayer.");
         }
         verifierPrecisionVehicule(requete.moyenUtilise(), requete.precisionVehicule());
+        fiphService.verifierAbsenceFiphScelleePourDate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
 
         BonSortieDto avant = bonSortieMapper.toDto(bonSortie);
+        if (requete.missionId() != null) {
+            bonSortie.setMission(missionRepository.findById(requete.missionId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Mission", requete.missionId())));
+        } else {
+            bonSortie.setMission(null);
+        }
         if (requete.vehiculeId() != null) {
             bonSortie.setVehicule(vehiculeRepository.findById(requete.vehiculeId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Vehicule", requete.vehiculeId())));
@@ -431,8 +495,10 @@ public class BonSortieService {
                             + " n'est rattache a aucun service. Rattachez-le a un service avant de continuer.");
         }
 
-        Optional<AffectationMission> affectation =
-                affectationMissionService.resoudreActiveADate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
+        // Evolution du 2026-08-27 : si une mission a ete choisie explicitement sur ce bon
+        // (Code Mission), elle devient prioritaire sur la simple resolution par date - voir
+        // Javadoc de resoudreAffectationPourValidation.
+        Optional<AffectationMission> affectation = resoudreAffectationPourValidation(bonSortie);
 
         StatutBonSortie avant = bonSortie.getStatut();
         affectation.ifPresent(bonSortie::setAffectationMission);

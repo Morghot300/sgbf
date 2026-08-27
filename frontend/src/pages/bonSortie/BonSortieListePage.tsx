@@ -16,7 +16,7 @@ const STATUTS: StatutBonSortie[] = ["BROUILLON", "VISE", "VALIDE"];
  * (parametres de requete), pas en chargeant tout puis en filtrant en React.
  */
 export default function BonSortieListePage() {
-  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "", nomComplet: "" });
   const services = useQuery({ queryKey: ["services"], queryFn: listerServices });
   const requete = useQuery({
     queryKey: ["bons-sortie", filtres],
@@ -26,11 +26,12 @@ export default function BonSortieListePage() {
       dateFin: filtres.dateFin || undefined,
       statut: filtres.statut || undefined,
       serviceId: filtres.serviceId ? Number(filtres.serviceId) : undefined,
+      nomComplet: filtres.nomComplet || undefined,
     }),
   });
 
   function reinitialiserFiltres() {
-    setFiltres({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "" });
+    setFiltres({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "", nomComplet: "" });
   }
 
   return (
@@ -47,6 +48,14 @@ export default function BonSortieListePage() {
         <input id="filtreDateDebut" type="date" value={filtres.dateDebut} onChange={(e) => setFiltres({ ...filtres, dateDebut: e.target.value, date: "" })} />
         <label htmlFor="filtreDateFin">Au</label>
         <input id="filtreDateFin" type="date" value={filtres.dateFin} onChange={(e) => setFiltres({ ...filtres, dateFin: e.target.value, date: "" })} />
+        <label htmlFor="filtreNomCompletBs">Nom complet</label>
+        <input
+          id="filtreNomCompletBs"
+          type="text"
+          placeholder="Rechercher un agent..."
+          value={filtres.nomComplet}
+          onChange={(e) => setFiltres({ ...filtres, nomComplet: e.target.value })}
+        />
         <label htmlFor="filtreStatutBs">Statut</label>
         <select id="filtreStatutBs" value={filtres.statut} onChange={(e) => setFiltres({ ...filtres, statut: e.target.value })}>
           <option value="">— Tous —</option>

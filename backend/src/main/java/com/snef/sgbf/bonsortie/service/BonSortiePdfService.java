@@ -92,9 +92,18 @@ public class BonSortiePdfService {
     private String construireXhtml(BonSortie bs) {
         Utilisateur agent = bs.getAgent();
         AffectationMission affectation = bs.getAffectationMission();
-        String mission = affectation != null
-                ? esc(affectation.getMission().getCodeHN().getCode()) + " &#8212; " + esc(affectation.getMission().getChantier().getLibelle())
-                : "Non resolue";
+        // Evolution du 2026-08-27 ("Code Mission") : si aucune affectation n'a ete resolue mais
+        // qu'une mission a ete choisie explicitement sur le bon, l'imprimer quand meme plutot que
+        // "Non resolue" - avec une mention explicite que l'affectation elle-meme reste a confirmer.
+        String mission;
+        if (affectation != null) {
+            mission = esc(affectation.getMission().getCodeHN().getCode()) + " &#8212; " + esc(affectation.getMission().getChantier().getLibelle());
+        } else if (bs.getMission() != null) {
+            mission = esc(bs.getMission().getCodeHN().getCode()) + " &#8212; " + esc(bs.getMission().getChantier().getLibelle())
+                    + " (affectation non confirmee)";
+        } else {
+            mission = "Non resolue";
+        }
         String vehicule = bs.getVehicule() != null ? esc(bs.getVehicule().getImmatriculation()) : "Non renseigne";
         String lt = bs.getLt() != null && !bs.getLt().isBlank() ? esc(bs.getLt()) : "Non renseigne";
         String moyenUtilise = esc(bs.getMoyenUtilise().name())

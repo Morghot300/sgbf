@@ -87,14 +87,19 @@ public class FiphService {
 
     /**
      * Liste des FIPH visibles, avec filtres optionnels combinables
-     * (evolution du 2026-08-18, section 2) : date exacte, periode (une FIPH
-     * est retenue des lors que sa periode hebdomadaire chevauche l'intervalle
-     * demande), statut de la version courante, service. Toujours appliques
-     * APRES le filtrage de perimetre (RG-SEC-002).
+     * (evolution du 2026-08-18, section 2 ; nomComplet ajoute le 2026-08-27,
+     * brief "Evolution du module Bon de Sortie", section 13-15) : date
+     * exacte, periode (une FIPH est retenue des lors que sa periode
+     * hebdomadaire chevauche l'intervalle demande), statut de la version
+     * courante, service, nom complet de l'agent (recherche partielle,
+     * insensible a la casse). Toujours appliques APRES le filtrage de
+     * perimetre (RG-SEC-002).
      */
     @Transactional(readOnly = true)
     public List<FiphDto> listerVisibles(Utilisateur courant, java.time.LocalDate date, java.time.LocalDate dateDebut,
-                                         java.time.LocalDate dateFin, StatutFiphVersion statut, Long serviceId) {
+                                         java.time.LocalDate dateFin, StatutFiphVersion statut, Long serviceId,
+                                         String nomComplet) {
+        String termeRecherche = nomComplet != null && !nomComplet.isBlank() ? nomComplet.trim().toLowerCase() : null;
         return entitesVisibles(courant).stream()
                 // La date de fin vit desormais sur la version courante et peut etre nulle
                 // (periode encore "ouverte", evolution du 2026-08-21) - traitee alors comme
@@ -106,6 +111,7 @@ public class FiphService {
                 .filter(f -> dateFin == null || !f.getDateDebutPeriode().isAfter(dateFin))
                 .filter(f -> statut == null || statut == f.getStatut())
                 .filter(f -> serviceId == null || serviceId.equals(f.getService().getId()))
+                .filter(f -> termeRecherche == null || f.getAgent().getNomComplet().toLowerCase().contains(termeRecherche))
                 .map(fiphMapper::toDto)
                 .toList();
     }
@@ -257,6 +263,29 @@ public class FiphService {
         // Cas 2 (et suite du cas 3) : ajout/mise a jour de la ligne de pointage.
         ajouterOuMettreAJourPointage(fiph.getVersionCourante(), bonSortie);
         recalculerTotaux(fiph.getVersionCourante());
+    }
+
+    /**
+     * Refuse la correction d'un bon de sortie source (evolution du
+     * 2026-08-27, section 12 du brief "Evolution du module Bon de Sortie")
+     * si une FIPH couvrant cette date pour cet agent est deja
+     * {@code VALIDEE_DEFINITIVEMENT} - ses jours de pointage sont scelles
+     * (RG-VER-001 cote FIPH), une correction du bon de sortie source ne doit
+     * donc jamais pouvoir la contredire silencieusement. Si la FIPH existe
+     * mais n'est pas encore scellee, aucune synchronisation automatique
+     * n'est effectuee ici (decision confirmee) : le Charge d'Affaires/la
+     * personne habilitee ajuste alors la FIPH manuellement si necessaire.
+     */
+    public void verifierAbsenceFiphScelleePourDate(Long agentId, LocalDate date) {
+        fiphRepository.trouverCouvrantDate(agentId, date).stream()
+                .filter(f -> f.getStatut() == StatutFiphVersion.VALIDEE_DEFINITIVEMENT)
+                .findFirst()
+                .ifPresent(f -> {
+                    throw new BusinessRuleViolationException("RG-BS-011",
+                            "Impossible de corriger ce bon de sortie : la FIPH #" + f.getId()
+                                    + " couvrant cette date pour cet agent est deja validee definitivement"
+                                    + " (jours de pointage scelles).");
+                });
     }
 
     /**

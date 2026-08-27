@@ -33,12 +33,19 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Evolution du 2026-08-26 ("ajoute la correction des bon de sortie") :
- * correction des champs d'un bon de sortie deja cree (remplace l'ancien
- * endpoint {@code /retour}, jamais expose cote frontend et donc inutilisable
- * en pratique). Meme perimetre que le visa/la validation (titulaire ou
- * gestionnaire - Charge d'Affaires/personne habilitee - du meme service),
- * bloquee des que le bon est {@code VALIDE} (RG-VER-001).
+ * Evolution du 2026-08-26 ("ajoute la correction des bon de sortie"), puis du
+ * 2026-08-27 (brief "Evolution du module Bon de Sortie", section 10-12,
+ * RG-VER-001 inversee sur decision explicite) : correction des champs d'un
+ * bon de sortie deja cree (remplace l'ancien endpoint {@code /retour},
+ * jamais expose cote frontend et donc inutilisable en pratique).
+ *
+ * <p>Perimetre selon le statut : tant que le bon n'est pas {@code VALIDE},
+ * le titulaire ou un gestionnaire (Charge d'Affaires/personne habilitee) de
+ * son service peuvent corriger. Une fois {@code VALIDE}, la correction reste
+ * possible mais se restreint au seul gestionnaire du service (le simple
+ * titulaire, s'il n'est pas lui-meme gestionnaire, ne peut plus corriger son
+ * propre bon) - sauf si une FIPH couvrant cette date pour cet agent est deja
+ * {@code VALIDEE_DEFINITIVEMENT} (RG-BS-011, jours de pointage scelles).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -101,9 +108,13 @@ class CorrectionBonSortieIT {
         assertThat(corrige.get("statut").asText()).isEqualTo("VISE");
     }
 
-    /** RG-VER-001 : plus aucune correction possible une fois le bon VALIDE. */
+    /**
+     * Evolution du 2026-08-27 : un Charge d'Affaires/une personne habilitee
+     * du service PEUT desormais corriger un bon de sortie meme deja VALIDE
+     * (RG-VER-001 inversee sur decision explicite).
+     */
     @Test
-    void correctionRefuseeUneFoisValide_RG_VER_001() throws Exception {
+    void correctionParCaDuServiceApresValidation_reussit() throws Exception {
         Utilisateur titulaire = creerUtilisateur("agent_correc3_" + suffixe, littoral);
         String tokenAgent = seConnecter(titulaire.getIdentifiant());
         String tokenCa = seConnecter(caLittoral.getIdentifiant());
@@ -116,12 +127,97 @@ class CorrectionBonSortieIT {
                 .andExpect(status().isOk());
         JsonNode valide = obtenir(tokenCa, bonId);
 
+        JsonNode corrige = corriger(tokenCa, bonId, "MS-004", 10, valide.get("lockVersion").asInt(), status().isOk());
+        assertThat(corrige.get("codeAffaireSaisi").asText()).isEqualTo("MS-004");
+        assertThat(corrige.get("statut").asText()).isEqualTo("VALIDE"); // le statut lui-meme reste inchange
+    }
+
+    /**
+     * A l'inverse, le simple titulaire (qui n'est pas lui-meme gestionnaire
+     * du service) ne peut plus corriger son propre bon une fois VALIDE -
+     * seul un CA/PH/Super Administrateur le peut desormais.
+     */
+    @Test
+    void correctionRefuseeAuTitulaireSeulUneFoisValide() throws Exception {
+        Utilisateur titulaire = creerUtilisateur("agent_correc3b_" + suffixe, littoral);
+        String tokenAgent = seConnecter(titulaire.getIdentifiant());
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        JsonNode bon = creerBonDeSortie(tokenAgent, "MS-003B");
+        long bonId = bon.get("id").asLong();
+
+        mockMvc.perform(post("/api/bons-sortie/" + bonId + "/viser").header("Authorization", "Bearer " + tokenAgent))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/bons-sortie/" + bonId + "/valider").header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk());
+        JsonNode valide = obtenir(tokenAgent, bonId);
+
+        mockMvc.perform(put("/api/bons-sortie/" + bonId)
+                        .header("Authorization", "Bearer " + tokenAgent)
+                        .contentType("application/json")
+                        .content(corpsCorrection("MS-004B", 10, valide.get("lockVersion").asInt())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * RG-BS-011 : des qu'une FIPH couvrant la date de sortie de l'agent est
+     * deja VALIDEE_DEFINITIVEMENT, la correction du bon de sortie source est
+     * refusee - ses jours de pointage sont scelles.
+     */
+    @Test
+    void correctionRefuseeSiFiphDejaValideeDefinitivement() throws Exception {
+        Utilisateur titulaire = creerUtilisateur("agent_correc3c_" + suffixe, littoral);
+        Utilisateur ra = creerUtilisateurAvecHabilitation("ra_" + suffixe, littoral, CodeRoleMetier.RESPONSABLE_ACTIVITE);
+        Utilisateur direction = creerUtilisateurAvecHabilitation("dir_" + suffixe, littoral, CodeRoleMetier.DIRECTION);
+        String tokenAgent = seConnecter(titulaire.getIdentifiant());
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        String tokenRa = seConnecter(ra.getIdentifiant());
+        String tokenDirection = seConnecter(direction.getIdentifiant());
+
+        JsonNode bon = creerBonDeSortie(tokenAgent, "MS-003C");
+        long bonId = bon.get("id").asLong();
+        mockMvc.perform(post("/api/bons-sortie/" + bonId + "/viser").header("Authorization", "Bearer " + tokenAgent))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/bons-sortie/" + bonId + "/valider").header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk());
+
+        // FIPH generee automatiquement - amenee jusqu'a VALIDEE_DEFINITIVEMENT (niveaux 2/3/4).
+        String reponseFiph = mockMvc.perform(get("/api/fiph").header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        JsonNode fiphs = objectMapper.readTree(reponseFiph);
+        long versionId = -1;
+        for (JsonNode f : fiphs) {
+            if (f.get("agentId").asLong() == titulaire.getId()) {
+                versionId = f.get("versionCouranteId").asLong();
+            }
+        }
+        assertThat(versionId).isPositive();
+
+        mockMvc.perform(put("/api/fiph-versions/" + versionId + "/date-fin")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("dateFin", LocalDate.now().toString());
+                        }})))
+                .andExpect(status().isOk());
+        String decisionValidee = objectMapper.writeValueAsString(new LinkedHashMap<>() {{ put("decision", "VALIDEE"); }});
+        mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/2")
+                        .header("Authorization", "Bearer " + tokenCa).contentType("application/json").content(decisionValidee))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/3")
+                        .header("Authorization", "Bearer " + tokenRa).contentType("application/json").content(decisionValidee))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/fiph-versions/" + versionId + "/valider/4")
+                        .header("Authorization", "Bearer " + tokenDirection).contentType("application/json").content(decisionValidee))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutVersion").value("VALIDEE_DEFINITIVEMENT"));
+
+        JsonNode valide = obtenir(tokenCa, bonId);
         mockMvc.perform(put("/api/bons-sortie/" + bonId)
                         .header("Authorization", "Bearer " + tokenCa)
                         .contentType("application/json")
-                        .content(corpsCorrection("MS-004", 10, valide.get("lockVersion").asInt())))
+                        .content(corpsCorrection("MS-004C", 10, valide.get("lockVersion").asInt())))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.codeRegle").value("RG-VER-001"));
+                .andExpect(jsonPath("$.codeRegle").value("RG-BS-011"));
     }
 
     /** Un Charge d'Affaires d'un AUTRE service ne peut pas corriger (RG-SEC-002). */

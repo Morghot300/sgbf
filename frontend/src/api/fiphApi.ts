@@ -11,6 +11,7 @@ export interface FiltresFiph {
   dateFin?: string;
   statut?: string;
   serviceId?: number;
+  nomComplet?: string;
 }
 /** Filtres combinables (date exacte, période, statut, service) - évolution du 2026-08-18. */
 export async function listerFiph(filtres: FiltresFiph = {}): Promise<FiphDto[]> {

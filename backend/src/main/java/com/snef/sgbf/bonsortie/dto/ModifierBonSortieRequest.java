@@ -15,19 +15,25 @@ import java.time.LocalTime;
  * plus {@link #heureRetour} (inconnue au moment de la creation, remplace
  * l'ancien endpoint dedie {@code /retour}).
  *
- * <p>Reservee au titulaire du bon ou a un gestionnaire (Charge d'Affaires/
- * personne habilitee) de son service - meme perimetre que le visa et la
- * validation ({@code BonSortieService#verifierAutoServiceOuGestionnaire}) -
- * et bloquee des que le bon est {@code VALIDE} (RG-VER-001) : la validation
- * fige definitivement le contenu, une correction ulterieure n'est alors plus
- * possible par construction (aucun mecanisme de nouvelle version pour un bon
- * de sortie, a la difference de la FIPH).
+ * <p>Reservee, tant que le bon n'est pas {@code VALIDE}, au titulaire ou a un
+ * gestionnaire (Charge d'Affaires/personne habilitee) de son service - meme
+ * perimetre que le visa ({@code BonSortieService#verifierAutoServiceOuGestionnaire}).
+ * Une fois {@code VALIDE}, la correction reste possible (evolution du
+ * 2026-08-27, "Evolution du module Bon de Sortie" - RG-VER-001 inversee sur
+ * decision explicite) mais se restreint alors au seul gestionnaire du service
+ * (ou au Super Administrateur) : le simple titulaire, s'il n'est pas
+ * lui-meme gestionnaire, ne peut plus corriger son propre bon une fois
+ * valide. Refusee si une FIPH couvrant la date de sortie de l'agent est deja
+ * {@code VALIDEE_DEFINITIVEMENT} (ses jours de pointage sont scelles).
  *
  * <p>{@link #lockVersion} porte le verrouillage optimiste (RG-SEC-001) :
  * doit correspondre a la version lue a l'ouverture de l'edition, sans quoi
  * la modification est rejetee comme conflit de concurrence (section 26.7).
  */
 public record ModifierBonSortieRequest(
+
+        /** Mission choisie explicitement (evolution du 2026-08-27, "Code Mission") - facultative. */
+        Long missionId,
 
         Long vehiculeId,
 

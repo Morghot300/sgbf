@@ -5,10 +5,12 @@ import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { modifierBonSortie } from "../../api/bonSortieApi";
 import { extraireMessageErreur } from "../../api/httpClient";
+import { listerMissions } from "../../api/missionApi";
 import { listerVehicules } from "../../api/referentielApi";
 import { LIBELLES_MOYEN_UTILISE, type BonSortieDto, type MoyenUtilise } from "../../types/bonSortie";
 
 const schema = z.object({
+  missionId: z.string().optional(),
   moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI", "AUTRE"]),
   precisionVehicule: z.string().max(200).optional(),
   vehiculeId: z.string().optional(),
@@ -32,12 +34,18 @@ function normaliserHeure(heure: string): string {
 
 /**
  * Correction des champs d'un bon de sortie (évolution du 2026-08-26 —
- * "ajoute la correction des bon de sortie") : repliée par défaut pour ne
- * pas alourdir la fiche d'un formulaire complet en permanence — un seul
- * bouton bascule son ouverture. Le serveur reste la seule source de vérité
- * sur qui peut corriger (titulaire ou gestionnaire du service) et jusqu'à
- * quel statut (bloqué dès VALIDE, RG-VER-001) ; ce composant ne fait que
- * refléter ce que le serveur acceptera, sans dupliquer cette logique.
+ * "ajoute la correction des bon de sortie", étendue le 2026-08-27 — brief
+ * "Evolution du module Bon de Sortie", section 10-12) : repliée par défaut
+ * pour ne pas alourdir la fiche d'un formulaire complet en permanence — un
+ * seul bouton bascule son ouverture.
+ *
+ * <p>Reste possible même une fois le bon VALIDE (RG-VER-001 désormais
+ * inversée sur décision explicite) — le serveur restreint alors la
+ * correction au seul gestionnaire du service (Chargé d'Affaires/personne
+ * habilitée) ou au Super Administrateur, et refuse si une FIPH déjà générée
+ * à partir de ce bon est validée définitivement (RG-BS-011). Ce composant ne
+ * fait que refléter ce que le serveur acceptera, sans dupliquer cette
+ * logique — un clic refusé échoue simplement avec un message clair.
  */
 export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
   bonSortie: BonSortieDto;
@@ -46,10 +54,12 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
   const [ouvert, setOuvert] = useState(false);
   const queryClient = useQueryClient();
   const vehicules = useQuery({ queryKey: ["vehicules"], queryFn: listerVehicules, enabled: ouvert });
+  const missions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: ouvert });
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<Formulaire>({
     resolver: zodResolver(schema),
     defaultValues: {
+      missionId: bonSortie.missionSelectionneeId ? String(bonSortie.missionSelectionneeId) : "",
       moyenUtilise: bonSortie.moyenUtilise,
       precisionVehicule: bonSortie.precisionVehicule ?? "",
       vehiculeId: bonSortie.vehiculeId ? String(bonSortie.vehiculeId) : "",
@@ -67,6 +77,7 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
 
   const correction = useMutation({
     mutationFn: (valeurs: Formulaire) => modifierBonSortie(bonSortie.id, {
+      missionId: valeurs.missionId ? Number(valeurs.missionId) : null,
       vehiculeId: valeurs.vehiculeId ? Number(valeurs.vehiculeId) : null,
       moyenUtilise: valeurs.moyenUtilise,
       precisionVehicule: valeurs.moyenUtilise === "AUTRE" ? (valeurs.precisionVehicule?.trim() || null) : null,
@@ -88,10 +99,6 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
     },
   });
 
-  if (bonSortie.statut === "VALIDE") {
-    return null;
-  }
-
   if (!ouvert) {
     return (
       <button type="button" onClick={() => setOuvert(true)}>Corriger le bon de sortie</button>
@@ -101,7 +108,22 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
   return (
     <section>
       <h2>Corriger le bon de sortie</h2>
+      {bonSortie.statut === "VALIDE" && (
+        <p role="alert" className="avertissement">
+          Ce bon de sortie est déjà validé. Réservé au Chargé d'Affaires/à la personne habilitée du service ou au
+          Super Administrateur — la modification sera enregistrée dans l'historique (auteur, date, anciennes et
+          nouvelles valeurs).
+        </p>
+      )}
       <form className="formulaire" onSubmit={handleSubmit((valeurs) => correction.mutate(valeurs))}>
+        <label htmlFor="c-missionId">Code Mission (facultatif)</label>
+        <select id="c-missionId" {...register("missionId")}>
+          <option value="">— Non renseigné —</option>
+          {missions.data?.map((m) => (
+            <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle} ({m.dateDebutPrevue} → {m.dateFinPrevue})</option>
+          ))}
+        </select>
+
         <label htmlFor="c-moyenUtilise">Moyen utilisé</label>
         <select id="c-moyenUtilise" {...register("moyenUtilise")}>
           {(Object.keys(LIBELLES_MOYEN_UTILISE) as MoyenUtilise[]).map((m) => (

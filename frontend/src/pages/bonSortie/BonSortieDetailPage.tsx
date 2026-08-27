@@ -66,7 +66,15 @@ export default function BonSortieDetailPage() {
                 <tr><th>Date / heure de sortie</th><td>{bs.dateSortie} à {bs.heureSortie}</td></tr>
                 <tr><th>Heure de retour</th><td>{bs.heureRetour ?? "Non renseignée"}</td></tr>
                 <tr><th>Kilométrage</th><td>{bs.kilometrage} km</td></tr>
-                <tr><th>Mission</th><td>{bs.missionCodeHN ?? "Non résolue"}</td></tr>
+                <tr>
+                  <th>Code Mission</th>
+                  <td>
+                    {bs.missionSelectionneeCodeHN
+                      ? `${bs.missionSelectionneeCodeHN} — ${bs.missionSelectionneeChantierLibelle}`
+                      : "Non renseigné"}
+                  </td>
+                </tr>
+                <tr><th>Mission résolue (affectation)</th><td>{bs.missionCodeHN ?? "Non résolue"}</td></tr>
                 <tr><th>Visa</th><td>{bs.viseParIdentifiant ? `${bs.viseParIdentifiant} le ${bs.dateVisa}` : "Non visé"}</td></tr>
                 <tr><th>Validation</th><td>{bs.valideParIdentifiant ? `${bs.valideParIdentifiant} le ${bs.dateValidation}` : "Non validé"}</td></tr>
               </tbody>
