@@ -50,6 +50,10 @@ export async function retirerPersonneABord(bonSortiePrincipalId: number, associa
 export async function listerAgentsEligibles(bonSortieId: number): Promise<AgentEligibleDto[]> {
   return (await httpClient.get<AgentEligibleDto[]>(`/bons-sortie/${bonSortieId}/agents-eligibles`)).data;
 }
+/** Personnel d'un service, sélectionnable AVANT même la création du bon (évolution du 2026-08-27) - périmètre calculé côté serveur. */
+export async function listerPersonnelDuService(serviceId: number): Promise<AgentEligibleDto[]> {
+  return (await httpClient.get<AgentEligibleDto[]>(`/bons-sortie/personnel-service/${serviceId}`)).data;
+}
 /** Ajout groupé, transactionnel et idempotent. */
 export async function ajouterPersonnesABordEnLot(bonSortiePrincipalId: number, requete: AjouterPersonnesABordEnLotRequest): Promise<BonSortiePersonneDto[]> {
   return (await httpClient.post<BonSortiePersonneDto[]>(`/bons-sortie/${bonSortiePrincipalId}/personnes-a-bord/lot`, requete)).data;

@@ -224,6 +224,27 @@ public class BonSortiePersonneService {
     }
 
     /**
+     * Personnel d'un service, selectionnable par cases a cocher (filtrable
+     * par nom cote client) AVANT MEME la creation du bon de sortie (evolution
+     * du 2026-08-27, brief "Evolution avancee du module Bon de Sortie,
+     * Missions et FIPH", section 3-4-30) - remplace la simple saisie libre
+     * d'un identifiant numerique par formulaire, qui ne permettait ni
+     * recherche ni verification visuelle. {@code dejaAffecteMemeCreneau} vaut
+     * toujours {@code false} ici : sans bon de sortie encore cree, il n'y a
+     * pas encore de creneau a comparer - ce signal ne redevient pertinent
+     * qu'une fois le bon cree (voir {@link #listerAgentsEligibles}).
+     */
+    @Transactional(readOnly = true)
+    public List<AgentEligibleDto> listerPersonnelDuService(Long serviceId, Utilisateur auteur) {
+        bonSortieService.verifierPerimetreService(auteur, serviceId);
+        return utilisateurRepository.findByService_Id(serviceId).stream()
+                .map(u -> new AgentEligibleDto(u.getId(), u.getNomComplet(), u.getMatricule(),
+                        u.getService() != null ? u.getService().getLibelle() : null, u.getStatutCompte(), false))
+                .filter(dto -> dto.statutCompte() == StatutCompte.ACTIF || dto.statutCompte() == StatutCompte.VERROUILLE)
+                .toList();
+    }
+
+    /**
      * RG-PAB-010 (evolution du 2026-08-21) : une personne a bord doit
      * obligatoirement appartenir au meme service que l'agent titulaire du bon
      * de sortie principal - jamais seulement filtre cote client

@@ -35,9 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Evolution du 2026-08-26 ("ajoute la correction des bon de sortie"), puis du
  * 2026-08-27 (brief "Evolution du module Bon de Sortie", section 10-12,
- * RG-VER-001 inversee sur decision explicite) : correction des champs d'un
- * bon de sortie deja cree (remplace l'ancien endpoint {@code /retour},
- * jamais expose cote frontend et donc inutilisable en pratique).
+ * RG-VER-001 inversee sur decision explicite ; brief "Evolution avancee du
+ * module Bon de Sortie, Missions et FIPH", section 15-17 - le bon repasse
+ * desormais a VISE) : correction des champs d'un bon de sortie deja cree
+ * (remplace l'ancien endpoint {@code /retour}, jamais expose cote frontend
+ * et donc inutilisable en pratique).
  *
  * <p>Perimetre selon le statut : tant que le bon n'est pas {@code VALIDE},
  * le titulaire ou un gestionnaire (Charge d'Affaires/personne habilitee) de
@@ -46,6 +48,9 @@ import org.springframework.transaction.annotation.Transactional;
  * titulaire, s'il n'est pas lui-meme gestionnaire, ne peut plus corriger son
  * propre bon) - sauf si une FIPH couvrant cette date pour cet agent est deja
  * {@code VALIDEE_DEFINITIVEMENT} (RG-BS-011, jours de pointage scelles).
+ * Corriger un bon {@code VALIDE} le fait repasser a {@code VISE} : une
+ * nouvelle validation (niveau 2) est desormais exigee (retour dans le
+ * circuit de validation, jamais un simple ecrasement silencieux).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -109,12 +114,14 @@ class CorrectionBonSortieIT {
     }
 
     /**
-     * Evolution du 2026-08-27 : un Charge d'Affaires/une personne habilitee
-     * du service PEUT desormais corriger un bon de sortie meme deja VALIDE
-     * (RG-VER-001 inversee sur decision explicite).
+     * Evolution du 2026-08-27 (brief "Evolution avancee...", section 15-17) :
+     * un Charge d'Affaires/une personne habilitee du service PEUT desormais
+     * corriger un bon de sortie meme deja VALIDE, mais cela le fait repasser
+     * a VISE - une nouvelle validation (niveau 2) est exigee avant de le
+     * considerer de nouveau VALIDE (retour dans le circuit de validation).
      */
     @Test
-    void correctionParCaDuServiceApresValidation_reussit() throws Exception {
+    void correctionParCaDuServiceApresValidation_repasseAViseEtExigeUneNouvelleValidation() throws Exception {
         Utilisateur titulaire = creerUtilisateur("agent_correc3_" + suffixe, littoral);
         String tokenAgent = seConnecter(titulaire.getIdentifiant());
         String tokenCa = seConnecter(caLittoral.getIdentifiant());
@@ -129,7 +136,14 @@ class CorrectionBonSortieIT {
 
         JsonNode corrige = corriger(tokenCa, bonId, "MS-004", 10, valide.get("lockVersion").asInt(), status().isOk());
         assertThat(corrige.get("codeAffaireSaisi").asText()).isEqualTo("MS-004");
-        assertThat(corrige.get("statut").asText()).isEqualTo("VALIDE"); // le statut lui-meme reste inchange
+        assertThat(corrige.get("statut").asText()).isEqualTo("VISE"); // retour dans le circuit de validation
+        assertThat(corrige.get("valideParIdentifiant").isNull()).isTrue(); // l'ancienne validation est effacee
+        assertThat(corrige.get("dateValidation").isNull()).isTrue();
+
+        // Une nouvelle validation (niveau 2) est desormais necessaire et fonctionne normalement.
+        mockMvc.perform(post("/api/bons-sortie/" + bonId + "/valider").header("Authorization", "Bearer " + tokenCa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("VALIDE"));
     }
 
     /**

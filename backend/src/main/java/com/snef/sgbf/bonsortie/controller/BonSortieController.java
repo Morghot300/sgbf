@@ -92,6 +92,17 @@ public class BonSortieController {
         return bonSortiePersonneService.listerAgentsEligibles(id, principal.getUtilisateur());
     }
 
+    /**
+     * Personnel d'un service, selectionnable comme personne principale ou
+     * personnes a bord AVANT MEME la creation du bon (evolution du
+     * 2026-08-27, section 3-4-30) - voir
+     * {@code BonSortiePersonneService.listerPersonnelDuService}.
+     */
+    @GetMapping("/personnel-service/{serviceId}")
+    public List<AgentEligibleDto> personnelDuService(@PathVariable Long serviceId, @AuthenticationPrincipal CustomUserDetails principal) {
+        return bonSortiePersonneService.listerPersonnelDuService(serviceId, principal.getUtilisateur());
+    }
+
     /** Impression du document valide au format PDF (section 13.2, RG-DOC-001 a 007). */
     @GetMapping("/{id}/pdf")
     public ResponseEntity<byte[]> imprimer(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {

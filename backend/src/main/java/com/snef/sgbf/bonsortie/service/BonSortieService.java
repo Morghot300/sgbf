@@ -342,8 +342,22 @@ public class BonSortieService {
      * n'est pas lui-meme gestionnaire, ne peut alors plus corriger son propre
      * bon une fois valide.
      *
-     * <p><strong>FIPH deja scellee (section 12 du meme brief)</strong> : si
-     * une FIPH couvrant la date de sortie de l'agent est deja
+     * <p><strong>Retour dans le circuit de validation (evolution du 2026-08-27,
+     * brief "Evolution avancee du module Bon de Sortie, Missions et FIPH",
+     * section 15-17 - decision confirmee explicitement)</strong> : corriger
+     * un bon {@code VALIDE} le fait desormais repasser a {@code VISE} - une
+     * nouvelle validation (niveau 2) est exigee avant qu'il ne soit de
+     * nouveau considere {@code VALIDE} (imprimable, etc). L'ancienne
+     * validation ({@link BonSortie#getValideParCA()}/{@link BonSortie#getDateValidation()})
+     * et l'affectation resolue ({@link BonSortie#getAffectationMission()})
+     * sont reinitialisees en consequence - une nouvelle resolution aura lieu
+     * a la prochaine validation, coherente avec les champs eventuellement
+     * corriges (mission, date de sortie...). Le Charge d'Affaires/la
+     * personne habilitee du service est notifie exactement comme lors d'un
+     * visa initial (memes destinataires, meme mecanisme).
+     *
+     * <p><strong>FIPH deja scellee (meme brief, section 23)</strong> : si une
+     * FIPH couvrant la date de sortie de l'agent est deja
      * {@code VALIDEE_DEFINITIVEMENT}, la correction est refusee - ses jours de
      * pointage sont scelles, une correction du bon de sortie source ne doit
      * jamais pouvoir la contredire silencieusement. Si la FIPH existe mais
@@ -353,7 +367,8 @@ public class BonSortieService {
      */
     public BonSortieDto modifier(Long bonSortieId, ModifierBonSortieRequest requete, Utilisateur auteur) {
         BonSortie bonSortie = chargerBonSortie(bonSortieId);
-        if (bonSortie.getStatut() == StatutBonSortie.VALIDE) {
+        boolean etaitValide = bonSortie.getStatut() == StatutBonSortie.VALIDE;
+        if (etaitValide) {
             verifierPerimetreGestionnaire(auteur, bonSortie.getAgent());
         } else {
             verifierAutoServiceOuGestionnaire(auteur, bonSortie.getAgent());
@@ -370,6 +385,7 @@ public class BonSortieService {
         fiphService.verifierAbsenceFiphScelleePourDate(bonSortie.getAgent().getId(), bonSortie.getDateSortie());
 
         BonSortieDto avant = bonSortieMapper.toDto(bonSortie);
+        StatutBonSortie statutAvant = bonSortie.getStatut();
         if (requete.missionId() != null) {
             bonSortie.setMission(missionRepository.findById(requete.missionId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Mission", requete.missionId())));
@@ -392,6 +408,12 @@ public class BonSortieService {
         bonSortie.setLieu(requete.lieu());
         bonSortie.setCodeAffaireSaisi(requete.codeAffaireSaisi());
         bonSortie.setMotifSortie(requete.motifSortie());
+        if (etaitValide) {
+            bonSortie.setStatut(StatutBonSortie.VISE);
+            bonSortie.setAffectationMission(null);
+            bonSortie.setValideParCA(null);
+            bonSortie.setDateValidation(null);
+        }
         // saveAndFlush (plutot que save) : le @Version JPA (lockVersion) n'est incremente par
         // Hibernate qu'au moment du flush, qui n'aurait sinon lieu qu'a la fin de la transaction -
         // APRES la construction du DTO retourne ci-dessous. Sans flush explicite ici, le client
@@ -399,8 +421,17 @@ public class BonSortieService {
         // comme un conflit de concurrence (RG-SEC-001) alors que personne d'autre n'a rien modifie.
         bonSortie = bonSortieRepository.saveAndFlush(bonSortie);
 
+        // Le statutAvant/statutApres ci-dessous capture deja, a lui seul, le retour eventuel dans
+        // le circuit de validation (VALIDE -> VISE) - inutile de dupliquer un second evenement
+        // d'audit pour la meme operation.
         auditService.enregistrer(EntiteAuditable.BON_SORTIE, bonSortie.getId(), auteur, TypeActionAudit.MODIFICATION,
-                avant, bonSortieMapper.toDto(bonSortie), bonSortie.getStatut().name(), bonSortie.getStatut().name());
+                avant, bonSortieMapper.toDto(bonSortie), statutAvant.name(), bonSortie.getStatut().name());
+        if (etaitValide) {
+            if (bonSortie.getAgent().getService() != null) {
+                notificationService.notifierBonSortieAValider(bonSortie.getId(), bonSortie.getAgent().getService().getId(),
+                        "Bon de sortie #" + bonSortie.getId() + " (correction - a revalider)", auteur);
+            }
+        }
         return avecAvertissementAffectation(bonSortieMapper.toDto(bonSortie), bonSortie);
     }
 
@@ -625,6 +656,30 @@ public class BonSortieService {
 
     private static boolean estSuperAdministrateur(Habilitation habilitation) {
         return CodeRoleMetier.SUPER_ADMINISTRATEUR.name().equals(habilitation.getRoleMetier().getCode());
+    }
+
+    /**
+     * Perimetre par SERVICE (et non par agent) - utilise pour lister le
+     * personnel eligible AVANT meme la creation d'un bon de sortie (evolution
+     * du 2026-08-27, brief "Evolution avancee du module Bon de Sortie,
+     * Missions et FIPH", section 3-4-30 : selection des personnes a bord par
+     * cases a cocher, filtrable par nom, des la creation - jamais une simple
+     * saisie libre d'identifiant). Autorise si l'auteur appartient lui-meme a
+     * ce service, en est gestionnaire (Charge d'Affaires/personne habilitee),
+     * ou est Super Administrateur. Package-privee : reutilisee par
+     * {@link BonSortiePersonneService}.
+     */
+    void verifierPerimetreService(Utilisateur auteur, Long serviceId) {
+        if (auteur.getService() != null && auteur.getService().getId().equals(serviceId)) {
+            return;
+        }
+        List<Habilitation> habilitationsAuteur = habilitationRepository.findByUtilisateur_IdAndActifTrue(auteur.getId());
+        boolean autorise = habilitationsAuteur.stream().anyMatch(BonSortieService::estSuperAdministrateur)
+                || habilitationsAuteur.stream().anyMatch(h -> estRoleGestionnaire(h.getRoleMetier().getCode())
+                        && h.getService() != null && h.getService().getId().equals(serviceId));
+        if (!autorise) {
+            throw new ForbiddenOperationException("Vous n'etes pas habilite a consulter le personnel de ce service.");
+        }
     }
 
     /**

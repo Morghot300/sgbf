@@ -7,27 +7,29 @@ import { z } from "zod";
 import { ajouterPersonnesABordEnLot, creerBonSortie } from "../../api/bonSortieApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerMissions } from "../../api/missionApi";
-import { listerVehicules } from "../../api/referentielApi";
+import { listerServices, listerVehicules } from "../../api/referentielApi";
 import { useAuth } from "../../auth/AuthContext";
 import { LIBELLES_MOYEN_UTILISE, type MoyenUtilise } from "../../types/bonSortie";
+import { SelectionPersonnelService } from "./SelectionPersonnelService";
 
 /**
- * Formulaire de creation d'un bon de sortie (section 3, RG-BS-001/002).
+ * Formulaire de creation d'un bon de sortie (section 3, RG-BS-001/002),
+ * reorganise selon une logique naturelle (evolution du 2026-08-27, brief
+ * "Evolution avancee du module Bon de Sortie, Missions et FIPH", section 29) :
+ * informations generales -> personne principale -> mission -> vehicule ->
+ * personnes a bord -> informations complementaires -> actions.
  *
  * <p>En libre-service (cas habituel), l'agent titulaire n'est pas un champ du
  * formulaire : il est resolu cote serveur a partir de l'utilisateur
- * authentifie. Evolution du 2026-08-27 (brief "Evolution du module Bon de
- * Sortie") : un Charge d'Affaires/une personne habilitee/un Super
- * Administrateur peut desormais indiquer une "Personne principale"
- * differente de lui-meme (creation pour le compte d'un tiers), un "Code
- * Mission" (association directe a une Mission existante, en plus/a la place
- * de la resolution automatique par date), et ajouter directement des
- * personnes a bord des la creation - le controle reel de qui peut faire quoi
- * reste, comme toujours, applique cote serveur, jamais seulement par
- * l'affichage conditionnel de ces champs ici.
+ * authentifie. Un Charge d'Affaires/une personne habilitee/un Super
+ * Administrateur peut en plus choisir une "Personne principale" differente
+ * de lui-meme (creation pour le compte d'un tiers) et des "Personnes a
+ * bord" - toutes deux selectionnees par cases a cocher parmi le personnel
+ * d'un service, filtrable par nom (jamais une simple saisie libre
+ * d'identifiant) - le controle reel de qui peut faire quoi reste, comme
+ * toujours, applique cote serveur.
  */
 const schema = z.object({
-  agentId: z.string().optional(),
   missionId: z.string().optional(),
   moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI", "AUTRE"]),
   precisionVehicule: z.string().max(200).optional(),
@@ -48,11 +50,20 @@ type Formulaire = z.infer<typeof schema>;
 export default function BonSortieNouveauPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { aLeRole } = useAuth();
+  const { aLeRole, utilisateur } = useAuth();
   const vehicules = useQuery({ queryKey: ["vehicules"], queryFn: listerVehicules });
   const peutChoisirPersonnePrincipale = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE") || aLeRole("SUPER_ADMINISTRATEUR");
+  const services = useQuery({ queryKey: ["services"], queryFn: listerServices, enabled: peutChoisirPersonnePrincipale });
   const missions = useQuery({ queryKey: ["missions"], queryFn: listerMissions });
-  const [personnesABord, setPersonnesABord] = useState<string[]>([]);
+  const [serviceId, setServiceId] = useState<string>(utilisateur?.serviceId ? String(utilisateur.serviceId) : "");
+  const [personnePrincipale, setPersonnePrincipale] = useState<Set<number>>(new Set());
+  const [personnesABord, setPersonnesABord] = useState<Set<number>>(new Set());
+  // Service dont le personnel est propose pour les personnes a bord : celui choisi ci-dessus pour
+  // la personne principale (CA/PH/Super Admin), ou directement le service du createur sinon (RG-PAB-010 :
+  // les personnes a bord appartiennent toujours au meme service que le titulaire du bon).
+  const serviceEffectif = peutChoisirPersonnePrincipale
+    ? (serviceId ? Number(serviceId) : null)
+    : (utilisateur?.serviceId ?? null);
 
   const { register, handleSubmit, control, formState: { errors } } = useForm<Formulaire>({
     resolver: zodResolver(schema),
@@ -62,8 +73,9 @@ export default function BonSortieNouveauPage() {
 
   const creation = useMutation({
     mutationFn: async (valeurs: Formulaire) => {
+      const agentId = [...personnePrincipale][0];
       const bonCree = await creerBonSortie({
-        agentId: valeurs.agentId ? Number(valeurs.agentId) : null,
+        agentId: agentId ?? null,
         missionId: valeurs.missionId ? Number(valeurs.missionId) : null,
         vehiculeId: valeurs.vehiculeId ? Number(valeurs.vehiculeId) : null,
         moyenUtilise: valeurs.moyenUtilise,
@@ -79,9 +91,8 @@ export default function BonSortieNouveauPage() {
       // Personnes a bord ajoutees juste apres la creation (evolution du 2026-08-27) - reutilise
       // exactement le meme mecanisme (transactionnel, idempotent) que l'ajout post-creation deja
       // existant, sans dupliquer cette logique cote serveur.
-      const agentIds = personnesABord.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0);
-      if (agentIds.length > 0) {
-        await ajouterPersonnesABordEnLot(bonCree.id, { agentIds });
+      if (personnesABord.size > 0) {
+        await ajouterPersonnesABordEnLot(bonCree.id, { agentIds: [...personnesABord] });
       }
       return bonCree;
     },
@@ -97,15 +108,27 @@ export default function BonSortieNouveauPage() {
       <form className="formulaire" onSubmit={handleSubmit((valeurs) => creation.mutate(valeurs))}>
         {peutChoisirPersonnePrincipale && (
           <>
-            <label htmlFor="agentId">Personne principale (facultatif — laisser vide pour créer votre propre bon)</label>
-            <input id="agentId" type="number" min={1} {...register("agentId")} />
+            <h2>Personne principale (facultatif)</h2>
             <p className="dashboard-accueil">
-              Identifiant de l'agent pour lequel ce bon de sortie est établi. Réservé au Chargé d'Affaires/à la
-              personne habilitée du même service, ou au Super Administrateur — vérifié côté serveur.
+              Laissez vide pour créer votre propre bon de sortie. Sélectionnez un service puis une personne pour créer
+              ce bon pour le compte d'un tiers — réservé au Chargé d'Affaires/à la personne habilitée du même
+              service, ou au Super Administrateur (vérifié côté serveur).
             </p>
+            <label htmlFor="serviceId">Service</label>
+            <select id="serviceId" value={serviceId} onChange={(e) => { setServiceId(e.target.value); setPersonnePrincipale(new Set()); setPersonnesABord(new Set()); }}>
+              <option value="">— Sélectionner —</option>
+              {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
+            </select>
+            <SelectionPersonnelService
+              serviceId={serviceId ? Number(serviceId) : null}
+              mode="unique"
+              selection={personnePrincipale}
+              onChange={setPersonnePrincipale}
+            />
           </>
         )}
 
+        <h2>Mission</h2>
         <label htmlFor="missionId">Code Mission (facultatif)</label>
         <select id="missionId" {...register("missionId")}>
           <option value="">— Non renseigné —</option>
@@ -114,6 +137,7 @@ export default function BonSortieNouveauPage() {
           ))}
         </select>
 
+        <h2>Véhicule</h2>
         <label htmlFor="moyenUtilise">Moyen utilisé</label>
         <select id="moyenUtilise" {...register("moyenUtilise")}>
           {(Object.keys(LIBELLES_MOYEN_UTILISE) as MoyenUtilise[]).map((m) => (
@@ -164,27 +188,14 @@ export default function BonSortieNouveauPage() {
         <textarea id="motifSortie" maxLength={500} {...register("motifSortie")} />
         {errors.motifSortie && <p role="alert">{errors.motifSortie.message}</p>}
 
-        <fieldset>
-          <legend>Personnes à bord (facultatif)</legend>
-          {personnesABord.map((valeur, index) => (
-            <div className="formulaire-ligne" key={index}>
-              <label htmlFor={`personneABord-${index}`}>Identifiant de l'agent</label>
-              <input
-                id={`personneABord-${index}`}
-                type="number"
-                min={1}
-                value={valeur}
-                onChange={(e) => setPersonnesABord((liste) => liste.map((v, i) => (i === index ? e.target.value : v)))}
-              />
-              <button type="button" onClick={() => setPersonnesABord((liste) => liste.filter((_, i) => i !== index))}>
-                Retirer
-              </button>
-            </div>
-          ))}
-          <button type="button" onClick={() => setPersonnesABord((liste) => [...liste, ""])}>
-            Ajouter une personne à bord
-          </button>
-        </fieldset>
+        <h2>Personnes à bord (facultatif)</h2>
+        <SelectionPersonnelService
+          serviceId={serviceEffectif}
+          mode="multiple"
+          selection={personnesABord}
+          onChange={setPersonnesABord}
+          exclureIds={personnePrincipale}
+        />
 
         {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, "Impossible de créer le bon de sortie.")}</p>}
 
