@@ -4,11 +4,15 @@ import { useAuth } from "../auth/AuthContext";
 import logoSnef from "../assets/brand/logo_snef.png";
 import { Icone } from "./Icone";
 import NotificationCenter from "./NotificationCenter";
+import { LIBELLES_STATUT_BON_SORTIE, type StatutBonSortie } from "../types/bonSortie";
 import { LIBELLES_CATEGORIE_FIPH, type CategorieFiph } from "../types/fiph";
+import { LIBELLES_STATUT_MISSION, type StatutMission } from "../types/mission";
 
 const CATEGORIES_FIPH: CategorieFiph[] = [
   "BROUILLONS", "VISEES", "VALIDEES_NIVEAU_2", "VALIDEES_NIVEAU_3", "VALIDEES_DEFINITIVEMENT", "REJETEES",
 ];
+const STATUTS_BON_SORTIE: StatutBonSortie[] = ["BROUILLON", "VISE", "VALIDE"];
+const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE", "TERMINEE"];
 
 /**
  * Ossature commune a tout ecran authentifie : en-tete (organisation,
@@ -68,9 +72,21 @@ export default function AppLayout() {
           <NavLink to="/" end onClick={() => setSidebarOuverte(false)}>
             <Icone nom="tableauDeBord" /> Tableau de bord
           </NavLink>
-          <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="document" /> Bons de sortie
-          </NavLink>
+
+          <div className="app-sidebar__groupe">
+            <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
+              <Icone nom="document" /> Bons de sortie
+            </NavLink>
+            <ul className="app-sidebar__sous-menu">
+              {STATUTS_BON_SORTIE.map((statut) => (
+                <li key={statut}>
+                  <NavLink to={`/bons-sortie?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
+                    {LIBELLES_STATUT_BON_SORTIE[statut]}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <div className="app-sidebar__groupe">
             <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)}>
@@ -87,13 +103,31 @@ export default function AppLayout() {
             </ul>
           </div>
 
-          <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="mission" /> Missions
-          </NavLink>
-          {aLeRole("ADMINISTRATEUR") && (
-            <NavLink to="/administration" onClick={() => setSidebarOuverte(false)}>
-              <Icone nom="administration" /> Administration
+          <div className="app-sidebar__groupe">
+            <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
+              <Icone nom="mission" /> Missions
             </NavLink>
+            <ul className="app-sidebar__sous-menu">
+              {STATUTS_MISSION.map((statut) => (
+                <li key={statut}>
+                  <NavLink to={`/missions?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
+                    {LIBELLES_STATUT_MISSION[statut]}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {aLeRole("ADMINISTRATEUR") && (
+            <div className="app-sidebar__groupe">
+              <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>
+                <Icone nom="administration" /> Administration
+              </NavLink>
+              <ul className="app-sidebar__sous-menu">
+                <li><NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>Personnel et habilitations</NavLink></li>
+                <li><NavLink to="/administration/referentiels" onClick={() => setSidebarOuverte(false)}>Référentiels</NavLink></li>
+              </ul>
+            </div>
           )}
         </nav>
         <main className="app-content">

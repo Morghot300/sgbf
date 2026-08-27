@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { modifierBonSortie } from "../../api/bonSortieApi";
@@ -56,7 +56,7 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
   const vehicules = useQuery({ queryKey: ["vehicules"], queryFn: listerVehicules, enabled: ouvert });
   const missions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: ouvert });
 
-  const { register, handleSubmit, control, formState: { errors } } = useForm<Formulaire>({
+  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<Formulaire>({
     resolver: zodResolver(schema),
     defaultValues: {
       missionId: bonSortie.missionSelectionneeId ? String(bonSortie.missionSelectionneeId) : "",
@@ -74,6 +74,15 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
     },
   });
   const moyenUtiliseChoisi = useWatch({ control, name: "moyenUtilise" });
+  // Code affaire et Code Mission designent la meme reference (confirme le 2026-08-27) : voir la
+  // meme logique dans BonSortieNouveauPage.
+  const missionIdChoisie = useWatch({ control, name: "missionId" });
+  const missionChoisie = missions.data?.find((m) => String(m.id) === missionIdChoisie);
+  useEffect(() => {
+    if (missionChoisie) {
+      setValue("codeAffaireSaisi", missionChoisie.codeHN, { shouldValidate: true });
+    }
+  }, [missionChoisie, setValue]);
 
   const correction = useMutation({
     mutationFn: (valeurs: Formulaire) => modifierBonSortie(bonSortie.id, {
@@ -169,8 +178,9 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
         <input id="c-lieu" type="text" maxLength={150} {...register("lieu")} />
         {errors.lieu && <p role="alert">{errors.lieu.message}</p>}
 
-        <label htmlFor="c-codeAffaireSaisi">Code affaire</label>
-        <input id="c-codeAffaireSaisi" type="text" maxLength={30} {...register("codeAffaireSaisi")} />
+        <label htmlFor="c-codeAffaireSaisi">Code affaire{missionChoisie ? " (= Code Mission ci-dessus)" : ""}</label>
+        <input id="c-codeAffaireSaisi" type="text" maxLength={30} readOnly={!!missionChoisie} {...register("codeAffaireSaisi")} />
+        {missionChoisie && <p className="note">Rempli automatiquement à partir de la mission choisie — même référence.</p>}
         {errors.codeAffaireSaisi && <p role="alert">{errors.codeAffaireSaisi.message}</p>}
 
         <label htmlFor="c-motifSortie">Motif de sortie</label>

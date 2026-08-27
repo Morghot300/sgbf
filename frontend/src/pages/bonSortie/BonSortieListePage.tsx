@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { listerBonsSortie } from "../../api/bonSortieApi";
 import { listerServices } from "../../api/referentielApi";
 import { EtatAsync } from "../../components/EtatAsync";
@@ -14,9 +14,22 @@ const STATUTS: StatutBonSortie[] = ["BROUILLON", "VISE", "VALIDE"];
  * applique cote serveur), avec filtres combinables date/periode/statut/
  * service (evolution du 2026-08-18) - le filtrage est realise cote backend
  * (parametres de requete), pas en chargeant tout puis en filtrant en React.
+ *
+ * <p>Le parametre d'URL {@code statut} (evolution du 2026-08-27, sous-menus
+ * du menu lateral) presélectionne ce filtre - reste combinable avec les
+ * autres filtres (date, service, nom).
  */
 export default function BonSortieListePage() {
-  const [filtres, setFiltres] = useState({ date: "", dateDebut: "", dateFin: "", statut: "", serviceId: "", nomComplet: "" });
+  const [searchParams] = useSearchParams();
+  const statutUrl = (searchParams.get("statut") ?? "") as StatutBonSortie | "";
+  const [filtres, setFiltres] = useState<{ date: string; dateDebut: string; dateFin: string; statut: string; serviceId: string; nomComplet: string }>(
+    { date: "", dateDebut: "", dateFin: "", statut: statutUrl, serviceId: "", nomComplet: "" },
+  );
+  // Un clic sur un sous-menu du menu lateral (categorie de statut) doit toujours reprendre le
+  // dessus sur un filtre manuel deja en place, pas seulement au premier chargement de la page.
+  useEffect(() => {
+    setFiltres((f) => ({ ...f, statut: statutUrl }));
+  }, [statutUrl]);
   const services = useQuery({ queryKey: ["services"], queryFn: listerServices });
   const requete = useQuery({
     queryKey: ["bons-sortie", filtres],
@@ -40,6 +53,11 @@ export default function BonSortieListePage() {
         <h1>Bons de sortie</h1>
         <Link to="/bons-sortie/nouveau" className="bouton-principal">Nouveau bon de sortie</Link>
       </div>
+      {statutUrl && (
+        <p className="note">
+          Catégorie : <strong>{LIBELLES_STATUT_BON_SORTIE[statutUrl]}</strong> — <Link to="/bons-sortie">voir tous les bons de sortie</Link>
+        </p>
+      )}
 
       <section className="barre-filtres">
         <label htmlFor="filtreDate">Date exacte</label>
