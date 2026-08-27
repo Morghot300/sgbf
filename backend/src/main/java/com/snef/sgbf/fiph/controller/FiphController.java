@@ -3,6 +3,7 @@ package com.snef.sgbf.fiph.controller;
 import com.snef.sgbf.bonsortie.dto.AgentEligibleDto;
 import com.snef.sgbf.fiph.dto.CreerFiphManuelleRequest;
 import com.snef.sgbf.fiph.dto.FiphDto;
+import com.snef.sgbf.fiph.dto.ModifierMissionFiphRequest;
 import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto;
 import com.snef.sgbf.fiph.entity.StatutFiphVersion;
 import com.snef.sgbf.fiph.service.FiphService;
@@ -19,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -59,6 +61,18 @@ public class FiphController {
     @GetMapping("/{id}")
     public FiphDto obtenir(@PathVariable Long id, @AuthenticationPrincipal CustomUserDetails principal) {
         return fiphService.obtenirParId(id, principal.getUtilisateur());
+    }
+
+    /**
+     * Modifie (ou retire) la mission d'une FIPH deja creee - evolution du
+     * 2026-08-27, section 6-9 : "lors de la creation OU DE LA MODIFICATION
+     * d'une FIPH". Voir {@code FiphService#modifierMission}.
+     */
+    @PutMapping("/{id}/mission")
+    @PreAuthorize("hasAnyRole('CHARGE_AFFAIRES', 'PERSONNE_HABILITEE', 'RH', 'SUPER_ADMINISTRATEUR')")
+    public FiphDto modifierMission(@PathVariable Long id, @RequestBody ModifierMissionFiphRequest requete,
+                                    @AuthenticationPrincipal CustomUserDetails principal) {
+        return fiphService.modifierMission(id, requete, principal.getUtilisateur());
     }
 
     @PostMapping("/manuelle")

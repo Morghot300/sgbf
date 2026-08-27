@@ -57,6 +57,11 @@ export interface CreerFiphManuelleRequest {
   missionId?: number | null;
 }
 
+/** Modifie (ou retire, si missionId est null) la mission d'une FIPH déjà créée (section 6-9 : "création OU modification"). */
+export interface ModifierMissionFiphRequest {
+  missionId: number | null;
+}
+
 export interface EchecCreationFiphDto {
   agentId: number;
   agentNomComplet: string | null;

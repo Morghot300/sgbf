@@ -10,6 +10,7 @@ import com.snef.sgbf.common.exception.ForbiddenOperationException;
 import com.snef.sgbf.common.exception.ResourceNotFoundException;
 import com.snef.sgbf.fiph.dto.CreerFiphManuelleRequest;
 import com.snef.sgbf.fiph.dto.FiphDto;
+import com.snef.sgbf.fiph.dto.ModifierMissionFiphRequest;
 import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto;
 import com.snef.sgbf.fiph.dto.ResultatCreationFiphDto.EchecCreationFiphDto;
 import com.snef.sgbf.fiph.entity.FIPH;
@@ -95,6 +96,46 @@ public class FiphService {
     public FiphDto obtenirParId(Long id, Utilisateur courant) {
         FIPH fiph = chargerFiph(id);
         verifierPerimetreLecture(courant, fiph);
+        return avecAvertissementMission(fiphMapper.toDto(fiph), fiph);
+    }
+
+    /**
+     * Modifie (ou retire) la mission associee a une FIPH deja creee
+     * (evolution du 2026-08-27, section 6-9 : "lors de la creation OU DE LA
+     * MODIFICATION d'une FIPH" - la premiere evolution de ce brief n'avait
+     * couvert que la creation, jamais corrigible ensuite - anomalie
+     * corrigee ici). Meme perimetre que la gestion du pointage
+     * ({@link #verifierPerimetreGestionnaire}) : Charge d'Affaires/personne
+     * habilitee du service, RH et Super Administrateur a perimetre global.
+     *
+     * <p>Volontairement possible quel que soit le statut de la version
+     * courante, y compris {@code VALIDEE_DEFINITIVEMENT} : la mission est une
+     * donnee associative/descriptive portee par {@code FIPH} (identite), pas
+     * par le contenu vise/valide de {@code FIPHVersion} - elle n'entre pour
+     * rien dans le calcul de l'empreinte d'integrite (RG-VER-006, voir
+     * {@code FiphVersionService#calculerEmpreinte}), donc la modifier ne
+     * remet jamais en cause un document deja fige. Chaque changement reste
+     * neanmoins integralement trace (avant/apres) dans l'audit (section 28).
+     */
+    public FiphDto modifierMission(Long id, ModifierMissionFiphRequest requete, Utilisateur auteur) {
+        FIPH fiph = chargerFiph(id);
+        verifierPerimetreGestionnaire(auteur, fiph.getAgent());
+
+        Mission ancienneMission = fiph.getMission();
+        Mission nouvelleMission = null;
+        if (requete.missionId() != null) {
+            nouvelleMission = missionRepository.findById(requete.missionId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Mission", requete.missionId()));
+        }
+
+        fiph.setMission(nouvelleMission);
+        fiph = fiphRepository.save(fiph);
+
+        auditService.enregistrer(EntiteAuditable.FIPH, fiph.getId(), auteur, TypeActionAudit.MODIFICATION,
+                ancienneMission != null ? ancienneMission.getCodeHN().getCode() : "non renseignee",
+                nouvelleMission != null ? nouvelleMission.getCodeHN().getCode() : "non renseignee",
+                fiph.getStatut().name(), fiph.getStatut().name());
+
         return avecAvertissementMission(fiphMapper.toDto(fiph), fiph);
     }
 

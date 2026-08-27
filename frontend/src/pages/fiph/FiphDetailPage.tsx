@@ -3,10 +3,12 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { historiqueAuditFiph, telechargerAuditCsv, telechargerAuditPdf } from "../../api/auditApi";
 import {
-  completerPointage, creerNouvelleVersionFiph, definirDateFinFiph, listerValidations, listerVersionsFiph, obtenirFiph,
-  obtenirFiphVersion, ouvrirPdfFiphVersion, priseEnMainSuperAdminFiph, signerFiph, soumettreFiph, validerFiph,
+  completerPointage, creerNouvelleVersionFiph, definirDateFinFiph, listerValidations, listerVersionsFiph,
+  modifierMissionFiph, obtenirFiph, obtenirFiphVersion, ouvrirPdfFiphVersion, priseEnMainSuperAdminFiph, signerFiph,
+  soumettreFiph, validerFiph,
 } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
+import { listerMissions } from "../../api/missionApi";
 import { EtatAsync } from "../../components/EtatAsync";
 import { BadgeStatutFiph } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
@@ -37,6 +39,8 @@ export default function FiphDetailPage() {
   const [pointagesModifies, setPointagesModifies] = useState<Record<number, { heuresNormales: string; heuresSup: string }>>({});
   const [dateFinSaisie, setDateFinSaisie] = useState("");
   const [motifDateFin, setMotifDateFin] = useState("");
+  const [modificationMissionOuverte, setModificationMissionOuverte] = useState(false);
+  const [missionSaisie, setMissionSaisie] = useState("");
 
   const fiph = useQuery({ queryKey: ["fiph-detail", fiphId], queryFn: () => obtenirFiph(fiphId) });
   const versionId = fiph.data?.versionCouranteId;
@@ -113,6 +117,12 @@ export default function FiphDetailPage() {
     onSuccess: () => { setMotifDateFin(""); invalider(); },
     onError: (e) => gererErreur(e, "Impossible de définir la date de fin de la période."),
   });
+  const missions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: modificationMissionOuverte });
+  const modifierMission = useMutation({
+    mutationFn: () => modifierMissionFiph(fiphId, { missionId: missionSaisie ? Number(missionSaisie) : null }),
+    onSuccess: () => { setModificationMissionOuverte(false); invalider(); },
+    onError: (e) => gererErreur(e, "Impossible de modifier la mission de cette FIPH."),
+  });
 
   // Role litteral, jamais herite via la hierarchie Spring Security (voir Javadoc de aLeRole) : contrairement a
   // aLeRole("ADMINISTRATEUR"), qui accepte aussi un Super Administrateur par confort d'affichage, la prise en
@@ -120,6 +130,9 @@ export default function FiphDetailPage() {
   // 2026-08-19, section 15) - jamais accessible a un Administrateur standard, meme via ce meme ecran.
   const estSuperAdministrateur = aLeRole("SUPER_ADMINISTRATEUR");
   const peutCompleter = aLeRole("CHARGE_AFFAIRES") || aLeRole("PERSONNE_HABILITEE");
+  // Meme perimetre que le backend (FiphController.modifierMission) : CA/PH du service, RH et Super
+  // Administrateur a perimetre global (section 6-9 : "creation OU modification d'une FIPH").
+  const peutModifierMission = peutCompleter || aLeRole("RH") || estSuperAdministrateur;
   const niveauAttendu = version.data ? NIVEAU_VALIDATION_ATTENDU[version.data.statutVersion] : undefined;
   const roleRequisParNiveau: Record<number, string> = { 2: "CHARGE_AFFAIRES", 3: "RESPONSABLE_ACTIVITE", 4: "DIRECTION" };
   const peutValiderNiveauCourant = niveauAttendu !== undefined
@@ -155,6 +168,17 @@ export default function FiphDetailPage() {
                 <th>Mission</th>
                 <td>
                   {f.missionCodeHN ? `${f.missionCodeHN} — ${f.missionChantierLibelle}` : "Non renseignée"}
+                  {peutModifierMission && (
+                    <>
+                      {" "}
+                      <button
+                        type="button"
+                        onClick={() => { setMissionSaisie(f.missionId ? String(f.missionId) : ""); setModificationMissionOuverte((v) => !v); }}
+                      >
+                        {modificationMissionOuverte ? "Annuler" : "Modifier"}
+                      </button>
+                    </>
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -164,6 +188,28 @@ export default function FiphDetailPage() {
 
       {fiph.data?.avertissementMission && (
         <p role="alert" className="avertissement">{fiph.data.avertissementMission}</p>
+      )}
+
+      {/* Section 6-9 : la mission reste modifiable APRES la creation, jamais seulement a la creation
+          (anomalie identifiee et corrigee - la premiere passe de cette evolution n'avait couvert que
+          la creation). Repliee par defaut (meme principe que CorrectionBonSortie) pour ne pas
+          surcharger la fiche d'un formulaire visible en permanence. */}
+      {modificationMissionOuverte && (
+        <section className="panneau-imbrique">
+          <h3>Modifier la mission</h3>
+          <label htmlFor="missionSaisie">Code Mission</label>
+          <select id="missionSaisie" value={missionSaisie} onChange={(e) => setMissionSaisie(e.target.value)}>
+            <option value="">— Non renseignée —</option>
+            {missions.data?.map((m) => (
+              <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle} ({m.dateDebutPrevue} → {m.dateFinPrevue})</option>
+            ))}
+          </select>
+          <div className="barre-actions">
+            <button type="button" onClick={() => modifierMission.mutate()} disabled={modifierMission.isPending}>
+              {modifierMission.isPending ? "Enregistrement..." : "Confirmer"}
+            </button>
+          </div>
+        </section>
       )}
 
       {fiph.data?.origine === "BON_SORTIE" && (

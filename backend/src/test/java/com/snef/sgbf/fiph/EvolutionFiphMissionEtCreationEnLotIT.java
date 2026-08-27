@@ -3,6 +3,7 @@ package com.snef.sgbf.fiph;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -251,6 +252,97 @@ class EvolutionFiphMissionEtCreationEnLotIT {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         assertThat(objectMapper.readTree(reponse).get("creees").get(0).get("avertissementMission").isNull()).isTrue();
+    }
+
+    // =========================================================================================
+    // Modification de la mission d'une FIPH deja creee (section 6-9 : "creation OU modification")
+    // =========================================================================================
+
+    @Test
+    void modifierMission_fiphCreeeSansMission_associeUneMissionExistante() throws Exception {
+        Mission mission = nouvelleMission();
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        long fiphId = creerFiphSansMission(tokenCa, agent1.getId(), LocalDate.of(2026, 9, 7));
+
+        mockMvc.perform(put("/api/fiph/" + fiphId + "/mission")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("missionId", mission.getId());
+                        }})))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.missionId").value(mission.getId()))
+                .andExpect(jsonPath("$.missionCodeHN").value(codeHN.getCode()));
+    }
+
+    @Test
+    void modifierMission_codeMissionInexistant_refusee() throws Exception {
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        long fiphId = creerFiphSansMission(tokenCa, agent1.getId(), LocalDate.of(2026, 9, 14));
+
+        mockMvc.perform(put("/api/fiph/" + fiphId + "/mission")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("missionId", 9_999_999L);
+                        }})))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void modifierMission_missionIdNull_retireLaMission() throws Exception {
+        Mission mission = nouvelleMission();
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        String reponseCreation = mockMvc.perform(post("/api/fiph/manuelle")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("agentIds", List.of(agent1.getId()));
+                            put("dateDebut", LocalDate.of(2026, 9, 21).toString());
+                            put("missionId", mission.getId());
+                        }})))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long fiphId = objectMapper.readTree(reponseCreation).get("creees").get(0).get("id").asLong();
+
+        String reponseModif = mockMvc.perform(put("/api/fiph/" + fiphId + "/mission")
+                        .header("Authorization", "Bearer " + tokenCa)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("missionId", null);
+                        }})))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(objectMapper.readTree(reponseModif).get("missionId").isNull()).isTrue();
+    }
+
+    @Test
+    void modifierMission_hostDeService_refuse() throws Exception {
+        String tokenCa = seConnecter(caLittoral.getIdentifiant());
+        long fiphId = creerFiphSansMission(tokenCa, agent1.getId(), LocalDate.of(2026, 9, 28));
+        Utilisateur caCentre = creerUtilisateurAvecHabilitation("ca_ctr_" + suffixe, centre, CodeRoleMetier.CHARGE_AFFAIRES);
+        String tokenCaCentre = seConnecter(caCentre.getIdentifiant());
+
+        mockMvc.perform(put("/api/fiph/" + fiphId + "/mission")
+                        .header("Authorization", "Bearer " + tokenCaCentre)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("missionId", null);
+                        }})))
+                .andExpect(status().isForbidden());
+    }
+
+    private long creerFiphSansMission(String token, Long agentId, LocalDate dateDebut) throws Exception {
+        String reponse = mockMvc.perform(post("/api/fiph/manuelle")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(new LinkedHashMap<>() {{
+                            put("agentIds", List.of(agentId));
+                            put("dateDebut", dateDebut.toString());
+                        }})))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(reponse).get("creees").get(0).get("id").asLong();
     }
 
     // =========================================================================================

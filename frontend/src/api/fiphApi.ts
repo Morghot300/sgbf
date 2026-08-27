@@ -3,8 +3,8 @@ import { httpClient } from "./httpClient";
 import type { AgentEligibleDto } from "../types/bonSortie";
 import type {
   CompleterPointageRequest, CreerFiphManuelleRequest, CreerNouvelleVersionRequest, DefinirDateFinRequest,
-  FiphDto, FiphVersionDto, PriseEnMainSuperAdminRequest, ResultatCreationFiphDto, StatutFiphVersion,
-  ValiderFiphRequest, ValidationDto,
+  FiphDto, FiphVersionDto, ModifierMissionFiphRequest, PriseEnMainSuperAdminRequest, ResultatCreationFiphDto,
+  StatutFiphVersion, ValiderFiphRequest, ValidationDto,
 } from "../types/fiph";
 
 export interface FiltresFiph {
@@ -39,6 +39,10 @@ export async function creerFiphManuelle(requete: CreerFiphManuelleRequest): Prom
 /** Personnel d'un service proposé pour la création manuelle d'une FIPH (section 2-3) — périmètre propre à la FIPH, vérifié côté serveur. */
 export async function listerPersonnelDuServicePourFiph(serviceId: number): Promise<AgentEligibleDto[]> {
   return (await httpClient.get<AgentEligibleDto[]>(`/fiph/personnel-service/${serviceId}`)).data;
+}
+/** Modifie (ou retire) la mission d'une FIPH déjà créée (section 6-9 : "création OU modification d'une FIPH"). */
+export async function modifierMissionFiph(fiphId: number, requete: ModifierMissionFiphRequest): Promise<FiphDto> {
+  return (await httpClient.put<FiphDto>(`/fiph/${fiphId}/mission`, requete)).data;
 }
 
 export async function obtenirFiphVersion(id: number): Promise<FiphVersionDto> {
