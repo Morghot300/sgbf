@@ -48,13 +48,24 @@ import org.springframework.web.bind.annotation.RestController;
  * (roles, habilitations, perimetre par service), tous appliques en aval,
  * inchanges.
  *
- * <p><strong>Session sans expiration d'inactivite</strong> (evolution du
- * 2026-08-26, tous comptes) : une session (jeton de rafraichissement) ne se
- * termine plus jamais par le seul ecoulement du temps - uniquement par une
- * deconnexion explicite ({@code /logout}) ou par une suspension/desactivation
- * du compte, qui revoque immediatement tous ses jetons ({@code
- * UtilisateurService.changerStatut}). Voir {@code RefreshTokenService} pour
- * le detail du mecanisme.
+ * <p><strong>Expiration reelle a la fermeture du navigateur</strong>
+ * (evolution du 2026-08-27, brief "Evolution avancee du module Bon de
+ * Sortie, Missions et FIPH", section 24-26 - decision confirmee
+ * explicitement, remplace l'evolution du 2026-08-26 ci-dessous qui faisait
+ * deliberement persister la session au-dela) : le cookie de rafraichissement
+ * est desormais un cookie de SESSION (aucun {@code Max-Age}/{@code Expires})
+ * - le navigateur le supprime lui-meme des que TOUTES ses fenetres/processus
+ * se ferment reellement (pas seulement un onglet), sans action serveur
+ * necessaire. Une deconnexion explicite ({@code /logout}) ou une
+ * suspension/desactivation du compte revoquent en plus, immediatement,
+ * tous les jetons cote serveur ({@code UtilisateurService.changerStatut}) -
+ * un jeton de rafraichissement presente apres l'un ou l'autre de ces
+ * evenements est donc toujours refuse par {@code /refresh}. Voir
+ * {@code RefreshTokenService} pour le detail du mecanisme.
+ *
+ * <p><em>Historique</em> : l'evolution du 2026-08-26 avait introduit un
+ * cookie a duree fixe de 400 jours ("session sans expiration d'inactivite"),
+ * decision explicitement inversee ci-dessus.
  *
  * <p>Toutes les tentatives (reussies ou non) sont journalisees dans le
  * journal d'audit (section 26.1, 26.4).
@@ -64,21 +75,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private static final String COOKIE_REFRESH = "refreshToken";
-
-    /**
-     * Duree du cookie de rafraichissement (evolution du 2026-08-26 : sessions
-     * sans expiration d'inactivite, tous comptes). Le jeton lui-meme n'expire
-     * plus jamais cote serveur ({@code RefreshTokenService.emettre}), mais un
-     * cookie HTTP reste, lui, necessairement borne dans le temps : les
-     * navigateurs recents (Chrome/Chromium en tete) plafonnent tout
-     * {@code Max-Age}/{@code Expires} a 400 jours et tronquent silencieusement
-     * toute valeur superieure. 400 jours est donc le maximum reellement
-     * utilisable - et comme ce cookie est reemis avec un nouveau delai complet
-     * a chaque connexion et a chaque rafraichissement reussi (glissant), un
-     * utilisateur qui revient au moins une fois tous les 400 jours ne voit
-     * jamais son cookie expirer.
-     */
-    private static final java.time.Duration DUREE_COOKIE_REFRESH = java.time.Duration.ofDays(400);
 
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
@@ -187,6 +183,13 @@ public class AuthController {
      * XSS) et jamais rejoue lors d'une requete inter-site (protection CSRF,
      * voir la justification dans {@code config.SecurityConfig}). Restreint au
      * chemin {@code /api/auth} : inutile de l'envoyer sur tous les autres appels API.
+     *
+     * <p>Deliberement SANS {@code maxAge} (evolution du 2026-08-27, section
+     * 24-26 - decision confirmee) : un cookie sans {@code Max-Age}/{@code Expires}
+     * est un cookie de SESSION, que le navigateur supprime lui-meme des que
+     * toutes ses fenetres/tous ses processus se ferment reellement - c'est ce
+     * mecanisme, natif et fiable, qui porte l'expiration a la fermeture du
+     * navigateur, sans necessiter la moindre logique cote serveur.
      */
     private ResponseCookie construireCookieRefresh(Utilisateur utilisateur) {
         String jeton = refreshTokenService.emettre(utilisateur);
@@ -195,7 +198,6 @@ public class AuthController {
                 .secure(cookieSecurise)
                 .sameSite("Strict")
                 .path("/api/auth")
-                .maxAge(DUREE_COOKIE_REFRESH)
                 .build();
     }
 }

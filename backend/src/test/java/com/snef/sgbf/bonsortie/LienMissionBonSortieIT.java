@@ -29,6 +29,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +79,7 @@ class LienMissionBonSortieIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         littoral = serviceRepository.save(nouveauService("LIT" + suffixe, "Service Littoral"));
         ca = creerUtilisateurAvecHabilitation("ca_" + suffixe, littoral, CodeRoleMetier.CHARGE_AFFAIRES);
         agent = creerUtilisateur("agent_" + suffixe, littoral);

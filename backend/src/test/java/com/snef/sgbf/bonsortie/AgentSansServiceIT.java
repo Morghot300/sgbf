@@ -23,6 +23,7 @@ import com.snef.sgbf.referentiel.entity.RoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +73,7 @@ class AgentSansServiceIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         superAdminSansService = creerUtilisateurAvecHabilitation("superadmin_ss_" + suffixe, null, CodeRoleMetier.SUPER_ADMINISTRATEUR);
         caService = creerUtilisateurAvecHabilitation("ca_ss_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);

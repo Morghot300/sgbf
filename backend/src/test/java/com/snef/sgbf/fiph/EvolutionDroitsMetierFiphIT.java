@@ -23,6 +23,7 @@ import com.snef.sgbf.referentiel.entity.RoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -79,7 +80,7 @@ class EvolutionDroitsMetierFiphIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         emetteur = creerPersonneAvecCompte("EMT" + (suffixe % 100_000L), "Test", "Emetteur", "emetteur_edm_" + suffixe, service);
         ca = creerUtilisateurAvecHabilitation("ca_edm_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);

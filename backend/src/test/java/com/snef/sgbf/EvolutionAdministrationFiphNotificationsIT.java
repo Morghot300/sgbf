@@ -33,6 +33,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -97,7 +98,7 @@ class EvolutionAdministrationFiphNotificationsIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
         codeHN = codeHNRepository.save(nouveauCodeHN("MIS" + suffixe, chantier));

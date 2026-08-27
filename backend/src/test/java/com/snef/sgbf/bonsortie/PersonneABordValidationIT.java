@@ -36,6 +36,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +64,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * personne (section 9.6) - une transaction de test englobante en rollback-only
  * rendrait cette generation invisible aux lectures suivantes de ce meme test
  * (voir la note detaillee dans {@code PersonneABordIT}). Les identifiants sont
- * rendus uniques via {@code System.nanoTime()} : les donnees reellement
+ * rendus uniques via {@code IdentifiantsTest.prochainSuffixe()} : les donnees reellement
  * commitees par ce test n'entrent jamais en collision avec celles d'un autre.
  */
 @SpringBootTest
@@ -96,7 +97,7 @@ class PersonneABordValidationIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test validation BS individuel"));
         Chantier chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
         CodeHN codeHN = codeHNRepository.save(nouveauCodeHN("MIS" + suffixe, chantier));

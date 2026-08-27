@@ -28,6 +28,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,7 +89,7 @@ class ScissionMissionsChevauchantesIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         ca = creerUtilisateurAvecHabilitation("ca_" + suffixe, service, CodeRoleMetier.CHARGE_AFFAIRES);
         agent = creerUtilisateur("agent_" + suffixe, service);

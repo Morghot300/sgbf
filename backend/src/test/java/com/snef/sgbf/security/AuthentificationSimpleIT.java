@@ -17,6 +17,7 @@ import com.snef.sgbf.referentiel.entity.RoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,7 +64,7 @@ class AuthentificationSimpleIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         Service service = new Service();
         service.setCodeService("SVC" + suffixe);
         service.setLibelle("Service de test");

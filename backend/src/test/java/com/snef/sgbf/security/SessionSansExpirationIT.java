@@ -13,6 +13,7 @@ import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
 import com.snef.sgbf.security.entity.RefreshToken;
 import com.snef.sgbf.security.entity.RefreshTokenRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,10 +28,17 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Verifie, au niveau HTTP reel, l'evolution du 2026-08-26 : la session ne
- * doit plus jamais expirer pour la seule raison d'une inactivite prolongee -
- * uniquement une deconnexion explicite ou une suspension/desactivation de
- * compte doit y mettre fin.
+ * Verifie, au niveau HTTP reel, l'evolution du 2026-08-26 : le jeton de
+ * rafraichissement lui-meme (cote serveur, {@code RefreshToken.dateExpiration})
+ * ne porte plus aucune expiration temporelle - seules une deconnexion
+ * explicite ou une suspension/desactivation de compte le revoquent
+ * (verifications inchangees par l'evolution du 2026-08-27 ci-dessous).
+ *
+ * <p>Le COOKIE HTTP qui porte ce jeton, lui, redevient un cookie de session
+ * depuis l'evolution du 2026-08-27 (section 24-26, decision confirmee) - le
+ * navigateur le supprime de lui-meme a la fermeture reelle de toutes ses
+ * fenetres, un comportement natif que MockMvc ne peut pas exercer ici (voir
+ * {@code AuthController#construireCookieRefresh}).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,7 +60,7 @@ class SessionSansExpirationIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         Service service = new Service();
         service.setCodeService("SVC" + suffixe);
         service.setLibelle("Service de test");

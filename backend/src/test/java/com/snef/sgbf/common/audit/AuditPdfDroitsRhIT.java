@@ -31,6 +31,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,7 +92,7 @@ class AuditPdfDroitsRhIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        long suffixe = System.nanoTime();
+        long suffixe = IdentifiantsTest.prochainSuffixe();
         Service service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         Service autreService = serviceRepository.save(nouveauService("AUT" + suffixe, "Autre service"));
         Chantier chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));

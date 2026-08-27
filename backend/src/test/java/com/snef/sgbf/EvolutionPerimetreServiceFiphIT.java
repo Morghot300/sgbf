@@ -34,6 +34,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,7 +105,7 @@ class EvolutionPerimetreServiceFiphIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         long court = suffixe % 100_000L;
 
         littoral = serviceRepository.save(nouveauService("LIT" + court, "Littoral " + suffixe));

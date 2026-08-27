@@ -20,6 +20,7 @@ import com.snef.sgbf.referentiel.entity.RoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +77,7 @@ class EvolutionSecuriteIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         admin1 = creerUtilisateurAvecHabilitation("admin1_" + suffixe, null, CodeRoleMetier.ADMINISTRATEUR);
         superAdmin = creerUtilisateurAvecHabilitation("superadmin_" + suffixe, null, CodeRoleMetier.SUPER_ADMINISTRATEUR);

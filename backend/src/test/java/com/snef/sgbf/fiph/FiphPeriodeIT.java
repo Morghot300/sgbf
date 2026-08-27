@@ -30,6 +30,7 @@ import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.CodeHNRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,7 +87,7 @@ class FiphPeriodeIT {
 
     @BeforeEach
     void construireJeuDeDonnees() throws Exception {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         autreService = serviceRepository.save(nouveauService("AUT" + suffixe, "Autre service"));
         chantier = chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));

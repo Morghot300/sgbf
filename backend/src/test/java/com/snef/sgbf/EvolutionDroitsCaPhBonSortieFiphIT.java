@@ -19,6 +19,7 @@ import com.snef.sgbf.referentiel.entity.RoleMetier;
 import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,7 +76,7 @@ class EvolutionDroitsCaPhBonSortieFiphIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         littoral = serviceRepository.save(nouveauService("LIT" + suffixe, "Service Littoral"));
         centre = serviceRepository.save(nouveauService("CTR" + suffixe, "Service Centre"));
 

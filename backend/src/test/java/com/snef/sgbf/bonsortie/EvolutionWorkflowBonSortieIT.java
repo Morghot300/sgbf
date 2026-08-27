@@ -23,6 +23,7 @@ import com.snef.sgbf.referentiel.entity.Service;
 import com.snef.sgbf.referentiel.repository.ChantierRepository;
 import com.snef.sgbf.referentiel.repository.RoleMetierRepository;
 import com.snef.sgbf.referentiel.repository.ServiceRepository;
+import com.snef.sgbf.support.IdentifiantsTest;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,7 +79,7 @@ class EvolutionWorkflowBonSortieIT {
 
     @BeforeEach
     void construireJeuDeDonnees() {
-        suffixe = System.nanoTime();
+        suffixe = IdentifiantsTest.prochainSuffixe();
         service = serviceRepository.save(nouveauService("SVC" + suffixe, "Service de test"));
         autreService = serviceRepository.save(nouveauService("AUT" + suffixe, "Autre service"));
         chantierRepository.save(nouveauChantier("CHT" + suffixe, "Chantier de test"));
