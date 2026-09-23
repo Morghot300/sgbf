@@ -1,9 +1,9 @@
 # Secrets locaux
-backend/src/main/resources/application-local.yml
+backend1/src/main/resources/application-local.yml
 
 # Backend (Maven)
-backend/target/
-backend/.mvn/wrapper/maven-wrapper.jar
+backend1/target/
+backend1/.mvn/wrapper/maven-wrapper.jar
 
 # Frontend (Node)
 frontend/node_modules/
@@ -27,6 +27,6 @@ Thumbs.db
 # Fichiers de travail temporaires
 _extracted*.txt
 _mvn_debug.txt
-backend/_run*.log
-backend/backend_startup.log
+backend1/_run*.log
+backend1/backend_startup.log
 frontend/_vite.log

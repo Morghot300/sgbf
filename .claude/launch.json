@@ -10,7 +10,7 @@
     {
       "name": "backend",
       "runtimeExecutable": "cmd.exe",
-      "runtimeArgs": ["/c", "cd /d C:\\Users\\Utilisateur\\Documents\\FIPH\\backend && powershell -NoProfile -ExecutionPolicy Bypass -File mvnw.ps1 -o spring-boot:run \"-Dspring-boot.run.profiles=local\""],
+      "runtimeArgs": ["/c", "cd /d C:\\Users\\Utilisateur\\Documents\\FIPH\\backend1 && powershell -NoProfile -ExecutionPolicy Bypass -File mvnw.ps1 -o spring-boot:run \"-Dspring-boot.run.profiles=local\""],
       "port": 8080
     }
   ]
