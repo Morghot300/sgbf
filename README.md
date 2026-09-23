@@ -26,13 +26,13 @@ React (TypeScript) ↔ API REST Spring Boot (Java 21) ↔ MySQL 8. Détail compl
 
 ```
 FIPH/
-├── backend/              Spring Boot (Maven) — API REST
+├── backend1/              Spring Boot (Maven) — API REST
 ├── frontend/              React + TypeScript (Vite) — SPA
 │   ├── src/styles/tokens.css   Système de tokens CSS (charte graphique)
 │   └── src/assets/brand/       Logo source
 ├── tools/                Scripts Python de charte graphique (extraction de couleurs, audit WCAG, génération des dérivés du logo)
 ├── database/
-│   ├── migrations/       Miroir des migrations Flyway (backend/src/main/resources/db/migration)
+│   ├── migrations/       Miroir des migrations Flyway (backend1/src/main/resources/db/migration)
 │   └── scripts/           Scripts de provisionnement (création DB/utilisateur)
 ├── documentation/
 │   ├── manuel-utilisateur/       Un guide par module
@@ -62,9 +62,9 @@ git clone <repo> && cd FIPH
 ### Backend
 
 ```bash
-cd backend
+cd backend1
 copy src\main\resources\application-local.yml.example src\main\resources\application-local.yml
-# renseigner DB_PASSWORD, JWT_SECRET dans application-local.yml (jamais commit)
+# renseigner DB_PASSWORD, SGBF_JWT_SECRET dans application-local.yml (jamais commit)
 ```
 
 ### Frontend
@@ -82,14 +82,14 @@ La base `sgbf_db` et le compte applicatif `ITadmin` (privilèges limités à cet
 mysql -u root -p < database/scripts/00_create_db_and_user.sql
 ```
 
-Les identifiants applicatifs sont ensuite fournis au backend exclusivement via `backend/src/main/resources/application-local.yml` (non versionné, profil Spring `local`) — jamais en clair dans le code ou la documentation utilisateur.
+Les identifiants applicatifs sont ensuite fournis au backend exclusivement via `backend1/src/main/resources/application-local.yml` (non versionné, profil Spring `local`) — jamais en clair dans le code ou la documentation utilisateur.
 
 ## 7. Lancement backend
 
 Le script `mvn.cmd` officiel de l'installation Maven de ce poste échoue dans PowerShell (voir §12) ; utiliser le wrapper fourni :
 
 ```powershell
-cd backend
+cd backend1
 .\mvnw.ps1 "-Dspring-boot.run.profiles=local" spring-boot:run
 ```
 
@@ -125,7 +125,7 @@ mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS sgbf_test_db CHARACTER SET ut
 ```
 
 ```bash
-cd backend && .\mvnw.ps1 test
+cd backend1 && .\mvnw.ps1 test
 cd frontend && npm run test
 ```
 
@@ -146,7 +146,8 @@ Voir §3 ci-dessus et le détail des paquets backend en [documentation/02-archit
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
-| `mvn` introuvable / erreur `Usage: java` | Maven absent du `PATH`, script `mvn.cmd` défaillant sur ce poste | Utiliser `backend\mvnw.ps1` |
+| `mvn` introuvable / erreur `Usage: java` | Maven absent du `PATH`, script `mvn.cmd` défaillant sur ce poste | Utiliser `backend1\mvnw.ps1` |
+| `WeakKeyException: ... 240 bits ...` au démarrage backend | Une variable d'environnement Windows persistante nommée `JWT_SECRET` (sans rapport avec ce projet) écrase la clé de `application-local.yml` — la résolution de placeholder Spring donne priorité aux variables d'environnement système sur les fichiers de profil | Depuis le 2026-09-23, la clé s'appelle `SGBF_JWT_SECRET` (namespace propre à l'application) pour ne plus entrer en collision ; vérifier que `application-local.yml` définit bien `SGBF_JWT_SECRET` (pas `JWT_SECRET`) |
 | `npm`/`node` introuvable dans un terminal | Node installé via `nvm` (`C:\Users\Utilisateur\AppData\Local\nvm\v22.14.0`), absent du `PATH` par défaut de certains terminaux | Ajouter ce dossier au `PATH` de la session, ou utiliser un terminal où `nvm` a déjà été initialisé |
 | `Communications link failure` au démarrage backend | Service `MySQL80` arrêté | `Start-Service MySQL80` (PowerShell administrateur) |
 | Flyway échoue sur `V3__evenement_audit.sql` : *"You do not have the SUPER privilege and binary logging is enabled"* | MySQL refuse la création de `TRIGGER` à un compte sans `SUPER` tant que `log_bin_trust_function_creators` est désactivé | `SET PERSIST log_bin_trust_function_creators = 1;` en root **une seule fois** (déjà inclus dans `database/scripts/00_create_db_and_user.sql`) — ne jamais accorder `SUPER` à `ITadmin` pour contourner |

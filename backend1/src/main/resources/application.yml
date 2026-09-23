@@ -47,7 +47,15 @@ app:
     # surprise sur un autre navigateur ou une autre machine de developpement.
     cookie-secure: ${COOKIE_SECURE:false}
     jwt:
-      secret: ${JWT_SECRET}
+      # Nom de variable namespace (evolution du 2026-09-23) : un simple "JWT_SECRET"
+      # collisionne trop facilement avec une variable d'environnement Windows
+      # persistante et non liee a ce projet (deja observe plusieurs fois en
+      # developpement local - la valeur de application-local.yml se faisait
+      # silencieusement ecraser par une variable systeme de 240 bits, provoquant
+      # une WeakKeyException au demarrage). Un nom specifique a l'application
+      # evite cette collision sans jamais toucher aux variables d'environnement
+      # de la machine.
+      secret: ${SGBF_JWT_SECRET}
       access-token-ttl-minutes: 15
       # Pas de duree de vie configuree pour le jeton de rafraichissement : il
       # n'expire plus par ecoulement du temps (evolution du 2026-08-26, tous
