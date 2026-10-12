@@ -45,37 +45,39 @@ export default function LoginPage() {
   return (
     <main className="page-login">
       <img src={logoSnef} alt="SNEF" className="logo-lockup" />
-      <h1 className="page-login__titre">
-        <span className="page-login__titre-accent">SGBF</span> — {t("Connexion")}
-      </h1>
-      <form onSubmit={soumettre}>
-        <label htmlFor="identifiant">{t("Login ou e-mail")}</label>
-        <div className="champ-icone">
-          <Icone nom="personne" />
-          <input
-            id="identifiant"
-            type="text"
-            autoComplete="username"
-            value={identifiant}
-            onChange={(e) => setIdentifiant(e.target.value)}
+      <p className="page-login__surtitre">SGBF</p>
+      <h1 className="page-login__titre">{t("Connexion")}</h1>
+
+      <div className="page-login__carte">
+        <form onSubmit={soumettre}>
+          <label htmlFor="identifiant">{t("Login ou e-mail")}</label>
+          <div className="champ-icone">
+            <Icone nom="personne" />
+            <input
+              id="identifiant"
+              type="text"
+              autoComplete="username"
+              value={identifiant}
+              onChange={(e) => setIdentifiant(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <ChampMotDePasse
+            id="mot-de-passe"
+            valeur={motDePasse}
+            onChange={setMotDePasse}
+            autoComplete="current-password"
             required
-            autoFocus
           />
-        </div>
 
-        <ChampMotDePasse
-          id="mot-de-passe"
-          valeur={motDePasse}
-          onChange={setMotDePasse}
-          autoComplete="current-password"
-          required
-        />
-
-        {erreur && <p role="alert">{erreur}</p>}
-        <button type="submit" disabled={enCours}>
-          {enCours ? t("Connexion...") : t("Se connecter")}
-        </button>
-      </form>
+          {erreur && <p role="alert">{erreur}</p>}
+          <button type="submit" disabled={enCours}>
+            {enCours ? t("Connexion...") : t("Se connecter")}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

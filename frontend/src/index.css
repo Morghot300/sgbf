@@ -35,12 +35,16 @@ body {
 }
 
 /* Mode verre (voir tokens.css) : --surface-page y est transparente - le corps de la page porte
-   donc son propre degrade fixe, construit a partir des memes primitives de marque deja auditees
-   (--brand-1/--brand-2), pour que le flou des surfaces (sidebar, barre de contenu, carte de
+   donc son propre fond fixe, pour que le flou des surfaces (sidebar, barre de contenu, carte de
    connexion...) ait quelque chose de visible a flouter. background-attachment: fixed evite que le
-   degrade ne defile avec le contenu (effet de profondeur constant, independant du scroll). */
+   fond ne defile avec le contenu (effet de profondeur constant, independant du scroll).
+   Corrige le 2026-10-12 : "sombre translucide", pas un degrade teal/vert affirme en diagonale sur
+   toute la page (premiere version, trop colore) - un unique halo discret en haut a gauche,
+   construit sur --brand-2 a tres faible opacite, sur un fond par ailleurs presque noir (--gris-900) -
+   reference visuelle SNEF "Gestion Administrative", dont le fond reste tres sombre, la couleur de
+   marque n'y apparaissant qu'en toute petite touche. */
 html[data-theme="glass"] body {
-  background: linear-gradient(135deg, var(--brand-1) 0%, var(--gris-900) 45%, var(--brand-2) 150%) fixed;
+  background: radial-gradient(circle at 12% 8%, rgba(0, 149, 169, 0.16), transparent 40%) fixed, var(--gris-900);
 }
 
 /* Surfaces "verre" (sidebar, barre de contenu, carte de connexion, panneau de notifications) -
@@ -50,7 +54,7 @@ html[data-theme="glass"] body {
    inutiles"). */
 html[data-theme="glass"] .app-sidebar,
 html[data-theme="glass"] .app-topbar,
-html[data-theme="glass"] .page-login,
+html[data-theme="glass"] .page-login__carte,
 html[data-theme="glass"] .notification-centre__panneau,
 html[data-theme="glass"] .menu-theme__panneau {
   backdrop-filter: var(--flou-verre);
@@ -70,12 +74,22 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* ==========================================================================
- * Page de connexion (ecran non authentifie)
+ * Page de connexion (ecran non authentifie) - evolution du 2026-10-12,
+ * alignement repris de la reference visuelle SNEF "Gestion Administrative" :
+ * logo + surtitre + titre CENTRES et HORS carte, la carte ne portant plus
+ * que le formulaire (labels/champs alignes a gauche, comme toute l'appli).
  * ========================================================================== */
 .page-login {
   max-width: 420px;
   margin: 4rem auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.page-login__carte {
+  margin-top: 1.5rem;
   padding: 2rem;
+  text-align: left;
   background: var(--surface-carte);
   border: 1px solid var(--bordure-defaut);
   border-radius: calc(var(--rayon-defaut) * 2);
@@ -92,15 +106,35 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   padding: var(--logo-clearspace);
 }
 
-.page-login__titre {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-.page-login__titre-accent {
-  color: var(--brand-2-text);
+/* Logo sur fond sombre/verre (evolution du 2026-10-12) : la seule source disponible
+   (frontend/src/assets/brand/logo_snef.png, voir tools/README.md - "aucune valeur ni aucun
+   derive du logo n'est retouche a la main") a un fond blanc OPAQUE integre a l'image (confirme en
+   lisant les pixels du fichier), pas transparent - affiche tel quel sur un fond sombre, un
+   rectangle blanc serait visible autour du mot-symbole. mix-blend-mode: multiply, sans jamais
+   modifier le fichier source, neutralise le blanc (blanc x n'importe quelle couleur = cette
+   couleur, donc invisible) tout en laissant les lettres non blanches (noir, teal) se fondre
+   legerement dans le fond - reproduit fidelement le rendu du logo observe sur fond sombre dans la
+   reference visuelle SNEF "Gestion Administrative" (lettres S/E/F tres peu contrastees, seul le
+   "n" teal reste nettement visible). */
+html[data-theme="dark"] .logo-lockup,
+html[data-theme="glass"] .logo-lockup {
+  mix-blend-mode: multiply;
 }
 
-.page-login form {
+.page-login__surtitre {
+  margin: 0;
+  font-size: var(--taille-petite);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-2-text);
+}
+.page-login__titre {
+  margin: 0.15rem 0 0;
+  color: var(--texte-lien);
+}
+
+.page-login__carte form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
