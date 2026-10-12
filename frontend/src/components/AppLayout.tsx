@@ -4,6 +4,7 @@ import { useAuth } from "../auth/AuthContext";
 import logoSnef from "../assets/brand/logo_snef.png";
 import { Icone } from "./Icone";
 import NotificationCenter from "./NotificationCenter";
+import { useTheme } from "../theme";
 import { LIBELLES_STATUT_BON_SORTIE, type StatutBonSortie } from "../types/bonSortie";
 import { LIBELLES_CATEGORIE_FIPH, type CategorieFiph } from "../types/fiph";
 import { LIBELLES_STATUT_MISSION, type StatutMission } from "../types/mission";
@@ -15,12 +16,13 @@ const STATUTS_BON_SORTIE: StatutBonSortie[] = ["BROUILLON", "VISE", "VALIDE"];
 const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE", "TERMINEE"];
 
 /**
- * Ossature commune a tout ecran authentifie : en-tete (organisation,
- * utilisateur connecte, deconnexion, notifications - INCHANGEE) et menu
- * lateral de navigation (evolution du 2026-08-27, brief "Evolution du module
- * FIPH", section 19-22 - remplace l'ancienne barre horizontale), avec le
- * contenu de la page courante rendu via `<Outlet />` (routes imbriquees, voir
- * `App.tsx`).
+ * Ossature commune a tout ecran authentifie (evolution du 2026-10-12,
+ * inspiree de l'application SNEF "Gestion Administrative" fournie en
+ * reference visuelle - sidebar pleine hauteur avec le lockup de marque en
+ * tete, barre superieure allegee scopee au contenu plutot qu'un bandeau
+ * pleine largeur) : menu lateral de navigation + barre de contenu (theme,
+ * notifications, utilisateur), avec le contenu de la page courante rendu via
+ * `<Outlet />` (routes imbriquees, voir `App.tsx`).
  *
  * <p>Les liens de navigation sont affiches a tous - c'est le controle serveur
  * (403 sur l'appel API concerne, voir Javadoc de `ProtectedRoute`) qui reste
@@ -41,95 +43,108 @@ const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE"
 export default function AppLayout() {
   const { utilisateur, deconnexion, aLeRole } = useAuth();
   const [sidebarOuverte, setSidebarOuverte] = useState(false);
+  const [theme, basculerTheme] = useTheme();
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <button
-          type="button"
-          className="app-header__bascule-menu"
-          onClick={() => setSidebarOuverte((v) => !v)}
-          aria-label={sidebarOuverte ? "Fermer le menu" : "Ouvrir le menu"}
-          aria-expanded={sidebarOuverte}
-        >
-          ☰
-        </button>
-        <div className="app-header__marque">
-          <img src={logoSnef} alt="SNEF" className="logo-lockup logo-lockup--entete" />
+      <nav className={`app-sidebar${sidebarOuverte ? " app-sidebar--ouverte" : ""}`}>
+        <div className="app-sidebar__marque">
+          <img src={logoSnef} alt="SNEF" className="logo-lockup logo-lockup--sidebar" />
           <span>SGBF</span>
         </div>
-        <div className="app-header__utilisateur">
-          <NotificationCenter />
-          <span>
-            {utilisateur?.identifiant}
-            {utilisateur?.serviceLibelle ? ` — ${utilisateur.serviceLibelle}` : ""}
-          </span>
-          <button type="button" onClick={() => void deconnexion()}>Se déconnecter</button>
-        </div>
-      </header>
-      <div className="app-body">
-        <nav className={`app-sidebar${sidebarOuverte ? " app-sidebar--ouverte" : ""}`}>
-          <NavLink to="/" end onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="tableauDeBord" /> Tableau de bord
+
+        <NavLink to="/" end onClick={() => setSidebarOuverte(false)}>
+          <Icone nom="tableauDeBord" /> Tableau de bord
+        </NavLink>
+
+        <div className="app-sidebar__groupe">
+          <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
+            <Icone nom="document" /> Bons de sortie
           </NavLink>
+          <ul className="app-sidebar__sous-menu">
+            {STATUTS_BON_SORTIE.map((statut) => (
+              <li key={statut}>
+                <NavLink to={`/bons-sortie?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
+                  {LIBELLES_STATUT_BON_SORTIE[statut]}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
 
+        <div className="app-sidebar__groupe">
+          <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)}>
+            <Icone nom="fiph" /> FIPH
+          </NavLink>
+          <ul className="app-sidebar__sous-menu">
+            {CATEGORIES_FIPH.map((categorie) => (
+              <li key={categorie}>
+                <NavLink to={`/fiph?categorie=${categorie}`} onClick={() => setSidebarOuverte(false)}>
+                  {LIBELLES_CATEGORIE_FIPH[categorie]}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="app-sidebar__groupe">
+          <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
+            <Icone nom="mission" /> Missions
+          </NavLink>
+          <ul className="app-sidebar__sous-menu">
+            {STATUTS_MISSION.map((statut) => (
+              <li key={statut}>
+                <NavLink to={`/missions?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
+                  {LIBELLES_STATUT_MISSION[statut]}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {aLeRole("ADMINISTRATEUR") && (
           <div className="app-sidebar__groupe">
-            <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
-              <Icone nom="document" /> Bons de sortie
+            <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>
+              <Icone nom="administration" /> Administration
             </NavLink>
             <ul className="app-sidebar__sous-menu">
-              {STATUTS_BON_SORTIE.map((statut) => (
-                <li key={statut}>
-                  <NavLink to={`/bons-sortie?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
-                    {LIBELLES_STATUT_BON_SORTIE[statut]}
-                  </NavLink>
-                </li>
-              ))}
+              <li><NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>Personnel et habilitations</NavLink></li>
+              <li><NavLink to="/administration/referentiels" onClick={() => setSidebarOuverte(false)}>Référentiels</NavLink></li>
             </ul>
           </div>
+        )}
+      </nav>
 
-          <div className="app-sidebar__groupe">
-            <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)}>
-              <Icone nom="fiph" /> FIPH
-            </NavLink>
-            <ul className="app-sidebar__sous-menu">
-              {CATEGORIES_FIPH.map((categorie) => (
-                <li key={categorie}>
-                  <NavLink to={`/fiph?categorie=${categorie}`} onClick={() => setSidebarOuverte(false)}>
-                    {LIBELLES_CATEGORIE_FIPH[categorie]}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
+      <div className="app-body">
+        <header className="app-topbar">
+          <button
+            type="button"
+            className="app-topbar__bascule-menu"
+            onClick={() => setSidebarOuverte((v) => !v)}
+            aria-label={sidebarOuverte ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-expanded={sidebarOuverte}
+          >
+            <Icone nom="menu" />
+          </button>
+          <div className="app-topbar__espace" />
+          <button
+            type="button"
+            className="app-topbar__bascule-theme"
+            onClick={basculerTheme}
+            aria-label={theme === "sombre" ? "Passer en mode clair" : "Passer en mode sombre"}
+            title={theme === "sombre" ? "Mode clair" : "Mode sombre"}
+          >
+            <Icone nom={theme === "sombre" ? "soleil" : "lune"} />
+          </button>
+          <NotificationCenter />
+          <div className="app-topbar__utilisateur">
+            <span className="app-topbar__utilisateur-nom">{utilisateur?.identifiant}</span>
+            {utilisateur?.serviceLibelle && <span className="app-topbar__utilisateur-service">{utilisateur.serviceLibelle}</span>}
           </div>
-
-          <div className="app-sidebar__groupe">
-            <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
-              <Icone nom="mission" /> Missions
-            </NavLink>
-            <ul className="app-sidebar__sous-menu">
-              {STATUTS_MISSION.map((statut) => (
-                <li key={statut}>
-                  <NavLink to={`/missions?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
-                    {LIBELLES_STATUT_MISSION[statut]}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {aLeRole("ADMINISTRATEUR") && (
-            <div className="app-sidebar__groupe">
-              <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>
-                <Icone nom="administration" /> Administration
-              </NavLink>
-              <ul className="app-sidebar__sous-menu">
-                <li><NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>Personnel et habilitations</NavLink></li>
-                <li><NavLink to="/administration/referentiels" onClick={() => setSidebarOuverte(false)}>Référentiels</NavLink></li>
-              </ul>
-            </div>
-          )}
-        </nav>
+          <button type="button" className="app-topbar__deconnexion" onClick={() => void deconnexion()} title="Se déconnecter">
+            <Icone nom="deconnexion" />
+          </button>
+        </header>
         <main className="app-content">
           <Outlet />
         </main>

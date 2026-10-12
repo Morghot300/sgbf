@@ -125,6 +125,52 @@
   --ombre-carte: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
+/* ==========================================================================
+ * MODE SOMBRE (evolution du 2026-10-12, inspiree de l'application SNEF
+ * "Gestion Administrative" fournie en reference visuelle) - bascule manuelle
+ * (voir src/theme.ts), jamais automatique seule : l'attribut data-theme est
+ * toujours explicitement pose sur <html>, memorise par utilisateur.
+ *
+ * Reutilise l'echelle de gris neutre deja existante (jamais de nouvelle
+ * primitive de couleur) et l'accent teal de marque (--brand-2), seul assez
+ * contraste sur fond sombre pour rester une action principale lisible -
+ * --brand-1 (quasi noir) s'y fondrait. Les tokens d'etat (succes/alerte/
+ * erreur/info, badges de statut) restent INCHANGES : leur fond propre
+ * (clair, independant de la page) reste lisible quel que soit le theme,
+ * conformement au principe deja en place (voir StatutBadge.tsx). --- */
+:root[data-theme="dark"] {
+  /* --brand-1-text/--brand-2-text sont documentes "conformes AA sur blanc" (couche 1) : sur un
+     fond sombre, ces memes valeurs (quasi noir / teal assombri) deviendraient illisibles - voir
+     .app-header__marque, .app-sidebar a.active, .carte-resume__nombre. Reaffectees ici a des
+     variantes claires/eclaircies, sans jamais toucher aux primitives --brand-1/--brand-2
+     elles-memes (le logo et les aplats de marque restent inchanges). */
+  --brand-1-text: var(--gris-50);
+  --brand-2-text: #5ecbda;
+
+  --surface-page: var(--gris-900);
+  --surface-carte: var(--gris-800);
+  --surface-entete: var(--gris-800);
+  --surface-survol: var(--gris-700);
+
+  --texte-principal: var(--gris-50);
+  --texte-secondaire: var(--gris-400);
+  --texte-inverse: var(--gris-900);
+  --texte-lien: #5ecbda;
+
+  --bordure-defaut: var(--gris-700);
+  --bordure-forte: var(--gris-600);
+  --bordure-focus: #5ecbda;
+
+  --action-fond: var(--brand-2);
+  --action-fond-survol: #00b4cc;
+  --action-texte: var(--gris-900);
+  --action-secondaire-fond: var(--gris-800);
+  --action-secondaire-bordure: var(--gris-600);
+  --action-secondaire-texte: var(--gris-50);
+
+  --ombre-carte: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
 /* prefers-reduced-motion (mission, critere d'acceptation 5) : neutralise toute transition/animation. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

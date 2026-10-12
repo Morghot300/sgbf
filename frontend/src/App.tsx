@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./auth/AuthContext";
+import { ThemeProvider } from "./theme";
 import AppLayout from "./components/AppLayout";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
@@ -26,41 +27,43 @@ import { ProtectedRoute, RouteAvecRole } from "./routes/ProtectedRoute";
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/" element={<DashboardPage />} />
-
-            <Route path="/bons-sortie" element={<BonSortieListePage />} />
-            <Route path="/bons-sortie/nouveau" element={<BonSortieNouveauPage />} />
-            <Route path="/bons-sortie/:id" element={<BonSortieDetailPage />} />
-
-            <Route path="/fiph" element={<FiphListePage />} />
-            <Route path="/fiph/:id" element={<FiphDetailPage />} />
-
-            <Route path="/missions" element={<MissionListePage />} />
-            <Route path="/missions/nouvelle" element={<MissionNouvellePage />} />
-            <Route path="/missions/:id" element={<MissionDetailPage />} />
-
+      <ThemeProvider>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
             <Route
-              path="/administration"
-              element={<RouteAvecRole role="ADMINISTRATEUR"><AdminUtilisateursPage /></RouteAvecRole>}
-            />
-            <Route
-              path="/administration/referentiels"
-              element={<RouteAvecRole role="ADMINISTRATEUR"><AdminReferentielsPage /></RouteAvecRole>}
-            />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AuthProvider>
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={<DashboardPage />} />
+
+              <Route path="/bons-sortie" element={<BonSortieListePage />} />
+              <Route path="/bons-sortie/nouveau" element={<BonSortieNouveauPage />} />
+              <Route path="/bons-sortie/:id" element={<BonSortieDetailPage />} />
+
+              <Route path="/fiph" element={<FiphListePage />} />
+              <Route path="/fiph/:id" element={<FiphDetailPage />} />
+
+              <Route path="/missions" element={<MissionListePage />} />
+              <Route path="/missions/nouvelle" element={<MissionNouvellePage />} />
+              <Route path="/missions/:id" element={<MissionDetailPage />} />
+
+              <Route
+                path="/administration"
+                element={<RouteAvecRole role="ADMINISTRATEUR"><AdminUtilisateursPage /></RouteAvecRole>}
+              />
+              <Route
+                path="/administration/referentiels"
+                element={<RouteAvecRole role="ADMINISTRATEUR"><AdminReferentielsPage /></RouteAvecRole>}
+              />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

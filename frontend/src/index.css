@@ -54,7 +54,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   margin: 4rem auto;
   padding: 2rem;
   background: var(--surface-carte);
-  border-radius: var(--rayon-defaut);
+  border: 1px solid var(--bordure-defaut);
+  border-radius: calc(var(--rayon-defaut) * 2);
   box-shadow: var(--ombre-carte);
 }
 
@@ -64,14 +65,42 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   display: block;
   height: 40px;
   width: auto;
-  margin: 0 0 calc(var(--logo-clearspace) * 2) 0;
+  margin: 0 auto calc(var(--logo-clearspace) * 2) auto;
   padding: var(--logo-clearspace);
+}
+
+.page-login__titre {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.page-login__titre-accent {
+  color: var(--brand-2-text);
 }
 
 .page-login form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+/* Champ avec icone en tete (evolution du 2026-10-12, reference visuelle SNEF
+   "Gestion Administrative") - l'input conserve sa propre bordure/fond habituels
+   (voir regle generique input/select/textarea plus bas), seul le padding gauche
+   est agrandi pour laisser la place a l'icone, positionnee en absolu par-dessus. */
+.champ-icone {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.champ-icone svg {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--texte-secondaire);
+  pointer-events: none;
+}
+.champ-icone input {
+  width: 100%;
+  padding-left: 2.5rem;
 }
 
 /* ==========================================================================
@@ -100,7 +129,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   gap: 0.5rem 1rem;
   padding: 0.75rem;
   margin-bottom: 1rem;
-  background: var(--fond-secondaire, #F7F8F9);
+  /* Bug reel corrige le 2026-10-12 : --fond-secondaire n'a jamais ete defini dans tokens.css -
+     la valeur de repli #F7F8F9 (identique a --gris-50) etait donc TOUJOURS utilisee en mode
+     clair par coincidence, mais ne s'adaptait jamais au mode sombre (ajoute le meme jour).
+     --surface-page est le token semantique deja prevu pour ce role. */
+  background: var(--surface-page);
   border-radius: var(--rayon-defaut);
 }
 .barre-filtres label {
@@ -212,89 +245,100 @@ button:disabled {
 }
 
 /* ==========================================================================
- * Ossature applicative (AppLayout) - en-tete, navigation, contenu
+ * Ossature applicative (AppLayout) - sidebar pleine hauteur, barre de
+ * contenu, contenu (evolution du 2026-10-12, inspiree de l'application SNEF
+ * "Gestion Administrative" fournie en reference visuelle - remplace l'ancien
+ * bandeau pleine largeur par une sidebar qui porte elle-meme le lockup de
+ * marque, et une barre de contenu allegee scopee a la zone de contenu).
  * ========================================================================== */
 .app-shell {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: var(--surface-entete);
-  border-bottom: 1px solid var(--bordure-defaut);
-  flex-wrap: wrap;
-  /* Ancre le panneau du centre de notifications (voir .notification-centre__panneau) : positionne par
-     rapport a la largeur de TOUTE la barre d'en-tete plutot que du seul bouton-cloche, qui peut se
-     retrouver pres du bord gauche quand l'en-tete passe a la ligne (largeur intermediaire, avant meme le
-     point de rupture mobile a 640px) - sans quoi le panneau, ancre a droite d'un conteneur etroit et
-     lui-meme proche du bord gauche, se retrouvait rendu hors ecran (coordonnee x negative, bug reproduit et
-     corrige le 2026-08-19 via une verification visuelle reelle dans le navigateur).
-  */
+  /* Contexte de positionnement pour le repli mobile de la sidebar (voir media query plus bas). */
   position: relative;
 }
 
-.app-header__marque {
+.app-body {
+  flex: 1;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  font-weight: 700;
-  font-size: var(--taille-h3);
-  color: var(--brand-1-text);
-  letter-spacing: 0.02em;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* Variante compacte du lockup pour l'en-tete (voir .logo-lockup, page de connexion) :
-   pas de zone de protection verticale ici, l'en-tete porte deja son propre espacement. */
-.logo-lockup--entete {
-  height: 24px;
-  width: auto;
-  margin: 0;
-  padding: 0;
+.app-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.5rem;
+  background: var(--surface-entete);
+  border-bottom: 1px solid var(--bordure-defaut);
+  /* Ancre le panneau du centre de notifications (voir .notification-centre__panneau) : positionne par
+     rapport a la largeur de TOUTE la barre plutot que du seul bouton-cloche, qui peut se retrouver pres
+     du bord gauche quand la barre passe a la ligne - sans quoi le panneau, ancre a droite d'un conteneur
+     etroit et lui-meme proche du bord gauche, se retrouvait rendu hors ecran (coordonnee x negative, bug
+     reproduit et corrige le 2026-08-19 via une verification visuelle reelle dans le navigateur). */
+  position: relative;
+}
+
+.app-topbar__espace {
+  flex: 1;
 }
 
 /* Bouton bascule du menu lateral (section 22) - masque par defaut, visible uniquement
    sous le point de rupture mobile (voir media query plus bas). */
-.app-header__bascule-menu {
+.app-topbar__bascule-menu {
   display: none;
   background: none;
   border: none;
   color: var(--texte-principal);
-  font-size: 1.2rem;
-  padding: 0.3rem 0.5rem;
+  padding: 0.4rem;
   cursor: pointer;
   line-height: 1;
 }
 
-.app-header__marque {
-  flex: 1;
+.app-topbar__bascule-theme,
+.app-topbar__deconnexion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--texte-secondaire);
+  padding: 0.4rem;
+  border-radius: var(--rayon-defaut);
+  cursor: pointer;
+  line-height: 1;
+}
+.app-topbar__bascule-theme:hover,
+.app-topbar__deconnexion:hover {
+  background: var(--surface-survol);
+  color: var(--texte-principal);
 }
 
-.app-header__utilisateur {
+.app-topbar__utilisateur {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+.app-topbar__utilisateur-nom {
   font-size: var(--taille-petite);
+  font-weight: 600;
+  color: var(--texte-principal);
+}
+.app-topbar__utilisateur-service {
+  font-size: 0.72rem;
   color: var(--texte-secondaire);
 }
-.app-header__utilisateur button {
-  padding: 0.4rem 0.75rem;
-  font-size: var(--taille-petite);
-}
 
-/* ==========================================================================
- * Menu lateral (evolution du 2026-08-27, brief "Evolution du module FIPH",
- * section 19-22) - remplace l'ancienne barre de navigation horizontale.
- * ========================================================================== */
-.app-body {
-  flex: 1;
-  display: flex;
-  align-items: flex-start;
-  min-height: 0;
+/* Variante compacte du lockup pour la sidebar (voir .logo-lockup, page de connexion) :
+   pas de zone de protection verticale ici, la sidebar porte deja son propre espacement. */
+.logo-lockup--sidebar {
+  height: 26px;
+  width: auto;
+  margin: 0;
+  padding: 0;
 }
 
 .app-sidebar {
@@ -306,7 +350,18 @@ button:disabled {
   padding: 1rem 0.75rem;
   background: var(--surface-entete);
   border-right: 1px solid var(--bordure-defaut);
-  align-self: stretch;
+  overflow-y: auto;
+}
+
+.app-sidebar__marque {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: var(--taille-h3);
+  color: var(--brand-1-text);
+  letter-spacing: 0.02em;
+  padding: 0.4rem 0.6rem 1rem;
 }
 
 .app-sidebar a {
@@ -326,7 +381,7 @@ button:disabled {
 .app-sidebar a.active,
 .app-sidebar a[aria-current="page"] {
   color: var(--brand-2-text);
-  background: var(--statut-info-fond);
+  background: var(--surface-survol);
 }
 .app-sidebar svg {
   flex-shrink: 0;
@@ -356,7 +411,7 @@ button:disabled {
  * ========================================================================== */
 .notification-centre {
   /* Le panneau deroulant (.notification-centre__panneau) est positionne en absolu par rapport a
-     .app-header (voir plus haut), pas a ce conteneur - ce dernier n'a donc pas besoin de son propre
+     .app-topbar (voir plus haut), pas a ce conteneur - ce dernier n'a donc pas besoin de son propre
      contexte de positionnement. */
   display: inline-flex;
 }
@@ -648,13 +703,14 @@ button:disabled {
  * Responsive - rendu correct de 360px a 1920px (mission, critere d'acceptation 6)
  * ========================================================================== */
 @media (max-width: 640px) {
-  .app-header {
-    gap: 0.75rem;
+  .app-topbar {
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
   }
-  .app-header__bascule-menu {
+  .app-topbar__bascule-menu {
     display: block;
   }
-  .app-header__utilisateur span {
+  .app-topbar__utilisateur-service {
     display: none;
   }
   .app-content {
@@ -666,11 +722,8 @@ button:disabled {
   }
 
   /* Menu lateral replie par defaut sous ce point de rupture (section 22) : le bouton
-     bascule de l'en-tete (visible uniquement ici) le fait apparaitre en superposition,
-     jamais un simple demontage - les liens restent toujours dans le DOM. */
-  .app-body {
-    position: relative;
-  }
+     bascule de la barre de contenu (visible uniquement ici) le fait apparaitre en
+     superposition, jamais un simple demontage - les liens restent toujours dans le DOM. */
   .app-sidebar {
     position: absolute;
     top: 0;

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { extraireMessageErreur } from "../api/httpClient";
 import { ChampMotDePasse } from "../components/ChampMotDePasse";
+import { Icone } from "../components/Icone";
 import logoSnef from "../assets/brand/logo_snef.png";
 
 /**
@@ -42,18 +43,23 @@ export default function LoginPage() {
   return (
     <main className="page-login">
       <img src={logoSnef} alt="SNEF" className="logo-lockup" />
-      <h1>SGBF - Connexion</h1>
+      <h1 className="page-login__titre">
+        <span className="page-login__titre-accent">SGBF</span> — Connexion
+      </h1>
       <form onSubmit={soumettre}>
         <label htmlFor="identifiant">Login ou e-mail</label>
-        <input
-          id="identifiant"
-          type="text"
-          autoComplete="username"
-          value={identifiant}
-          onChange={(e) => setIdentifiant(e.target.value)}
-          required
-          autoFocus
-        />
+        <div className="champ-icone">
+          <Icone nom="personne" />
+          <input
+            id="identifiant"
+            type="text"
+            autoComplete="username"
+            value={identifiant}
+            onChange={(e) => setIdentifiant(e.target.value)}
+            required
+            autoFocus
+          />
+        </div>
 
         <ChampMotDePasse
           id="mot-de-passe"
