@@ -171,6 +171,45 @@
   --ombre-carte: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
+/* ==========================================================================
+ * MODE VERRE (evolution du 2026-10-12, reference visuelle SNEF "Gestion
+ * Administrative" - 3e option du menu, a cote de clair/sombre). Base sombre
+ * identique au mode sombre (texte, focus) mais les surfaces deviennent
+ * translucides avec un flou d'arriere-plan (glassmorphism), sur un degrade
+ * fixe construit a partir des memes primitives de marque (--brand-1/-2) -
+ * jamais de nouvelle couleur, uniquement une nouvelle PRESENTATION des
+ * couleurs deja en place. Le degrade lui-meme (body[data-theme="glass"])
+ * est pose dans index.css, pas ici (couche 2 = variables, pas de regles
+ * multi-valeurs complexes). --- */
+:root[data-theme="glass"] {
+  --brand-1-text: var(--gris-50);
+  --brand-2-text: #5ecbda;
+
+  --surface-page: transparent;
+  --surface-carte: rgba(38, 45, 50, 0.55);
+  --surface-entete: rgba(22, 25, 28, 0.45);
+  --surface-survol: rgba(255, 255, 255, 0.08);
+
+  --texte-principal: var(--gris-50);
+  --texte-secondaire: var(--gris-300);
+  --texte-inverse: var(--gris-900);
+  --texte-lien: #5ecbda;
+
+  --bordure-defaut: rgba(255, 255, 255, 0.14);
+  --bordure-forte: rgba(255, 255, 255, 0.22);
+  --bordure-focus: #5ecbda;
+
+  --action-fond: var(--brand-2);
+  --action-fond-survol: #00b4cc;
+  --action-texte: var(--gris-900);
+  --action-secondaire-fond: rgba(255, 255, 255, 0.06);
+  --action-secondaire-bordure: rgba(255, 255, 255, 0.22);
+  --action-secondaire-texte: var(--gris-50);
+
+  --flou-verre: blur(18px) saturate(150%);
+  --ombre-carte: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+
 /* prefers-reduced-motion (mission, critere d'acceptation 5) : neutralise toute transition/animation. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

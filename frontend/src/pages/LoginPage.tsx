@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { extraireMessageErreur } from "../api/httpClient";
@@ -20,6 +21,7 @@ import logoSnef from "../assets/brand/logo_snef.png";
 export default function LoginPage() {
   const { connexion } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [identifiant, setIdentifiant] = useState("");
   const [motDePasse, setMotDePasse] = useState("");
@@ -34,7 +36,7 @@ export default function LoginPage() {
       await connexion(identifiant, motDePasse);
       navigate("/", { replace: true });
     } catch (erreurCaptee) {
-      setErreur(extraireMessageErreur(erreurCaptee, "Identifiant ou mot de passe incorrect."));
+      setErreur(extraireMessageErreur(erreurCaptee, t("Identifiant ou mot de passe incorrect.")));
     } finally {
       setEnCours(false);
     }
@@ -44,10 +46,10 @@ export default function LoginPage() {
     <main className="page-login">
       <img src={logoSnef} alt="SNEF" className="logo-lockup" />
       <h1 className="page-login__titre">
-        <span className="page-login__titre-accent">SGBF</span> — Connexion
+        <span className="page-login__titre-accent">SGBF</span> — {t("Connexion")}
       </h1>
       <form onSubmit={soumettre}>
-        <label htmlFor="identifiant">Login ou e-mail</label>
+        <label htmlFor="identifiant">{t("Login ou e-mail")}</label>
         <div className="champ-icone">
           <Icone nom="personne" />
           <input
@@ -71,7 +73,7 @@ export default function LoginPage() {
 
         {erreur && <p role="alert">{erreur}</p>}
         <button type="submit" disabled={enCours}>
-          {enCours ? "Connexion..." : "Se connecter"}
+          {enCours ? t("Connexion...") : t("Se connecter")}
         </button>
       </form>
     </main>

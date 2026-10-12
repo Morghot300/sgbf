@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import logoSnef from "../assets/brand/logo_snef.png";
 import { Icone } from "./Icone";
+import { MenuTheme } from "./MenuTheme";
 import NotificationCenter from "./NotificationCenter";
-import { useTheme } from "../theme";
+import { SelecteurLangue } from "./SelecteurLangue";
 import { LIBELLES_STATUT_BON_SORTIE, type StatutBonSortie } from "../types/bonSortie";
 import { LIBELLES_CATEGORIE_FIPH, type CategorieFiph } from "../types/fiph";
 import { LIBELLES_STATUT_MISSION, type StatutMission } from "../types/mission";
@@ -21,8 +23,8 @@ const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE"
  * reference visuelle - sidebar pleine hauteur avec le lockup de marque en
  * tete, barre superieure allegee scopee au contenu plutot qu'un bandeau
  * pleine largeur) : menu lateral de navigation + barre de contenu (theme,
- * notifications, utilisateur), avec le contenu de la page courante rendu via
- * `<Outlet />` (routes imbriquees, voir `App.tsx`).
+ * langue, notifications, utilisateur), avec le contenu de la page courante
+ * rendu via `<Outlet />` (routes imbriquees, voir `App.tsx`).
  *
  * <p>Les liens de navigation sont affiches a tous - c'est le controle serveur
  * (403 sur l'appel API concerne, voir Javadoc de `ProtectedRoute`) qui reste
@@ -39,11 +41,17 @@ const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE"
  * bouton bascule plutot que de disparaitre : {@code sidebarOuverte} pilote
  * une classe CSS, jamais un demontage du DOM (les liens restent atteignables
  * au clavier/lecteur d'ecran meme replies).
+ *
+ * <p><strong>Portee de la traduction (section langue, evolution du
+ * 2026-10-12)</strong> : seuls les libelles de CETTE ossature sont traduits
+ * (voir {@code i18n.ts}) - les pages metier (Bons de sortie, FIPH,
+ * Missions, Administration) restent en francais quelle que soit la langue
+ * choisie, a traduire dans un increment ulterieur.
  */
 export default function AppLayout() {
   const { utilisateur, deconnexion, aLeRole } = useAuth();
+  const { t } = useTranslation();
   const [sidebarOuverte, setSidebarOuverte] = useState(false);
-  const [theme, basculerTheme] = useTheme();
 
   return (
     <div className="app-shell">
@@ -54,18 +62,18 @@ export default function AppLayout() {
         </div>
 
         <NavLink to="/" end onClick={() => setSidebarOuverte(false)}>
-          <Icone nom="tableauDeBord" /> Tableau de bord
+          <Icone nom="tableauDeBord" /> {t("Tableau de bord")}
         </NavLink>
 
         <div className="app-sidebar__groupe">
           <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="document" /> Bons de sortie
+            <Icone nom="document" /> {t("Bons de sortie")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
             {STATUTS_BON_SORTIE.map((statut) => (
               <li key={statut}>
                 <NavLink to={`/bons-sortie?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
-                  {LIBELLES_STATUT_BON_SORTIE[statut]}
+                  {t(LIBELLES_STATUT_BON_SORTIE[statut])}
                 </NavLink>
               </li>
             ))}
@@ -74,13 +82,13 @@ export default function AppLayout() {
 
         <div className="app-sidebar__groupe">
           <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="fiph" /> FIPH
+            <Icone nom="fiph" /> {t("FIPH")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
             {CATEGORIES_FIPH.map((categorie) => (
               <li key={categorie}>
                 <NavLink to={`/fiph?categorie=${categorie}`} onClick={() => setSidebarOuverte(false)}>
-                  {LIBELLES_CATEGORIE_FIPH[categorie]}
+                  {t(LIBELLES_CATEGORIE_FIPH[categorie])}
                 </NavLink>
               </li>
             ))}
@@ -89,13 +97,13 @@ export default function AppLayout() {
 
         <div className="app-sidebar__groupe">
           <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
-            <Icone nom="mission" /> Missions
+            <Icone nom="mission" /> {t("Missions")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
             {STATUTS_MISSION.map((statut) => (
               <li key={statut}>
                 <NavLink to={`/missions?statut=${statut}`} onClick={() => setSidebarOuverte(false)}>
-                  {LIBELLES_STATUT_MISSION[statut]}
+                  {t(LIBELLES_STATUT_MISSION[statut])}
                 </NavLink>
               </li>
             ))}
@@ -105,11 +113,11 @@ export default function AppLayout() {
         {aLeRole("ADMINISTRATEUR") && (
           <div className="app-sidebar__groupe">
             <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>
-              <Icone nom="administration" /> Administration
+              <Icone nom="administration" /> {t("Administration")}
             </NavLink>
             <ul className="app-sidebar__sous-menu">
-              <li><NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>Personnel et habilitations</NavLink></li>
-              <li><NavLink to="/administration/referentiels" onClick={() => setSidebarOuverte(false)}>Référentiels</NavLink></li>
+              <li><NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>{t("Personnel et habilitations")}</NavLink></li>
+              <li><NavLink to="/administration/referentiels" onClick={() => setSidebarOuverte(false)}>{t("Référentiels")}</NavLink></li>
             </ul>
           </div>
         )}
@@ -121,27 +129,20 @@ export default function AppLayout() {
             type="button"
             className="app-topbar__bascule-menu"
             onClick={() => setSidebarOuverte((v) => !v)}
-            aria-label={sidebarOuverte ? "Fermer le menu" : "Ouvrir le menu"}
+            aria-label={sidebarOuverte ? t("Fermer le menu") : t("Ouvrir le menu")}
             aria-expanded={sidebarOuverte}
           >
             <Icone nom="menu" />
           </button>
           <div className="app-topbar__espace" />
-          <button
-            type="button"
-            className="app-topbar__bascule-theme"
-            onClick={basculerTheme}
-            aria-label={theme === "sombre" ? "Passer en mode clair" : "Passer en mode sombre"}
-            title={theme === "sombre" ? "Mode clair" : "Mode sombre"}
-          >
-            <Icone nom={theme === "sombre" ? "soleil" : "lune"} />
-          </button>
+          <SelecteurLangue />
+          <MenuTheme />
           <NotificationCenter />
           <div className="app-topbar__utilisateur">
             <span className="app-topbar__utilisateur-nom">{utilisateur?.identifiant}</span>
             {utilisateur?.serviceLibelle && <span className="app-topbar__utilisateur-service">{utilisateur.serviceLibelle}</span>}
           </div>
-          <button type="button" className="app-topbar__deconnexion" onClick={() => void deconnexion()} title="Se déconnecter">
+          <button type="button" className="app-topbar__deconnexion" onClick={() => void deconnexion()} title={t("Se déconnecter")}>
             <Icone nom="deconnexion" />
           </button>
         </header>

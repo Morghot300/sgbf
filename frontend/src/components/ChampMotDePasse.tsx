@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /**
  * Champ mot de passe avec case a cocher "Afficher le mot de passe" (bascule
@@ -23,10 +24,11 @@ export function ChampMotDePasse({
 }) {
   const [visible, setVisible] = useState(false);
   const idCase = useId();
+  const { t } = useTranslation();
 
   return (
     <>
-      <label htmlFor={id}>{libelle}</label>
+      <label htmlFor={id}>{t(libelle)}</label>
       <input
         id={id}
         type={visible ? "text" : "password"}
@@ -43,7 +45,7 @@ export function ChampMotDePasse({
           checked={visible}
           onChange={(e) => setVisible(e.target.checked)}
         />
-        Afficher le mot de passe
+        {t("Afficher le mot de passe")}
       </label>
     </>
   );

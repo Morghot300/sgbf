@@ -34,6 +34,29 @@ body {
   line-height: 1.5;
 }
 
+/* Mode verre (voir tokens.css) : --surface-page y est transparente - le corps de la page porte
+   donc son propre degrade fixe, construit a partir des memes primitives de marque deja auditees
+   (--brand-1/--brand-2), pour que le flou des surfaces (sidebar, barre de contenu, carte de
+   connexion...) ait quelque chose de visible a flouter. background-attachment: fixed evite que le
+   degrade ne defile avec le contenu (effet de profondeur constant, independant du scroll). */
+html[data-theme="glass"] body {
+  background: linear-gradient(135deg, var(--brand-1) 0%, var(--gris-900) 45%, var(--brand-2) 150%) fixed;
+}
+
+/* Surfaces "verre" (sidebar, barre de contenu, carte de connexion, panneau de notifications) -
+   seules les surfaces de l'OSSATURE recoivent le flou (jamais chaque tableau/carte de contenu :
+   le flou reste un effet de la structure d'accueil, pas une texture appliquee partout, pour rester
+   lisible et ne pas alourdir le rendu - voir mega-prompt section 2, "reduis les elements decoratifs
+   inutiles"). */
+html[data-theme="glass"] .app-sidebar,
+html[data-theme="glass"] .app-topbar,
+html[data-theme="glass"] .page-login,
+html[data-theme="glass"] .notification-centre__panneau,
+html[data-theme="glass"] .menu-theme__panneau {
+  backdrop-filter: var(--flou-verre);
+  -webkit-backdrop-filter: var(--flou-verre);
+}
+
 h1 { font-size: var(--taille-h1); margin: 0 0 1rem; }
 h2 { font-size: var(--taille-h2); margin: 1.5rem 0 0.75rem; }
 h3 { font-size: var(--taille-h3); margin: 1.25rem 0 0.5rem; }
@@ -314,6 +337,90 @@ button:disabled {
 .app-topbar__deconnexion:hover {
   background: var(--surface-survol);
   color: var(--texte-principal);
+}
+
+/* ==========================================================================
+ * Menu de theme (components/MenuTheme.tsx, evolution du 2026-10-12) -
+ * bouton + panneau deroulant a 3 options (clair/sombre/verre).
+ * ========================================================================== */
+.menu-theme {
+  position: relative;
+  display: inline-flex;
+}
+.menu-theme__panneau {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  width: 190px;
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure-defaut);
+  border-radius: var(--rayon-defaut);
+  box-shadow: var(--ombre-carte);
+  padding: 0.35rem;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.menu-theme__option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--texte-principal);
+  font-size: var(--taille-petite);
+  font-weight: 500;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--rayon-defaut);
+  cursor: pointer;
+  text-align: left;
+}
+.menu-theme__option:hover {
+  background: var(--surface-survol);
+}
+.menu-theme__option svg:first-child {
+  color: var(--texte-secondaire);
+  flex-shrink: 0;
+}
+.menu-theme__option span {
+  flex: 1;
+}
+.menu-theme__option svg:last-child {
+  color: var(--brand-2-text);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+ * Selecteur de langue (components/SelecteurLangue.tsx, evolution du
+ * 2026-10-12) - "FR EN" cote a cote, l'actif mis en evidence.
+ * ========================================================================== */
+.selecteur-langue {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.selecteur-langue__option,
+.selecteur-langue__option--actif {
+  background: none;
+  border: none;
+  padding: 0.3rem 0.4rem;
+  border-radius: var(--rayon-defaut);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.selecteur-langue__option {
+  color: var(--texte-secondaire);
+}
+.selecteur-langue__option:hover {
+  background: var(--surface-survol);
+  color: var(--texte-principal);
+}
+.selecteur-langue__option--actif {
+  color: var(--brand-2-text);
 }
 
 .app-topbar__utilisateur {
