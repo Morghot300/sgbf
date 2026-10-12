@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ajouterPersonnesABordEnLot, listerAgentsEligibles } from "../../api/bonSortieApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 
@@ -14,6 +15,7 @@ export function SelectionPersonnesABord({ bonSortieId, onAjoutReussi }: {
   bonSortieId: number;
   onAjoutReussi: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [recherche, setRecherche] = useState("");
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -40,7 +42,7 @@ export function SelectionPersonnesABord({ bonSortieId, onAjoutReussi }: {
       void queryClient.invalidateQueries({ queryKey: ["agents-eligibles", bonSortieId] });
       onAjoutReussi();
     },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible d'ajouter les personnes sélectionnées.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, t("Impossible d'ajouter les personnes sélectionnées."))),
   });
 
   function basculer(agentId: number) {
@@ -69,30 +71,30 @@ export function SelectionPersonnesABord({ bonSortieId, onAjoutReussi }: {
   }
 
   if (agents.isLoading) {
-    return <p>Chargement du personnel du service...</p>;
+    return <p>{t("Chargement du personnel du service...")}</p>;
   }
   if (agents.error) {
     return (
       <div role="alert">
-        <p>{extraireMessageErreur(agents.error, "Impossible de charger le personnel éligible.")}</p>
-        <button type="button" onClick={() => void agents.refetch()}>Réessayer</button>
+        <p>{extraireMessageErreur(agents.error, t("Impossible de charger le personnel éligible."))}</p>
+        <button type="button" onClick={() => void agents.refetch()}>{t("Réessayer")}</button>
       </div>
     );
   }
   if ((agents.data ?? []).length === 0) {
-    return <p>Aucune personne du service n'est disponible à ajouter (déjà à bord, ou aucun autre membre du service).</p>;
+    return <p>{t("Aucune personne du service n'est disponible à ajouter (déjà à bord, ou aucun autre membre du service).")}</p>;
   }
 
   return (
     <div className="selection-personnes-a-bord">
       {erreur && <p role="alert">{erreur}</p>}
-      <label htmlFor="recherche-agents-eligibles">Rechercher (nom, matricule)</label>
+      <label htmlFor="recherche-agents-eligibles">{t("Rechercher (nom, matricule)")}</label>
       <input
         id="recherche-agents-eligibles"
         type="text"
         value={recherche}
         onChange={(e) => setRecherche(e.target.value)}
-        aria-label="Rechercher une personne par nom ou matricule"
+        aria-label={t("Rechercher une personne par nom ou matricule")}
       />
       <table className="tableau tableau--compact">
         <thead>
@@ -102,19 +104,19 @@ export function SelectionPersonnesABord({ bonSortieId, onAjoutReussi }: {
                 type="checkbox"
                 checked={tousSelectionnes}
                 onChange={basculerTout}
-                aria-label="Tout sélectionner"
+                aria-label={t("Tout sélectionner")}
                 disabled={filtres.length === 0}
               />
             </th>
-            <th>Nom</th>
-            <th>Matricule</th>
-            <th>Service</th>
-            <th>Statut</th>
+            <th>{t("Nom")}</th>
+            <th>{t("Matricule")}</th>
+            <th>{t("Service")}</th>
+            <th>{t("Statut")}</th>
           </tr>
         </thead>
         <tbody>
           {filtres.length === 0 && (
-            <tr><td colSpan={5}>Aucune personne ne correspond à cette recherche.</td></tr>
+            <tr><td colSpan={5}>{t("Aucune personne ne correspond à cette recherche.")}</td></tr>
           )}
           {filtres.map((a) => (
             <tr key={a.id}>
@@ -124,28 +126,28 @@ export function SelectionPersonnesABord({ bonSortieId, onAjoutReussi }: {
                   id={`agent-eligible-${a.id}`}
                   checked={selection.has(a.id)}
                   onChange={() => basculer(a.id)}
-                  aria-label={`Sélectionner ${a.nomComplet}`}
+                  aria-label={`${t("Sélectionner")} ${a.nomComplet}`}
                 />
               </td>
               <td><label htmlFor={`agent-eligible-${a.id}`}>{a.nomComplet}</label></td>
               <td>{a.matricule ?? "—"}</td>
               <td>{a.serviceLibelle ?? "—"}</td>
               <td>
-                {a.statutCompte !== "ACTIF" && <span> (compte {a.statutCompte.toLowerCase()})</span>}
-                {a.dejaAffecteMemeCreneau && <span> — déjà à bord d'un autre bon ce jour-là</span>}
+                {a.statutCompte !== "ACTIF" && <span> ({t("compte")} {a.statutCompte.toLowerCase()})</span>}
+                {a.dejaAffecteMemeCreneau && <span> — {t("déjà à bord d'un autre bon ce jour-là")}</span>}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="formulaire-ligne">
-        <span>{selection.size} personne(s) sélectionnée(s)</span>
+        <span>{selection.size} {t("personne(s) sélectionnée(s)")}</span>
         <button
           type="button"
           onClick={() => ajout.mutate()}
           disabled={selection.size === 0 || ajout.isPending}
         >
-          {ajout.isPending ? "Ajout en cours..." : "Ajouter la sélection"}
+          {ajout.isPending ? t("Ajout en cours...") : t("Ajouter la sélection")}
         </button>
       </div>
     </div>

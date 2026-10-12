@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { extraireMessageErreur } from "../api/httpClient";
 import type { AgentEligibleDto } from "../types/bonSortie";
 
@@ -32,6 +33,7 @@ export function SelectionPersonnelService({ serviceId, mode, selection, onChange
   /** Fonction de chargement du personnel d'un service — propre à chaque module appelant (périmètre vérifié côté serveur). */
   chargerPersonnel: (serviceId: number) => Promise<AgentEligibleDto[]>;
 }) {
+  const { t } = useTranslation();
   const [recherche, setRecherche] = useState("");
   // `chargerPersonnel` est volontairement EXCLUE de la clé de cache (react-query) : une fonction
   // passée inline par l'appelant changerait de reference a chaque rendu, invalidant le cache a
@@ -63,41 +65,41 @@ export function SelectionPersonnelService({ serviceId, mode, selection, onChange
   }
 
   if (serviceId === null) {
-    return <p className="dashboard-accueil">Sélectionnez d'abord un service pour afficher son personnel.</p>;
+    return <p className="dashboard-accueil">{t("Sélectionnez d'abord un service pour afficher son personnel.")}</p>;
   }
   if (personnel.isLoading) {
-    return <p>Chargement du personnel du service...</p>;
+    return <p>{t("Chargement du personnel du service...")}</p>;
   }
   if (personnel.error) {
     return (
       <div role="alert">
-        <p>{extraireMessageErreur(personnel.error, "Impossible de charger le personnel de ce service.")}</p>
-        <button type="button" onClick={() => void personnel.refetch()}>Réessayer</button>
+        <p>{extraireMessageErreur(personnel.error, t("Impossible de charger le personnel de ce service."))}</p>
+        <button type="button" onClick={() => void personnel.refetch()}>{t("Réessayer")}</button>
       </div>
     );
   }
   if ((personnel.data ?? []).length === 0) {
-    return <p>Aucune personne trouvée dans ce service.</p>;
+    return <p>{t("Aucune personne trouvée dans ce service.")}</p>;
   }
 
   return (
     <div className="selection-personnes-a-bord">
-      <label htmlFor={`recherche-personnel-${serviceId}`}>Rechercher une personne (nom, matricule)</label>
+      <label htmlFor={`recherche-personnel-${serviceId}`}>{t("Rechercher une personne (nom, matricule)")}</label>
       <input
         id={`recherche-personnel-${serviceId}`}
         type="text"
         value={recherche}
         onChange={(e) => setRecherche(e.target.value)}
-        placeholder="Rechercher une personne..."
+        placeholder={t("Rechercher une personne...")}
       />
-      {mode === "multiple" && <p className="dashboard-accueil">{selection.size} personne(s) sélectionnée(s)</p>}
+      {mode === "multiple" && <p className="dashboard-accueil">{selection.size} {t("personne(s) sélectionnée(s)")}</p>}
       <table className="tableau tableau--compact">
         <thead>
-          <tr><th></th><th>Nom</th><th>Matricule</th><th>Statut</th></tr>
+          <tr><th></th><th>{t("Nom")}</th><th>{t("Matricule")}</th><th>{t("Statut")}</th></tr>
         </thead>
         <tbody>
           {filtres.length === 0 && (
-            <tr><td colSpan={4}>Aucune personne ne correspond à cette recherche.</td></tr>
+            <tr><td colSpan={4}>{t("Aucune personne ne correspond à cette recherche.")}</td></tr>
           )}
           {filtres.map((p) => (
             <tr key={p.id}>
@@ -107,12 +109,12 @@ export function SelectionPersonnelService({ serviceId, mode, selection, onChange
                   id={`personnel-${mode}-${p.id}`}
                   checked={selection.has(p.id)}
                   onChange={() => basculer(p.id)}
-                  aria-label={`Sélectionner ${p.nomComplet}`}
+                  aria-label={`${t("Sélectionner")} ${p.nomComplet}`}
                 />
               </td>
               <td><label htmlFor={`personnel-${mode}-${p.id}`}>{p.nomComplet}</label></td>
               <td>{p.matricule ?? "—"}</td>
-              <td>{p.statutCompte !== "ACTIF" && <span>Compte {p.statutCompte.toLowerCase()}</span>}</td>
+              <td>{p.statutCompte !== "ACTIF" && <span>{t("Compte")} {p.statutCompte.toLowerCase()}</span>}</td>
             </tr>
           ))}
         </tbody>

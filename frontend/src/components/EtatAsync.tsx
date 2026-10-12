@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { extraireMessageErreur } from "../api/httpClient";
 
 /**
@@ -15,11 +16,12 @@ export function EtatAsync<T>({
   donnees: T | undefined;
   children: (donnees: T) => ReactNode;
 }) {
+  const { t } = useTranslation();
   if (chargement) {
-    return <p className="etat-chargement">Chargement...</p>;
+    return <p className="etat-chargement">{t("Chargement...")}</p>;
   }
   if (erreur) {
-    return <p role="alert">{extraireMessageErreur(erreur, "Une erreur est survenue lors du chargement.")}</p>;
+    return <p role="alert">{extraireMessageErreur(erreur, t("Une erreur est survenue lors du chargement."))}</p>;
   }
   if (donnees === undefined) {
     return null;

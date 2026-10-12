@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { compterNotificationsNonLues, listerNotifications, marquerNotificationCommeLue } from "../api/notificationApi";
 import type { NotificationDto } from "../types/notification";
@@ -33,6 +34,7 @@ const DUREE_TOAST_MS = 8_000;
  * l'ouverture de la page cible, qui s'applique dans les deux cas.
  */
 export default function NotificationCenter() {
+  const { t, i18n } = useTranslation();
   const [ouvert, setOuvert] = useState(false);
   const [toasts, setToasts] = useState<NotificationDto[]>([]);
   const conteneurRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,7 @@ export default function NotificationCenter() {
       <button
         type="button"
         className="notification-centre__cloche"
-        aria-label={nombreNonLues > 0 ? `Notifications (${nombreNonLues} non lues)` : "Notifications"}
+        aria-label={nombreNonLues > 0 ? `${t("Notifications")} (${nombreNonLues} ${t("non lues")})` : t("Notifications")}
         aria-expanded={ouvert}
         onClick={() => setOuvert((v) => !v)}
       >
@@ -133,9 +135,9 @@ export default function NotificationCenter() {
 
       {ouvert && (
         <div className="notification-centre__panneau" role="menu">
-          <h3>Notifications</h3>
-          {notifications.isLoading && <p className="etat-chargement">Chargement...</p>}
-          {notifications.data && notifications.data.length === 0 && <p>Aucune notification.</p>}
+          <h3>{t("Notifications")}</h3>
+          {notifications.isLoading && <p className="etat-chargement">{t("Chargement...")}</p>}
+          {notifications.data && notifications.data.length === 0 && <p>{t("Aucune notification.")}</p>}
           {notifications.data && notifications.data.length > 0 && (
             <ul className="notification-centre__liste">
               {notifications.data.map((n) => (
@@ -147,7 +149,9 @@ export default function NotificationCenter() {
                   >
                     <span className="notification-centre__titre">{n.titre}</span>
                     <span className="notification-centre__message">{n.message}</span>
-                    <span className="notification-centre__date">{new Date(n.dateCreation).toLocaleString("fr-FR")}</span>
+                    <span className="notification-centre__date">
+                      {new Date(n.dateCreation).toLocaleString(i18n.language === "en" ? "en-GB" : "fr-FR")}
+                    </span>
                   </button>
                 </li>
               ))}

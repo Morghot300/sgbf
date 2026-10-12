@@ -1,7 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { ajouterPersonnesABordEnLot, creerBonSortie, listerPersonnelDuService } from "../../api/bonSortieApi";
@@ -29,25 +31,29 @@ import { LIBELLES_MOYEN_UTILISE, type MoyenUtilise } from "../../types/bonSortie
  * d'identifiant) - le controle reel de qui peut faire quoi reste, comme
  * toujours, applique cote serveur.
  */
-const schema = z.object({
-  missionId: z.string().optional(),
-  moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI", "AUTRE"]),
-  precisionVehicule: z.string().max(200).optional(),
-  vehiculeId: z.string().optional(),
-  lt: z.string().max(20).optional(),
-  kilometrage: z.coerce.number().int().min(0, "Le kilométrage doit être positif ou nul."),
-  dateSortie: z.string().min(1, "La date de sortie est obligatoire."),
-  heureSortie: z.string().min(1, "L'heure de sortie est obligatoire."),
-  lieu: z.string().min(1, "La destination est obligatoire.").max(150),
-  codeAffaireSaisi: z.string().min(1, "Le code affaire est obligatoire.").max(30),
-  motifSortie: z.string().min(1, "Le motif est obligatoire.").max(500),
-}).refine(
-  (valeurs) => valeurs.moyenUtilise !== "AUTRE" || !!valeurs.precisionVehicule?.trim(),
-  { message: "Veuillez préciser le véhicule utilisé.", path: ["precisionVehicule"] },
-);
-type Formulaire = z.infer<typeof schema>;
+function construireSchema(t: TFunction) {
+  return z.object({
+    missionId: z.string().optional(),
+    moyenUtilise: z.enum(["OMNIUM_SERVICE", "PERSONNEL", "TAXI", "AUTRE"]),
+    precisionVehicule: z.string().max(200).optional(),
+    vehiculeId: z.string().optional(),
+    lt: z.string().max(20).optional(),
+    kilometrage: z.coerce.number().int().min(0, t("Le kilométrage doit être positif ou nul.")),
+    dateSortie: z.string().min(1, t("La date de sortie est obligatoire.")),
+    heureSortie: z.string().min(1, t("L'heure de sortie est obligatoire.")),
+    lieu: z.string().min(1, t("La destination est obligatoire.")).max(150),
+    codeAffaireSaisi: z.string().min(1, t("Le code affaire est obligatoire.")).max(30),
+    motifSortie: z.string().min(1, t("Le motif est obligatoire.")).max(500),
+  }).refine(
+    (valeurs) => valeurs.moyenUtilise !== "AUTRE" || !!valeurs.precisionVehicule?.trim(),
+    { message: t("Veuillez préciser le véhicule utilisé."), path: ["precisionVehicule"] },
+  );
+}
+type Formulaire = z.infer<ReturnType<typeof construireSchema>>;
 
 export default function BonSortieNouveauPage() {
+  const { t } = useTranslation();
+  const schema = useMemo(() => construireSchema(t), [t]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { aLeRole, utilisateur } = useAuth();
@@ -116,19 +122,17 @@ export default function BonSortieNouveauPage() {
 
   return (
     <div>
-      <h1>Nouveau bon de sortie</h1>
+      <h1>{t("Nouveau bon de sortie")}</h1>
       <form className="formulaire" onSubmit={handleSubmit((valeurs) => creation.mutate(valeurs))}>
         {peutChoisirPersonnePrincipale && (
           <>
-            <h2>Personne principale (facultatif)</h2>
+            <h2>{t("Personne principale (facultatif)")}</h2>
             <p className="dashboard-accueil">
-              Laissez vide pour créer votre propre bon de sortie. Sélectionnez un service puis une personne pour créer
-              ce bon pour le compte d'un tiers — réservé au Chargé d'Affaires/à la personne habilitée du même
-              service, ou au Super Administrateur (vérifié côté serveur).
+              {t("Laissez vide pour créer votre propre bon de sortie. Sélectionnez un service puis une personne pour créer ce bon pour le compte d'un tiers — réservé au Chargé d'Affaires/à la personne habilitée du même service, ou au Super Administrateur (vérifié côté serveur).")}
             </p>
-            <label htmlFor="serviceId">Service</label>
+            <label htmlFor="serviceId">{t("Service")}</label>
             <select id="serviceId" value={serviceId} onChange={(e) => { setServiceId(e.target.value); setPersonnePrincipale(new Set()); setPersonnesABord(new Set()); }}>
-              <option value="">— Sélectionner —</option>
+              <option value="">{t("— Sélectionner —")}</option>
               {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
             </select>
             <SelectionPersonnelService
@@ -141,68 +145,68 @@ export default function BonSortieNouveauPage() {
           </>
         )}
 
-        <h2>Mission</h2>
-        <label htmlFor="missionId">Code Mission (facultatif)</label>
+        <h2>{t("Mission")}</h2>
+        <label htmlFor="missionId">{t("Code Mission (facultatif)")}</label>
         <select id="missionId" {...register("missionId")}>
-          <option value="">— Non renseigné —</option>
+          <option value="">{t("— Non renseigné —")}</option>
           {missions.data?.map((m) => (
             <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle} ({m.dateDebutPrevue} → {m.dateFinPrevue})</option>
           ))}
         </select>
 
-        <h2>Véhicule</h2>
-        <label htmlFor="moyenUtilise">Moyen utilisé</label>
+        <h2>{t("Véhicule")}</h2>
+        <label htmlFor="moyenUtilise">{t("Moyen utilisé")}</label>
         <select id="moyenUtilise" {...register("moyenUtilise")}>
           {(Object.keys(LIBELLES_MOYEN_UTILISE) as MoyenUtilise[]).map((m) => (
-            <option key={m} value={m}>{LIBELLES_MOYEN_UTILISE[m]}</option>
+            <option key={m} value={m}>{t(LIBELLES_MOYEN_UTILISE[m])}</option>
           ))}
         </select>
 
         {moyenUtiliseChoisi === "AUTRE" && (
           <>
-            <label htmlFor="precisionVehicule">Préciser le véhicule</label>
+            <label htmlFor="precisionVehicule">{t("Préciser le véhicule")}</label>
             <input id="precisionVehicule" type="text" maxLength={200} {...register("precisionVehicule")} />
             {errors.precisionVehicule && <p role="alert">{errors.precisionVehicule.message}</p>}
           </>
         )}
 
-        <label htmlFor="vehiculeId">Véhicule (facultatif)</label>
+        <label htmlFor="vehiculeId">{t("Véhicule (facultatif)")}</label>
         <select id="vehiculeId" {...register("vehiculeId")}>
-          <option value="">— Non renseigné —</option>
+          <option value="">{t("— Non renseigné —")}</option>
           {vehicules.data?.map((v) => (
             <option key={v.id} value={v.id}>{v.immatriculation}</option>
           ))}
         </select>
 
-        <label htmlFor="lt">Immatriculation (LT) si non listée ci-dessus</label>
+        <label htmlFor="lt">{t("Immatriculation (LT) si non listée ci-dessus")}</label>
         <input id="lt" type="text" maxLength={20} {...register("lt")} />
 
-        <label htmlFor="kilometrage">Kilométrage</label>
+        <label htmlFor="kilometrage">{t("Kilométrage")}</label>
         <input id="kilometrage" type="number" min={0} {...register("kilometrage")} />
         {errors.kilometrage && <p role="alert">{errors.kilometrage.message}</p>}
 
-        <label htmlFor="dateSortie">Date de sortie</label>
+        <label htmlFor="dateSortie">{t("Date de sortie")}</label>
         <input id="dateSortie" type="date" {...register("dateSortie")} />
         {errors.dateSortie && <p role="alert">{errors.dateSortie.message}</p>}
 
-        <label htmlFor="heureSortie">Heure de sortie</label>
+        <label htmlFor="heureSortie">{t("Heure de sortie")}</label>
         <input id="heureSortie" type="time" {...register("heureSortie")} />
         {errors.heureSortie && <p role="alert">{errors.heureSortie.message}</p>}
 
-        <label htmlFor="lieu">Destination</label>
+        <label htmlFor="lieu">{t("Destination")}</label>
         <input id="lieu" type="text" maxLength={150} {...register("lieu")} />
         {errors.lieu && <p role="alert">{errors.lieu.message}</p>}
 
-        <label htmlFor="codeAffaireSaisi">Code affaire{missionChoisie ? " (= Code Mission ci-dessus)" : ""}</label>
+        <label htmlFor="codeAffaireSaisi">{t("Code affaire")}{missionChoisie ? ` ${t("(= Code Mission ci-dessus)")}` : ""}</label>
         <input id="codeAffaireSaisi" type="text" maxLength={30} readOnly={!!missionChoisie} {...register("codeAffaireSaisi")} />
-        {missionChoisie && <p className="note">Rempli automatiquement à partir de la mission choisie — même référence.</p>}
+        {missionChoisie && <p className="note">{t("Rempli automatiquement à partir de la mission choisie — même référence.")}</p>}
         {errors.codeAffaireSaisi && <p role="alert">{errors.codeAffaireSaisi.message}</p>}
 
-        <label htmlFor="motifSortie">Motif de sortie</label>
+        <label htmlFor="motifSortie">{t("Motif de sortie")}</label>
         <textarea id="motifSortie" maxLength={500} {...register("motifSortie")} />
         {errors.motifSortie && <p role="alert">{errors.motifSortie.message}</p>}
 
-        <h2>Personnes à bord (facultatif)</h2>
+        <h2>{t("Personnes à bord (facultatif)")}</h2>
         <SelectionPersonnelService
           serviceId={serviceEffectif}
           mode="multiple"
@@ -212,10 +216,10 @@ export default function BonSortieNouveauPage() {
           chargerPersonnel={listerPersonnelDuService}
         />
 
-        {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, "Impossible de créer le bon de sortie.")}</p>}
+        {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, t("Impossible de créer le bon de sortie."))}</p>}
 
         <button type="submit" disabled={creation.isPending}>
-          {creation.isPending ? "Création..." : "Créer le bon de sortie"}
+          {creation.isPending ? t("Création...") : t("Créer le bon de sortie")}
         </button>
       </form>
     </div>

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import {
   affecterAgent, historiqueMission, interrompreAffectation, listerAffectations,
@@ -13,6 +14,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { LIBELLES_STATUT_AFFECTATION, LIBELLES_STATUT_MISSION } from "../../types/mission";
 
 export default function MissionDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const missionId = Number(id);
   const queryClient = useQueryClient();
@@ -44,7 +46,7 @@ export default function MissionDetailPage() {
   const affecter = useMutation({
     mutationFn: () => affecterAgent({ agentId: Number(agentId), missionId, dateDebutAffectation: dateDebut }),
     onSuccess: () => { setAgentId(""); setDateDebut(""); invalider(); },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible d'affecter cet agent.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, t("Impossible d'affecter cet agent."))),
   });
   const interrompre = useMutation({
     mutationFn: () => interrompreAffectation(interruption!.affectationId, {
@@ -53,7 +55,7 @@ export default function MissionDetailPage() {
       commentaire: interruption!.commentaire || null,
     }),
     onSuccess: () => { setInterruption(null); invalider(); },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible d'interrompre cette affectation.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, t("Impossible d'interrompre cette affectation."))),
   });
   const reaffecterMiMission = useMutation({
     mutationFn: () => reaffecterPendantMissionEnCours({
@@ -73,7 +75,7 @@ export default function MissionDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["chantiers"] });
       void queryClient.invalidateQueries({ queryKey: ["codes-hn"] });
     },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de réaffecter cet agent.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, t("Impossible de réaffecter cet agent."))),
   });
   const modifierDateFinPrevue = useMutation({
     mutationFn: () => modifierDateFinPrevueMission(missionId, {
@@ -85,21 +87,21 @@ export default function MissionDetailPage() {
       setMotifDateFinPrevue("");
       void queryClient.invalidateQueries({ queryKey: ["mission", missionId] });
     },
-    onError: (e) => setErreur(extraireMessageErreur(e, "Impossible de modifier la date de fin prévue de cette mission.")),
+    onError: (e) => setErreur(extraireMessageErreur(e, t("Impossible de modifier la date de fin prévue de cette mission."))),
   });
 
   return (
     <div>
-      <h1>Mission #{missionId}</h1>
+      <h1>{t("Mission")} #{missionId}</h1>
       <EtatAsync chargement={mission.isLoading} erreur={mission.error} donnees={mission.data}>
         {(m) => (
           <table className="fiche">
             <tbody>
-              <tr><th>Code mission</th><td>{m.codeHN} — {m.codeHNLibelle}</td></tr>
-              <tr><th>Chantier</th><td>{m.chantierLibelle}</td></tr>
-              <tr><th>Statut</th><td><BadgeStatutMission statut={m.statut} libelle={LIBELLES_STATUT_MISSION[m.statut]} /></td></tr>
-              <tr><th>Période prévue</th><td>{m.dateDebutPrevue} → {m.dateFinPrevue}</td></tr>
-              {m.dateFinReelle && <tr><th>Fin réelle</th><td>{m.dateFinReelle}</td></tr>}
+              <tr><th>{t("Code mission")}</th><td>{m.codeHN} — {m.codeHNLibelle}</td></tr>
+              <tr><th>{t("Chantier")}</th><td>{m.chantierLibelle}</td></tr>
+              <tr><th>{t("Statut")}</th><td><BadgeStatutMission statut={m.statut} libelle={t(LIBELLES_STATUT_MISSION[m.statut])} /></td></tr>
+              <tr><th>{t("Période prévue")}</th><td>{m.dateDebutPrevue} → {m.dateFinPrevue}</td></tr>
+              {m.dateFinReelle && <tr><th>{t("Fin réelle")}</th><td>{m.dateFinReelle}</td></tr>}
             </tbody>
           </table>
         )}
@@ -109,17 +111,15 @@ export default function MissionDetailPage() {
 
       {peutGerer && mission.data && mission.data.statut !== "TERMINEE" && (
         <section>
-          <h3>Prolonger ou réduire la date de fin prévue</h3>
+          <h3>{t("Prolonger ou réduire la date de fin prévue")}</h3>
           <p className="dashboard-accueil">
-            La mission reste la même (son code ne change pas) : seule l'échéance planifiée est ajustée. Sans effet
-            sur les jours de pointage déjà générés — une réduction est refusée si des heures sont déjà saisies
-            au-delà de la nouvelle date.
+            {t("La mission reste la même (son code ne change pas) : seule l'échéance planifiée est ajustée. Sans effet sur les jours de pointage déjà générés — une réduction est refusée si des heures sont déjà saisies au-delà de la nouvelle date.")}
           </p>
           <form
             className="formulaire-ligne"
             onSubmit={(e) => { e.preventDefault(); modifierDateFinPrevue.mutate(); }}
           >
-            <label htmlFor="nouvelleDateFinPrevue">Nouvelle date de fin prévue</label>
+            <label htmlFor="nouvelleDateFinPrevue">{t("Nouvelle date de fin prévue")}</label>
             <input
               id="nouvelleDateFinPrevue"
               type="date"
@@ -128,7 +128,7 @@ export default function MissionDetailPage() {
               onChange={(e) => setNouvelleDateFinPrevue(e.target.value)}
               required
             />
-            <label htmlFor="motifDateFinPrevue">Motif (facultatif)</label>
+            <label htmlFor="motifDateFinPrevue">{t("Motif (facultatif)")}</label>
             <input
               id="motifDateFinPrevue"
               type="text"
@@ -137,31 +137,31 @@ export default function MissionDetailPage() {
               onChange={(e) => setMotifDateFinPrevue(e.target.value)}
             />
             <button type="submit" disabled={modifierDateFinPrevue.isPending || !nouvelleDateFinPrevue}>
-              {modifierDateFinPrevue.isPending ? "Enregistrement..." : "Confirmer"}
+              {modifierDateFinPrevue.isPending ? t("Enregistrement...") : t("Confirmer")}
             </button>
           </form>
         </section>
       )}
 
-      <h2>Affectations</h2>
+      <h2>{t("Affectations")}</h2>
       <EtatAsync chargement={affectations.isLoading} erreur={affectations.error} donnees={affectations.data}>
         {(liste) => (
           <table className="tableau">
-            <thead><tr><th>Agent</th><th>Début</th><th>Fin</th><th>Statut</th><th>Motif interruption</th>{peutGerer && <th></th>}</tr></thead>
+            <thead><tr><th>{t("Agent")}</th><th>{t("Début")}</th><th>{t("Fin")}</th><th>{t("Statut")}</th><th>{t("Motif interruption")}</th>{peutGerer && <th></th>}</tr></thead>
             <tbody>
               {liste.map((a) => (
                 <tr key={a.id}>
                   <td>{a.agentNomComplet} ({a.agentMatricule})</td>
                   <td>{a.dateDebutAffectation}</td>
                   <td>{a.dateFinAffectation ?? "—"}</td>
-                  <td><BadgeStatutAffectation statut={a.statutAffectation} libelle={LIBELLES_STATUT_AFFECTATION[a.statutAffectation]} /></td>
+                  <td><BadgeStatutAffectation statut={a.statutAffectation} libelle={t(LIBELLES_STATUT_AFFECTATION[a.statutAffectation])} /></td>
                   <td>{a.motifInterruptionLibelle ?? "—"}</td>
                   {peutGerer && (
                     <td>
                       {a.statutAffectation === "ACTIVE" && (
                         <>
                           <button type="button" onClick={() => setInterruption({ affectationId: a.id, motifCode: "", commentaire: "" })}>
-                            Interrompre
+                            {t("Interrompre")}
                           </button>
                           {" "}
                           <button
@@ -171,7 +171,7 @@ export default function MissionDetailPage() {
                               dateDebutPrevueMission: "", dateFinPrevueMission: "", dateDebutAffectation: "", dateFinAffectation: "",
                             })}
                           >
-                            Réaffecter vers une nouvelle mission
+                            {t("Réaffecter vers une nouvelle mission")}
                           </button>
                         </>
                       )}
@@ -186,37 +186,31 @@ export default function MissionDetailPage() {
 
       {interruption && (
         <section>
-          <h3>Interrompre l'affectation #{interruption.affectationId}</h3>
-          <label htmlFor="motifCode">Motif</label>
+          <h3>{t("Interrompre l'affectation")} #{interruption.affectationId}</h3>
+          <label htmlFor="motifCode">{t("Motif")}</label>
           <select id="motifCode" value={interruption.motifCode} onChange={(e) => setInterruption({ ...interruption, motifCode: e.target.value })}>
-            <option value="">— Sélectionner —</option>
+            <option value="">{t("— Sélectionner —")}</option>
             {motifs.data?.map((mo) => <option key={mo.id} value={mo.code}>{mo.libelle}</option>)}
           </select>
-          <label htmlFor="commentaire">Commentaire (obligatoire si motif "Autre")</label>
+          <label htmlFor="commentaire">{t("Commentaire (obligatoire si motif \"Autre\")")}</label>
           <textarea id="commentaire" maxLength={500} value={interruption.commentaire} onChange={(e) => setInterruption({ ...interruption, commentaire: e.target.value })} />
           <div className="barre-actions">
-            <button type="button" onClick={() => interrompre.mutate()} disabled={interrompre.isPending || !interruption.motifCode}>Confirmer l'interruption</button>
-            <button type="button" onClick={() => setInterruption(null)}>Annuler</button>
+            <button type="button" onClick={() => interrompre.mutate()} disabled={interrompre.isPending || !interruption.motifCode}>{t("Confirmer l'interruption")}</button>
+            <button type="button" onClick={() => setInterruption(null)}>{t("Annuler")}</button>
           </div>
         </section>
       )}
 
       {reaffectation && (
         <section>
-          <h3>Réaffecter l'agent vers une nouvelle mission</h3>
+          <h3>{t("Réaffecter l'agent vers une nouvelle mission")}</h3>
           <p className="dashboard-accueil">
-            L'affectation actuelle se termine automatiquement la veille de la date de début choisie ci-dessous ;
-            elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent. Le chantier et le code
-            mission sont saisis librement : un code déjà existant est réutilisé tel quel, un code inédit crée une
-            nouvelle mission à la volée.
+            {t("L'affectation actuelle se termine automatiquement la veille de la date de début choisie ci-dessous ; elle ne peut pas être antérieure au dernier jour déjà pointé pour cet agent. Le chantier et le code mission sont saisis librement : un code déjà existant est réutilisé tel quel, un code inédit crée une nouvelle mission à la volée.")}
           </p>
           <p className="dashboard-accueil">
-            <strong>Date de fin (facultative)</strong> : si renseignée, la mission précédente reprend
-            automatiquement le lendemain jusqu'à son propre terme — utile pour une diversion temporaire (ex. mission
-            A du lundi au vendredi, diversion vers B du mercredi au jeudi, reprise de A le vendredi). Laissée vide,
-            la bascule est permanente : la mission précédente ne reprend jamais.
+            <strong>{t("Date de fin (facultative)")}</strong> : {t("si renseignée, la mission précédente reprend automatiquement le lendemain jusqu'à son propre terme — utile pour une diversion temporaire (ex. mission A du lundi au vendredi, diversion vers B du mercredi au jeudi, reprise de A le vendredi). Laissée vide, la bascule est permanente : la mission précédente ne reprend jamais.")}
           </p>
-          <label htmlFor="codeChantierReaffectation">Code chantier</label>
+          <label htmlFor="codeChantierReaffectation">{t("Code chantier")}</label>
           <input
             id="codeChantierReaffectation"
             type="text"
@@ -230,7 +224,7 @@ export default function MissionDetailPage() {
           </datalist>
           {reaffectation.codeChantier && !chantiers.data?.some((c) => c.codeAffaire === reaffectation.codeChantier) && (
             <>
-              <label htmlFor="libelleChantierReaffectation">Libellé du chantier (nouveau code - facultatif)</label>
+              <label htmlFor="libelleChantierReaffectation">{t("Libellé du chantier (nouveau code - facultatif)")}</label>
               <input
                 id="libelleChantierReaffectation"
                 type="text"
@@ -241,7 +235,7 @@ export default function MissionDetailPage() {
             </>
           )}
 
-          <label htmlFor="codeMissionReaffectation">Code mission</label>
+          <label htmlFor="codeMissionReaffectation">{t("Code mission")}</label>
           <input
             id="codeMissionReaffectation"
             type="text"
@@ -255,7 +249,7 @@ export default function MissionDetailPage() {
           </datalist>
           {reaffectation.codeMission && !codesHN.data?.some((c) => c.code === reaffectation.codeMission) && (
             <>
-              <label htmlFor="libelleCodeMissionReaffectation">Libellé du code mission (nouveau code - facultatif)</label>
+              <label htmlFor="libelleCodeMissionReaffectation">{t("Libellé du code mission (nouveau code - facultatif)")}</label>
               <input
                 id="libelleCodeMissionReaffectation"
                 type="text"
@@ -266,28 +260,28 @@ export default function MissionDetailPage() {
             </>
           )}
 
-          <label htmlFor="dateDebutPrevueMissionReaffectation">Date de début prévue de la nouvelle mission</label>
+          <label htmlFor="dateDebutPrevueMissionReaffectation">{t("Date de début prévue de la nouvelle mission")}</label>
           <input
             id="dateDebutPrevueMissionReaffectation"
             type="date"
             value={reaffectation.dateDebutPrevueMission}
             onChange={(e) => setReaffectation({ ...reaffectation, dateDebutPrevueMission: e.target.value })}
           />
-          <label htmlFor="dateFinPrevueMissionReaffectation">Date de fin prévue de la nouvelle mission</label>
+          <label htmlFor="dateFinPrevueMissionReaffectation">{t("Date de fin prévue de la nouvelle mission")}</label>
           <input
             id="dateFinPrevueMissionReaffectation"
             type="date"
             value={reaffectation.dateFinPrevueMission}
             onChange={(e) => setReaffectation({ ...reaffectation, dateFinPrevueMission: e.target.value })}
           />
-          <label htmlFor="dateDebutReaffectation">Date de début de la nouvelle affectation</label>
+          <label htmlFor="dateDebutReaffectation">{t("Date de début de la nouvelle affectation")}</label>
           <input
             id="dateDebutReaffectation"
             type="date"
             value={reaffectation.dateDebutAffectation}
             onChange={(e) => setReaffectation({ ...reaffectation, dateDebutAffectation: e.target.value })}
           />
-          <label htmlFor="dateFinReaffectation">Date de fin de la nouvelle affectation (facultative — reprise automatique de l'ancienne mission sinon absente)</label>
+          <label htmlFor="dateFinReaffectation">{t("Date de fin de la nouvelle affectation (facultative — reprise automatique de l'ancienne mission sinon absente)")}</label>
           <input
             id="dateFinReaffectation"
             type="date"
@@ -302,22 +296,22 @@ export default function MissionDetailPage() {
               disabled={reaffecterMiMission.isPending || !reaffectation.codeChantier || !reaffectation.codeMission
                 || !reaffectation.dateDebutPrevueMission || !reaffectation.dateFinPrevueMission || !reaffectation.dateDebutAffectation}
             >
-              Confirmer la réaffectation
+              {t("Confirmer la réaffectation")}
             </button>
-            <button type="button" onClick={() => setReaffectation(null)}>Annuler</button>
+            <button type="button" onClick={() => setReaffectation(null)}>{t("Annuler")}</button>
           </div>
         </section>
       )}
 
       {peutGerer && (
         <section>
-          <h3>Affecter un agent</h3>
+          <h3>{t("Affecter un agent")}</h3>
           <form className="formulaire-ligne" onSubmit={(e) => { e.preventDefault(); affecter.mutate(); }}>
-            <label htmlFor="agentId">Identifiant de l'agent</label>
+            <label htmlFor="agentId">{t("Identifiant de l'agent")}</label>
             <input id="agentId" type="number" value={agentId} onChange={(e) => setAgentId(e.target.value)} required />
-            <label htmlFor="dateDebut">Date de début</label>
+            <label htmlFor="dateDebut">{t("Date de début")}</label>
             <input id="dateDebut" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} required />
-            <button type="submit" disabled={affecter.isPending}>Affecter</button>
+            <button type="submit" disabled={affecter.isPending}>{t("Affecter")}</button>
           </form>
         </section>
       )}
@@ -325,17 +319,17 @@ export default function MissionDetailPage() {
       <EtatAsync chargement={historique.isLoading} erreur={historique.error} donnees={historique.data}>
         {(liste) => liste.length > 1 && (
           <section>
-            <h2>Historique de la mission</h2>
-            <p className="dashboard-accueil">Chaîne des missions liées entre elles par prolongation (mission_precedente_id).</p>
+            <h2>{t("Historique de la mission")}</h2>
+            <p className="dashboard-accueil">{t("Chaîne des missions liées entre elles par prolongation (mission_precedente_id).")}</p>
             <table className="tableau tableau--compact">
-              <thead><tr><th>Code mission</th><th>Chantier</th><th>Période prévue</th><th>Statut</th></tr></thead>
+              <thead><tr><th>{t("Code mission")}</th><th>{t("Chantier")}</th><th>{t("Période prévue")}</th><th>{t("Statut")}</th></tr></thead>
               <tbody>
                 {liste.map((m) => (
                   <tr key={m.id}>
                     <td>{m.codeHN}</td>
                     <td>{m.chantierLibelle}</td>
                     <td>{m.dateDebutPrevue} → {m.dateFinPrevue}</td>
-                    <td><BadgeStatutMission statut={m.statut} libelle={LIBELLES_STATUT_MISSION[m.statut]} /></td>
+                    <td><BadgeStatutMission statut={m.statut} libelle={t(LIBELLES_STATUT_MISSION[m.statut])} /></td>
                   </tr>
                 ))}
               </tbody>

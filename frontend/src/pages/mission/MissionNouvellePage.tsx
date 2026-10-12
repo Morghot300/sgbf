@@ -1,6 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { creerMission } from "../../api/missionApi";
@@ -16,17 +19,21 @@ import { listerChantiers, listerCodesHN } from "../../api/referentielApi";
  * code déjà existant le réutilise tel quel ; taper un code inédit le crée à
  * la volée côté serveur (voir Javadoc de `MissionService#creerMission`).
  */
-const schema = z.object({
-  codeChantier: z.string().min(1, "Le code chantier est obligatoire.").max(30),
-  libelleChantier: z.string().max(150).optional(),
-  codeMission: z.string().min(1, "Le code mission est obligatoire.").max(30),
-  libelleCodeMission: z.string().max(150).optional(),
-  dateDebutPrevue: z.string().min(1, "La date de début est obligatoire."),
-  dateFinPrevue: z.string().min(1, "La date de fin est obligatoire."),
-});
-type Formulaire = z.infer<typeof schema>;
+function construireSchema(t: TFunction) {
+  return z.object({
+    codeChantier: z.string().min(1, t("Le code chantier est obligatoire.")).max(30),
+    libelleChantier: z.string().max(150).optional(),
+    codeMission: z.string().min(1, t("Le code mission est obligatoire.")).max(30),
+    libelleCodeMission: z.string().max(150).optional(),
+    dateDebutPrevue: z.string().min(1, t("La date de début est obligatoire.")),
+    dateFinPrevue: z.string().min(1, t("La date de fin est obligatoire.")),
+  });
+}
+type Formulaire = z.infer<ReturnType<typeof construireSchema>>;
 
 export default function MissionNouvellePage() {
+  const { t } = useTranslation();
+  const schema = useMemo(() => construireSchema(t), [t]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const chantiers = useQuery({ queryKey: ["chantiers"], queryFn: listerChantiers });
@@ -58,9 +65,9 @@ export default function MissionNouvellePage() {
 
   return (
     <div>
-      <h1>Nouvelle mission</h1>
+      <h1>{t("Nouvelle mission")}</h1>
       <form className="formulaire" onSubmit={handleSubmit((v) => creation.mutate(v))}>
-        <label htmlFor="codeChantier">Code chantier</label>
+        <label htmlFor="codeChantier">{t("Code chantier")}</label>
         <input id="codeChantier" type="text" maxLength={30} list="chantiers-existants" {...register("codeChantier")} />
         <datalist id="chantiers-existants">
           {chantiers.data?.map((c) => <option key={c.id} value={c.codeAffaire}>{c.libelle}</option>)}
@@ -69,12 +76,12 @@ export default function MissionNouvellePage() {
 
         {codeChantierSaisi && !chantierExistant && (
           <>
-            <label htmlFor="libelleChantier">Libellé du chantier (nouveau code - facultatif, repris du code sinon)</label>
+            <label htmlFor="libelleChantier">{t("Libellé du chantier (nouveau code - facultatif, repris du code sinon)")}</label>
             <input id="libelleChantier" type="text" maxLength={150} {...register("libelleChantier")} />
           </>
         )}
 
-        <label htmlFor="codeMission">Code mission (Code HN)</label>
+        <label htmlFor="codeMission">{t("Code mission (Code HN)")}</label>
         <input id="codeMission" type="text" maxLength={30} list="codes-mission-existants" {...register("codeMission")} />
         <datalist id="codes-mission-existants">
           {codesHN.data?.map((c) => <option key={c.id} value={c.code}>{c.libelle}</option>)}
@@ -83,22 +90,22 @@ export default function MissionNouvellePage() {
 
         {codeMissionSaisi && !codeMissionExistant && (
           <>
-            <label htmlFor="libelleCodeMission">Libellé du code mission (nouveau code - facultatif, repris du code sinon)</label>
+            <label htmlFor="libelleCodeMission">{t("Libellé du code mission (nouveau code - facultatif, repris du code sinon)")}</label>
             <input id="libelleCodeMission" type="text" maxLength={150} {...register("libelleCodeMission")} />
           </>
         )}
 
-        <label htmlFor="dateDebutPrevue">Date de début prévue</label>
+        <label htmlFor="dateDebutPrevue">{t("Date de début prévue")}</label>
         <input id="dateDebutPrevue" type="date" {...register("dateDebutPrevue")} />
         {errors.dateDebutPrevue && <p role="alert">{errors.dateDebutPrevue.message}</p>}
 
-        <label htmlFor="dateFinPrevue">Date de fin prévue</label>
+        <label htmlFor="dateFinPrevue">{t("Date de fin prévue")}</label>
         <input id="dateFinPrevue" type="date" {...register("dateFinPrevue")} />
         {errors.dateFinPrevue && <p role="alert">{errors.dateFinPrevue.message}</p>}
 
-        {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, "Impossible de créer la mission.")}</p>}
+        {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, t("Impossible de créer la mission."))}</p>}
 
-        <button type="submit" disabled={creation.isPending}>{creation.isPending ? "Création..." : "Créer la mission"}</button>
+        <button type="submit" disabled={creation.isPending}>{creation.isPending ? t("Création...") : t("Créer la mission")}</button>
       </form>
     </div>
   );
