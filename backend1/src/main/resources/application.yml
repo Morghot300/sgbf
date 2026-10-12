@@ -2,6 +2,19 @@ spring:
   application:
     name: sgbf-backend
 
+  # Profil de repli (evolution du 2026-09-23) : utilise UNIQUEMENT si aucun profil n'est
+  # explicitement active ailleurs (JVM -Dspring-boot.run.profiles, variable
+  # SPRING_PROFILES_ACTIVE, configuration d'IDE...) - jamais prioritaire sur un choix explicite.
+  # Avant cette evolution, lancer l'application sans preciser le profil (bouton "Run" d'un
+  # IDE, mvnw spring-boot:run sans argument) retombait sur le profil "default", qui ne charge
+  # jamais application-local.yml : ${SGBF_JWT_SECRET} et les autres secrets locaux restaient
+  # alors non resolus (echec de demarrage), pour un developpeur qui s'attendait a un
+  # environnement local pret a l'emploi. Ce projet n'ayant, a ce stade, aucun environnement de
+  # production deploye distinct, faire de "local" le repli par defaut est sans risque ici et
+  # elimine cette source recurrente d'echec de demarrage.
+  profiles:
+    default: local
+
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:sgbf_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Africa/Douala&characterEncoding=utf8
     username: ${DB_USERNAME}
