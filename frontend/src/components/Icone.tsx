@@ -13,7 +13,7 @@
  */
 type NomIcone = "tableauDeBord" | "document" | "fiph" | "mission" | "agents" | "service" | "rapports" | "administration"
   | "chevron" | "soleil" | "lune" | "personne" | "cadenas" | "deconnexion" | "menu" | "verre" | "coche"
-  | "recherche" | "plus";
+  | "recherche" | "plus" | "aide" | "fermer";
 
 const TRACES: Record<NomIcone, string> = {
   tableauDeBord: "M3 13h7V3H3v10Zm0 8h7v-6H3v6Zm11 0h7V11h-7v10Zm0-18v6h7V3h-7Z",
@@ -35,6 +35,8 @@ const TRACES: Record<NomIcone, string> = {
   coche: "M20 6 9 17l-5-5",
   recherche: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm8 2-4.35-4.35",
   plus: "M12 5v14M5 12h14",
+  aide: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM9.5 9a2.5 2.5 0 1 1 3.3 2.36c-.73.26-1.3.9-1.3 1.64v.3M12 17h.01",
+  fermer: "M6 6l12 12M18 6 6 18",
 };
 
 export function Icone({ nom, taille = 18 }: { nom: NomIcone; taille?: number }) {

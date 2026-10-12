@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -7,9 +7,12 @@ import { Icone } from "./Icone";
 import { MenuTheme } from "./MenuTheme";
 import NotificationCenter from "./NotificationCenter";
 import { SelecteurLangue } from "./SelecteurLangue";
+import { VisiteGuidee, type EtapeVisiteGuidee } from "./VisiteGuidee";
 import { LIBELLES_STATUT_BON_SORTIE, type StatutBonSortie } from "../types/bonSortie";
 import { LIBELLES_CATEGORIE_FIPH, type CategorieFiph } from "../types/fiph";
 import { LIBELLES_STATUT_MISSION, type StatutMission } from "../types/mission";
+
+const CLE_VISITE_GUIDEE_VUE = "sgbf-visite-guidee-vue";
 
 const CATEGORIES_FIPH: CategorieFiph[] = [
   "BROUILLONS", "VISEES", "VALIDEES_NIVEAU_2", "VALIDEES_NIVEAU_3", "VALIDEES_DEFINITIVEMENT", "REJETEES",
@@ -47,11 +50,109 @@ const STATUTS_MISSION: StatutMission[] = ["PLANIFIEE", "EN_COURS", "INTERROMPUE"
  * (voir {@code i18n.ts}) - les pages metier (Bons de sortie, FIPH,
  * Missions, Administration) restent en francais quelle que soit la langue
  * choisie, a traduire dans un increment ulterieur.
+ *
+ * <p><strong>Visite guidee (evolution du 2026-10-12)</strong> : orientation
+ * rapide dans l'ossature (menu lateral + barre de contenu), PAS un doublon
+ * du manuel utilisateur Markdown (voir documentation/manuel-utilisateur/) -
+ * son role est la decouvrabilite ("ou se trouve X"), le manuel reste la
+ * reference pour le detail metier de chaque module. Se lance automatiquement
+ * a la toute premiere connexion (memorisee via localStorage, meme principe
+ * que le theme/la langue) et peut etre rejouee a tout moment via le bouton
+ * "?" de la barre de contenu. Les etapes cotes {@code [data-tour="..."]}
+ * sont posees directement sur les elements reels de cette ossature plutot
+ * que dupliquees - jamais de copie visuelle a part qui pourrait diverger.
  */
 export default function AppLayout() {
   const { utilisateur, deconnexion, aLeRole } = useAuth();
   const { t } = useTranslation();
   const [sidebarOuverte, setSidebarOuverte] = useState(false);
+  const [visiteOuverte, setVisiteOuverte] = useState(false);
+  const [etapeVisiteIndex, setEtapeVisiteIndex] = useState(0);
+  const estAdministrateur = aLeRole("ADMINISTRATEUR");
+
+  const etapesVisite = useMemo<EtapeVisiteGuidee[]>(() => {
+    const etapes: EtapeVisiteGuidee[] = [
+      {
+        cible: null,
+        titre: t("Bienvenue dans SGBF"),
+        texte: t("Cette courte visite vous présente les grandes zones de l'application. Vous pourrez la revoir à tout moment depuis le bouton d'aide, en haut de l'écran."),
+      },
+      {
+        cible: '[data-tour="nav-tableau-de-bord"]', groupe: "sidebar",
+        titre: t("Tableau de bord"), texte: t("Votre page d'accueil : un aperçu de vos bons de sortie en cours et des FIPH qui attendent une action de votre part."),
+      },
+      {
+        cible: '[data-tour="nav-bons-sortie"]', groupe: "sidebar",
+        titre: t("Bons de sortie"), texte: t("Créez et suivez vos bons de sortie. Un sous-menu déroulant permet de filtrer directement par statut (brouillon, visé, validé)."),
+      },
+      {
+        cible: '[data-tour="nav-fiph"]', groupe: "sidebar",
+        titre: t("FIPH"), texte: t("Vos fiches individuelles de pointage hebdomadaire : complétez vos heures, signez et suivez le circuit de validation."),
+      },
+      {
+        cible: '[data-tour="nav-missions"]', groupe: "sidebar",
+        titre: t("Missions"), texte: t("La liste des missions et des affectations du personnel, avec leur période et leur statut."),
+      },
+    ];
+    if (estAdministrateur) {
+      etapes.push({
+        cible: '[data-tour="nav-administration"]', groupe: "sidebar",
+        titre: t("Administration"), texte: t("Réservé aux administrateurs : gestion du personnel, des habilitations et des référentiels partagés (services, chantiers, véhicules...)."),
+      });
+    }
+    etapes.push(
+      {
+        cible: '[data-tour="topbar-langue"]',
+        titre: t("Choix de la langue"), texte: t("Basculez l'interface en français ou en anglais à tout moment."),
+      },
+      {
+        cible: '[data-tour="topbar-theme"]',
+        titre: t("Choix du thème"), texte: t("Trois apparences disponibles : claire, sombre, ou « verre » (sombre translucide)."),
+      },
+      {
+        cible: '[data-tour="topbar-notifications"]',
+        titre: t("Notifications"), texte: t("Un badge indique vos notifications non lues : validations en attente, décisions sur vos documents, etc."),
+      },
+      {
+        cible: '[data-tour="topbar-utilisateur"]',
+        titre: t("Votre compte"), texte: t("Votre identifiant et votre service sont toujours rappelés ici. Le bouton à droite permet de vous déconnecter."),
+      },
+      {
+        cible: null,
+        titre: t("Vous êtes prêt(e) !"), texte: t("Pour le détail de chaque module, consultez le manuel utilisateur. Vous pouvez revoir cette visite à tout moment via le bouton d'aide."),
+      },
+    );
+    return etapes;
+  }, [t, estAdministrateur]);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(CLE_VISITE_GUIDEE_VUE)) {
+        setVisiteOuverte(true);
+      }
+    } catch {
+      // Stockage indisponible (navigation privée, quota...) - pas de lancement automatique, le
+      // bouton d'aide reste de toute façon disponible pour lancer la visite manuellement.
+    }
+  }, []);
+
+  function ouvrirVisite() {
+    setEtapeVisiteIndex(0);
+    setVisiteOuverte(true);
+  }
+  function fermerVisite() {
+    setVisiteOuverte(false);
+    setSidebarOuverte(false);
+    try {
+      localStorage.setItem(CLE_VISITE_GUIDEE_VUE, "1");
+    } catch {
+      // Confort d'usage uniquement (voir plus haut) - une écriture échouée ne doit jamais bloquer.
+    }
+  }
+  function changerEtapeVisite(index: number) {
+    setEtapeVisiteIndex(index);
+    setSidebarOuverte(etapesVisite[index]?.groupe === "sidebar");
+  }
 
   return (
     <div className="app-shell">
@@ -61,12 +162,12 @@ export default function AppLayout() {
           <span>SGBF</span>
         </div>
 
-        <NavLink to="/" end onClick={() => setSidebarOuverte(false)}>
+        <NavLink to="/" end onClick={() => setSidebarOuverte(false)} data-tour="nav-tableau-de-bord">
           <Icone nom="tableauDeBord" /> {t("Tableau de bord")}
         </NavLink>
 
         <div className="app-sidebar__groupe">
-          <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)}>
+          <NavLink to="/bons-sortie" onClick={() => setSidebarOuverte(false)} data-tour="nav-bons-sortie">
             <Icone nom="document" /> {t("Bons de sortie")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
@@ -81,7 +182,7 @@ export default function AppLayout() {
         </div>
 
         <div className="app-sidebar__groupe">
-          <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)}>
+          <NavLink to="/fiph" end onClick={() => setSidebarOuverte(false)} data-tour="nav-fiph">
             <Icone nom="fiph" /> {t("FIPH")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
@@ -96,7 +197,7 @@ export default function AppLayout() {
         </div>
 
         <div className="app-sidebar__groupe">
-          <NavLink to="/missions" onClick={() => setSidebarOuverte(false)}>
+          <NavLink to="/missions" onClick={() => setSidebarOuverte(false)} data-tour="nav-missions">
             <Icone nom="mission" /> {t("Missions")}
           </NavLink>
           <ul className="app-sidebar__sous-menu">
@@ -110,9 +211,9 @@ export default function AppLayout() {
           </ul>
         </div>
 
-        {aLeRole("ADMINISTRATEUR") && (
+        {estAdministrateur && (
           <div className="app-sidebar__groupe">
-            <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)}>
+            <NavLink to="/administration" end onClick={() => setSidebarOuverte(false)} data-tour="nav-administration">
               <Icone nom="administration" /> {t("Administration")}
             </NavLink>
             <ul className="app-sidebar__sous-menu">
@@ -135,10 +236,13 @@ export default function AppLayout() {
             <Icone nom="menu" />
           </button>
           <div className="app-topbar__espace" />
-          <SelecteurLangue />
-          <MenuTheme />
-          <NotificationCenter />
-          <div className="app-topbar__utilisateur">
+          <button type="button" className="app-topbar__aide" onClick={ouvrirVisite} title={t("Revoir la visite guidée")}>
+            <Icone nom="aide" />
+          </button>
+          <span data-tour="topbar-langue"><SelecteurLangue /></span>
+          <span data-tour="topbar-theme"><MenuTheme /></span>
+          <span data-tour="topbar-notifications"><NotificationCenter /></span>
+          <div className="app-topbar__utilisateur" data-tour="topbar-utilisateur">
             <span className="app-topbar__utilisateur-nom">{utilisateur?.identifiant}</span>
             {utilisateur?.serviceLibelle && <span className="app-topbar__utilisateur-service">{utilisateur.serviceLibelle}</span>}
           </div>
@@ -150,6 +254,14 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {visiteOuverte && (
+        <VisiteGuidee
+          etapes={etapesVisite}
+          etapeIndex={etapeVisiteIndex}
+          onEtapeChange={changerEtapeVisite}
+          onFermer={fermerVisite}
+        />
+      )}
     </div>
   );
 }

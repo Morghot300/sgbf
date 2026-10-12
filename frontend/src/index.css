@@ -289,6 +289,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.bouton-secondaire {
+  background: var(--action-secondaire-fond);
+  color: var(--action-secondaire-texte);
+  border: 1px solid var(--action-secondaire-bordure);
+}
+.bouton-secondaire:hover:not(:disabled) {
+  background: var(--surface-survol);
+}
+
 .bouton-principal {
   display: inline-flex;
   align-items: center;
@@ -860,6 +869,86 @@ button:disabled {
 .carte-resume__libelle {
   color: var(--texte-secondaire);
   font-size: var(--taille-petite);
+}
+
+/* ==========================================================================
+ * Bouton d'aide (ouvre/rejoue la visite guidee, voir AppLayout.tsx)
+ * ========================================================================== */
+.app-topbar__aide {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--texte-secondaire);
+  padding: 0.4rem;
+  border-radius: var(--rayon-defaut);
+  cursor: pointer;
+  line-height: 1;
+}
+.app-topbar__aide:hover {
+  background: var(--surface-survol);
+  color: var(--texte-principal);
+}
+
+/* ==========================================================================
+ * Visite guidee (components/VisiteGuidee.tsx, evolution du 2026-10-12) -
+ * voile plein ecran + anneau de mise en evidence + bulle d'aide, rendus via
+ * portail dans document.body (voir Javadoc du composant).
+ * ========================================================================== */
+.visite-guidee__voile {
+  position: fixed;
+  inset: 0;
+  background: var(--superposition-fond);
+  z-index: 100;
+}
+.visite-guidee__surbrillance {
+  position: fixed;
+  z-index: 101;
+  border: 3px solid var(--bordure-focus);
+  border-radius: var(--rayon-defaut);
+  pointer-events: none;
+  transition: top 0.15s ease, left 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+.visite-guidee__panneau {
+  position: fixed;
+  z-index: 102;
+  width: min(320px, calc(100vw - 2rem));
+  background: var(--surface-carte);
+  border: 1px solid var(--bordure-defaut);
+  border-radius: calc(var(--rayon-defaut) * 2);
+  box-shadow: var(--ombre-carte);
+  padding: 1.25rem;
+  transition: top 0.15s ease, left 0.15s ease;
+}
+.visite-guidee__panneau h3 {
+  margin: 0.25rem 0 0.5rem;
+}
+.visite-guidee__panneau p {
+  margin: 0 0 0.5rem;
+}
+.visite-guidee__fermer {
+  float: right;
+  display: inline-flex;
+  background: none;
+  border: none;
+  color: var(--texte-secondaire);
+  padding: 0.2rem;
+  cursor: pointer;
+  border-radius: var(--rayon-defaut);
+}
+.visite-guidee__fermer:hover {
+  background: var(--surface-survol);
+  color: var(--texte-principal);
+}
+.visite-guidee__compteur {
+  margin: 0;
+  font-size: var(--taille-petite);
+  font-weight: 600;
+  color: var(--brand-2-text);
+}
+.visite-guidee__espace {
+  flex: 1;
 }
 
 /* ==========================================================================

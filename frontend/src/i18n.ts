@@ -68,6 +68,39 @@ void i18n.use(initReactI18next).init({
         "Notifications": "Notifications",
         "Aucune notification.": "No notifications.",
         "non lues": "unread",
+        // --- Visite guidée (components/VisiteGuidee.tsx, evolution du 2026-10-12) ---
+        "Revoir la visite guidée": "Replay the guided tour",
+        "Visite guidée": "Guided tour",
+        "Fermer la visite guidée": "Close the guided tour",
+        "Précédent": "Previous",
+        "Suivant": "Next",
+        "Terminer": "Finish",
+        "Bienvenue dans SGBF": "Welcome to SGBF",
+        "Cette courte visite vous présente les grandes zones de l'application. Vous pourrez la revoir à tout moment depuis le bouton d'aide, en haut de l'écran.":
+          "This short tour introduces the main areas of the application. You can replay it at any time from the help button, at the top of the screen.",
+        "Votre page d'accueil : un aperçu de vos bons de sortie en cours et des FIPH qui attendent une action de votre part.":
+          "Your home page: an overview of your current outgoing slips and the FIPH awaiting action from you.",
+        "Créez et suivez vos bons de sortie. Un sous-menu déroulant permet de filtrer directement par statut (brouillon, visé, validé).":
+          "Create and track your outgoing slips. A drop-down submenu lets you filter directly by status (draft, endorsed, approved).",
+        "Vos fiches individuelles de pointage hebdomadaire : complétez vos heures, signez et suivez le circuit de validation.":
+          "Your individual weekly time sheets: fill in your hours, sign, and follow the approval workflow.",
+        "La liste des missions et des affectations du personnel, avec leur période et leur statut.":
+          "The list of missions and staff assignments, with their period and status.",
+        "Réservé aux administrateurs : gestion du personnel, des habilitations et des référentiels partagés (services, chantiers, véhicules...).":
+          "Reserved for administrators: staff management, permissions, and shared reference data (departments, sites, vehicles...).",
+        "Choix de la langue": "Language choice",
+        "Basculez l'interface en français ou en anglais à tout moment.": "Switch the interface to French or English at any time.",
+        "Choix du thème": "Theme choice",
+        "Trois apparences disponibles : claire, sombre, ou « verre » (sombre translucide).":
+          "Three appearances available: light, dark, or \"glass\" (dark translucent).",
+        "Un badge indique vos notifications non lues : validations en attente, décisions sur vos documents, etc.":
+          "A badge shows your unread notifications: pending approvals, decisions on your documents, etc.",
+        "Votre compte": "Your account",
+        "Votre identifiant et votre service sont toujours rappelés ici. Le bouton à droite permet de vous déconnecter.":
+          "Your username and department are always shown here. The button on the right lets you log out.",
+        "Vous êtes prêt(e) !": "You're all set!",
+        "Pour le détail de chaque module, consultez le manuel utilisateur. Vous pouvez revoir cette visite à tout moment via le bouton d'aide.":
+          "For details on each module, see the user manual. You can replay this tour at any time via the help button.",
         // --- Page de connexion ---
         "Connexion": "Sign in",
         "Login ou e-mail": "Username or email",
