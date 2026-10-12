@@ -12,7 +12,8 @@
  * "plus brillante" ne veut jamais dire surchargée).
  */
 type NomIcone = "tableauDeBord" | "document" | "fiph" | "mission" | "agents" | "service" | "rapports" | "administration"
-  | "chevron" | "soleil" | "lune" | "personne" | "cadenas" | "deconnexion" | "menu" | "verre" | "coche";
+  | "chevron" | "soleil" | "lune" | "personne" | "cadenas" | "deconnexion" | "menu" | "verre" | "coche"
+  | "recherche" | "plus";
 
 const TRACES: Record<NomIcone, string> = {
   tableauDeBord: "M3 13h7V3H3v10Zm0 8h7v-6H3v6Zm11 0h7V11h-7v10Zm0-18v6h7V3h-7Z",
@@ -32,6 +33,8 @@ const TRACES: Record<NomIcone, string> = {
   menu: "M3 6h18M3 12h18M3 18h18",
   verre: "M5 3h14l-5 9v7h3v2H7v-2h3v-7L5 3Zm2.4 2 3 5.5h3.2l3-5.5H7.4Z",
   coche: "M20 6 9 17l-5-5",
+  recherche: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm8 2-4.35-4.35",
+  plus: "M12 5v14M5 12h14",
 };
 
 export function Icone({ nom, taille = 18 }: { nom: NomIcone; taille?: number }) {

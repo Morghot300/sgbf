@@ -196,6 +196,13 @@ html[data-theme="glass"] .logo-lockup {
 .barre-filtres label {
   margin-bottom: 0;
 }
+/* Champ de recherche libre avec loupe (evolution du 2026-10-12, polish visuel des tableaux/listes -
+   reference visuelle SNEF "Gestion Administrative") : largeur fixe pour un alignement regulier des
+   filtres sur la meme ligne - .champ-icone (voir page de connexion) s'etire sinon a 100% de son
+   parent, ce qui n'a de sens que dans un formulaire en colonne comme celui de la connexion. */
+.barre-filtres .champ-icone {
+  width: 220px;
+}
 
 label {
   font-weight: 600;
@@ -262,6 +269,10 @@ textarea {
 }
 
 button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.6rem 1rem;
   background-color: var(--action-fond);
   color: var(--action-texte);
@@ -279,7 +290,9 @@ button:disabled {
 }
 
 .bouton-principal {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.6rem 1rem;
   background-color: var(--action-fond);
   color: var(--action-texte);
@@ -719,7 +732,7 @@ button:disabled {
   font-size: var(--taille-petite);
 }
 .tableau th, .tableau td {
-  padding: 0.6rem 0.75rem;
+  padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid var(--bordure-defaut);
 }
@@ -762,22 +775,31 @@ button:disabled {
   padding: 0.4rem 0;
 }
 
+/* Onglets soulignes (evolution du 2026-10-12, polish visuel des tableaux/listes - reference
+   visuelle SNEF "Gestion Administrative" : indicateur teal sous l'onglet actif, chevauchant la
+   fine ligne de separation commune a tous les onglets plutot qu'un simple changement de couleur). */
 .admin-nav {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--bordure-defaut);
-  padding-bottom: 0.5rem;
 }
 .admin-nav a {
   color: var(--texte-secondaire);
   text-decoration: none;
   font-weight: 600;
   font-size: var(--taille-petite);
+  padding-bottom: 0.75rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+}
+.admin-nav a:hover {
+  color: var(--texte-principal);
 }
 .admin-nav a.active,
 .admin-nav a[aria-current="page"] {
   color: var(--brand-2-text);
+  border-bottom-color: var(--brand-2-text);
 }
 
 .panneau-imbrique {

@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { creerFiphManuelle, listerFiph, listerPersonnelDuServicePourFiph } from "../../api/fiphApi";
 import { extraireMessageErreur } from "../../api/httpClient";
 import { listerMissions } from "../../api/missionApi";
 import { listerServices } from "../../api/referentielApi";
 import { EtatAsync } from "../../components/EtatAsync";
+import { Icone } from "../../components/Icone";
 import { SelectionPersonnelService } from "../../components/SelectionPersonnelService";
 import { BadgeStatutFiph } from "../../components/StatutBadge";
 import { useAuth } from "../../auth/AuthContext";
@@ -28,6 +30,7 @@ const STATUTS = Object.keys(LIBELLES_STATUT_FIPH) as StatutFiphVersion[];
  * les autres filtres (nom, service, mission...).
  */
 export default function FiphListePage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const categorieUrl = searchParams.get("categorie") as CategorieFiph | null;
   const [filtres, setFiltres] = useState({
@@ -56,64 +59,70 @@ export default function FiphListePage() {
   return (
     <div>
       <div className="page-entete">
-        <h1>FIPH — Fiches Individuelles de Pointage Hebdomadaire</h1>
+        <h1>{t("FIPH — Fiches Individuelles de Pointage Hebdomadaire")}</h1>
       </div>
       {categorieUrl && (
         <p className="note">
-          Catégorie : <strong>{LIBELLES_CATEGORIE_FIPH[categorieUrl]}</strong> — <Link to="/fiph">voir toutes les FIPH</Link>
+          {t("Catégorie :")} <strong>{t(LIBELLES_CATEGORIE_FIPH[categorieUrl])}</strong> — <Link to="/fiph">{t("voir toutes les FIPH")}</Link>
         </p>
       )}
 
       <section className="barre-filtres">
-        <label htmlFor="filtreDateFiph">Date exacte</label>
+        <label htmlFor="filtreDateFiph">{t("Date exacte")}</label>
         <input id="filtreDateFiph" type="date" value={filtres.date} onChange={(e) => setFiltres({ ...filtres, date: e.target.value, dateDebut: "", dateFin: "" })} />
-        <label htmlFor="filtreDateDebutFiph">Du</label>
+        <label htmlFor="filtreDateDebutFiph">{t("Du")}</label>
         <input id="filtreDateDebutFiph" type="date" value={filtres.dateDebut} onChange={(e) => setFiltres({ ...filtres, dateDebut: e.target.value, date: "" })} />
-        <label htmlFor="filtreDateFinFiph">Au</label>
+        <label htmlFor="filtreDateFinFiph">{t("Au")}</label>
         <input id="filtreDateFinFiph" type="date" value={filtres.dateFin} onChange={(e) => setFiltres({ ...filtres, dateFin: e.target.value, date: "" })} />
-        <label htmlFor="filtreNomCompletFiph">Nom complet</label>
-        <input
-          id="filtreNomCompletFiph"
-          type="text"
-          placeholder="Rechercher un agent..."
-          value={filtres.nomComplet}
-          onChange={(e) => setFiltres({ ...filtres, nomComplet: e.target.value })}
-        />
-        <label htmlFor="filtreMissionFiph">Mission</label>
-        <input
-          id="filtreMissionFiph"
-          type="text"
-          placeholder="Code ou nom de la mission..."
-          value={filtres.mission}
-          onChange={(e) => setFiltres({ ...filtres, mission: e.target.value })}
-        />
+        <label htmlFor="filtreNomCompletFiph">{t("Nom complet")}</label>
+        <div className="champ-icone">
+          <Icone nom="recherche" taille={16} />
+          <input
+            id="filtreNomCompletFiph"
+            type="text"
+            placeholder={t("Rechercher un agent...")}
+            value={filtres.nomComplet}
+            onChange={(e) => setFiltres({ ...filtres, nomComplet: e.target.value })}
+          />
+        </div>
+        <label htmlFor="filtreMissionFiph">{t("Mission")}</label>
+        <div className="champ-icone">
+          <Icone nom="recherche" taille={16} />
+          <input
+            id="filtreMissionFiph"
+            type="text"
+            placeholder={t("Code ou nom de la mission...")}
+            value={filtres.mission}
+            onChange={(e) => setFiltres({ ...filtres, mission: e.target.value })}
+          />
+        </div>
         {!categorieUrl && (
           <>
-            <label htmlFor="filtreStatutFiph">Statut</label>
+            <label htmlFor="filtreStatutFiph">{t("Statut")}</label>
             <select id="filtreStatutFiph" value={filtres.statut} onChange={(e) => setFiltres({ ...filtres, statut: e.target.value })}>
-              <option value="">— Tous —</option>
-              {STATUTS.map((s) => <option key={s} value={s}>{LIBELLES_STATUT_FIPH[s]}</option>)}
+              <option value="">{t("— Tous —")}</option>
+              {STATUTS.map((s) => <option key={s} value={s}>{t(LIBELLES_STATUT_FIPH[s])}</option>)}
             </select>
           </>
         )}
-        <label htmlFor="filtreServiceFiph">Service</label>
+        <label htmlFor="filtreServiceFiph">{t("Service")}</label>
         <select id="filtreServiceFiph" value={filtres.serviceId} onChange={(e) => setFiltres({ ...filtres, serviceId: e.target.value })}>
-          <option value="">— Tous —</option>
+          <option value="">{t("— Tous —")}</option>
           {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
         </select>
-        <button type="button" onClick={reinitialiserFiltres}>Réinitialiser les filtres</button>
+        <button type="button" onClick={reinitialiserFiltres}>{t("Réinitialiser les filtres")}</button>
       </section>
 
       <EtatAsync chargement={requete.isLoading} erreur={requete.error} donnees={requete.data}>
         {(liste) => {
           if (liste.length === 0) {
-            return <p>Aucune FIPH ne correspond à ces critères.</p>;
+            return <p>{t("Aucune FIPH ne correspond à ces critères.")}</p>;
           }
           const triees = [...liste].sort((a, b) => (b.annee - a.annee) || (b.numeroSemaine - a.numeroSemaine));
           return (
             <table className="tableau">
               <thead>
-                <tr><th>Agent</th><th>Service</th><th>Mission</th><th>Semaine</th><th>Origine</th><th>Version</th><th>Statut</th><th></th></tr>
+                <tr><th>{t("Agent")}</th><th>{t("Service")}</th><th>{t("Mission")}</th><th>{t("Semaine")}</th><th>{t("Origine")}</th><th>{t("Version")}</th><th>{t("Statut")}</th><th></th></tr>
               </thead>
               <tbody>
                 {triees.map((f) => (
@@ -125,10 +134,10 @@ export default function FiphListePage() {
                       {f.avertissementMission && <span title={f.avertissementMission}> ⚠</span>}
                     </td>
                     <td>S{f.numeroSemaine} / {f.annee}</td>
-                    <td>{f.origine === "BON_SORTIE" ? "Bon de sortie" : "Manuelle"}</td>
+                    <td>{f.origine === "BON_SORTIE" ? t("Bon de sortie") : t("Manuelle")}</td>
                     <td>v{f.versionCouranteNumero}</td>
-                    <td><BadgeStatutFiph statut={f.statut} libelle={LIBELLES_STATUT_FIPH[f.statut]} /></td>
-                    <td><Link to={`/fiph/${f.id}`}>Ouvrir</Link></td>
+                    <td><BadgeStatutFiph statut={f.statut} libelle={t(LIBELLES_STATUT_FIPH[f.statut])} /></td>
+                    <td><Link to={`/fiph/${f.id}`}>{t("Ouvrir")}</Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -152,6 +161,7 @@ export default function FiphListePage() {
  * clairement les creations reussies des echecs.
  */
 function SectionCreationManuelle() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { utilisateur, aLeRole } = useAuth();
@@ -182,27 +192,26 @@ function SectionCreationManuelle() {
 
   return (
     <section>
-      <h2>Créer une ou plusieurs FIPH manuelles (Code Service)</h2>
-      <p className="dashboard-accueil">Pour un ou plusieurs agents non concernés par un bon de sortie durant la période.</p>
+      <h2>{t("Créer une ou plusieurs FIPH manuelles (Code Service)")}</h2>
+      <p className="dashboard-accueil">{t("Pour un ou plusieurs agents non concernés par un bon de sortie durant la période.")}</p>
       <p className="dashboard-accueil">
-        La date de fin est optionnelle : la période reste "ouverte" tant qu'elle n'est pas définie (ajustable ensuite),
-        mais elle devra être renseignée avant toute soumission au circuit de validation.
+        {t("La date de fin est optionnelle : la période reste \"ouverte\" tant qu'elle n'est pas définie (ajustable ensuite), mais elle devra être renseignée avant toute soumission au circuit de validation.")}
       </p>
-      {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, "Impossible de créer ces FIPH.")}</p>}
+      {creation.isError && <p role="alert">{extraireMessageErreur(creation.error, t("Impossible de créer ces FIPH."))}</p>}
 
       <form className="formulaire" onSubmit={(e) => { e.preventDefault(); setResultat(null); creation.mutate(); }}>
         {peutChoisirService && (
           <>
-            <label htmlFor="serviceIdFiphManuelle">Service</label>
+            <label htmlFor="serviceIdFiphManuelle">{t("Service")}</label>
             <select id="serviceIdFiphManuelle" value={serviceId}
                     onChange={(e) => { setServiceId(e.target.value); setAgentsSelectionnes(new Set()); }}>
-              <option value="">— Sélectionner —</option>
+              <option value="">{t("— Sélectionner —")}</option>
               {services.data?.map((s) => <option key={s.id} value={s.id}>{s.libelle}</option>)}
             </select>
           </>
         )}
 
-        <h3>Personnel du service</h3>
+        <h3>{t("Personnel du service")}</h3>
         <SelectionPersonnelService
           serviceId={serviceEffectif}
           mode="multiple"
@@ -211,21 +220,21 @@ function SectionCreationManuelle() {
           chargerPersonnel={listerPersonnelDuServicePourFiph}
         />
 
-        <label htmlFor="missionIdFiphManuelle">Code Mission (facultatif)</label>
+        <label htmlFor="missionIdFiphManuelle">{t("Code Mission (facultatif)")}</label>
         <select id="missionIdFiphManuelle" value={missionId} onChange={(e) => setMissionId(e.target.value)}>
-          <option value="">— Non renseigné —</option>
+          <option value="">{t("— Non renseigné —")}</option>
           {missions.data?.map((m) => (
             <option key={m.id} value={m.id}>{m.codeHN} — {m.chantierLibelle} ({m.dateDebutPrevue} → {m.dateFinPrevue})</option>
           ))}
         </select>
 
-        <label htmlFor="dateDebutFiphManuelle">Date de début</label>
+        <label htmlFor="dateDebutFiphManuelle">{t("Date de début")}</label>
         <input id="dateDebutFiphManuelle" type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} required />
-        <label htmlFor="dateFinFiphManuelle">Date de fin (optionnelle)</label>
+        <label htmlFor="dateFinFiphManuelle">{t("Date de fin (optionnelle)")}</label>
         <input id="dateFinFiphManuelle" type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
 
         <button type="submit" disabled={creation.isPending || agentsSelectionnes.size === 0}>
-          {creation.isPending ? "Création..." : `Créer ${agentsSelectionnes.size > 1 ? `(${agentsSelectionnes.size} agents)` : ""}`}
+          {creation.isPending ? t("Création...") : `${t("Créer")} ${agentsSelectionnes.size > 1 ? `(${agentsSelectionnes.size} ${t("agents")})` : ""}`}
         </button>
       </form>
 
@@ -233,7 +242,7 @@ function SectionCreationManuelle() {
         <div className="panneau-imbrique">
           {resultat.creees.length > 0 && (
             <p>
-              ✅ {resultat.creees.length} FIPH créée(s) :{" "}
+              ✅ {resultat.creees.length} {t("FIPH créée(s) :")}{" "}
               {resultat.creees.map((f, i) => (
                 <span key={f.id}>
                   {i > 0 && ", "}
@@ -244,10 +253,10 @@ function SectionCreationManuelle() {
           )}
           {resultat.echecs.length > 0 && (
             <div role="alert">
-              <p>{resultat.echecs.length} échec(s) :</p>
+              <p>{resultat.echecs.length} {t("échec(s) :")}</p>
               <ul>
                 {resultat.echecs.map((e) => (
-                  <li key={e.agentId}>{e.agentNomComplet ?? `Agent #${e.agentId}`} — {e.motif}</li>
+                  <li key={e.agentId}>{e.agentNomComplet ?? `${t("Agent")} #${e.agentId}`} — {e.motif}</li>
                 ))}
               </ul>
             </div>
