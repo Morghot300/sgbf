@@ -10,7 +10,7 @@ const useAuthSimule = vi.mocked(useAuth);
 
 function rendreAvecRoutes(elementProtege: ReactElement) {
   return render(
-    <MemoryRouter initialEntries={["/protege"]}>
+    <MemoryRouter initialEntries={["/protege"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<p>Page de connexion</p>} />
         <Route path="/" element={<p>Tableau de bord</p>} />

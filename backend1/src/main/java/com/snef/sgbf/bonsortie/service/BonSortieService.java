@@ -708,10 +708,16 @@ public class BonSortieService {
         if (agent.getId().equals(lecteur.getId())) {
             return;
         }
-        Long serviceAgentId = agent.getService().getId();
+        // Meme bug reel que verifierPerimetreGestionnaire (corrige le 2026-08-26, voir plus haut) :
+        // un agent sans service (Administrateur/Super Administrateur/RH, ou enregistrement heritage)
+        // provoquait ici une NullPointerException - jamais rattrapee avant ce controle anti-IDOR, donc
+        // transformee par GlobalExceptionHandler en 500 opaque au lieu d'un 403/200 propre. Un agent
+        // sans service ne peut par construction correspondre au service d'aucun tiers : seule la
+        // vision globale (RH/DIRECTION/ADMINISTRATEUR/SUPER_ADMINISTRATEUR) reste alors pertinente.
+        Long serviceAgentId = agent.getService() != null ? agent.getService().getId() : null;
         boolean autorise = habilitationRepository.findByUtilisateur_IdAndActifTrue(lecteur.getId()).stream()
                 .anyMatch(h -> estRoleVisionGlobale(h.getRoleMetier().getCode())
-                        || (h.getService() != null && h.getService().getId().equals(serviceAgentId)));
+                        || (serviceAgentId != null && h.getService() != null && h.getService().getId().equals(serviceAgentId)));
         if (!autorise) {
             throw new ForbiddenOperationException(
                     "Vous n'etes pas habilite a consulter ce bon de sortie (hors de votre perimetre).");

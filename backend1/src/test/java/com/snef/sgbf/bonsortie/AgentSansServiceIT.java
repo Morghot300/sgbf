@@ -136,6 +136,52 @@ class AgentSansServiceIT {
         assertThat(present).isTrue(); // visible pour son propre titulaire, malgre l'absence de service.
     }
 
+    /**
+     * Bug reel corrige le 2026-10-12 : le controle anti-IDOR de lecture par identifiant
+     * ({@code BonSortieService.verifierPerimetreLecture}) avait recu, lors du correctif du
+     * 2026-08-26 ci-dessus, le meme traitement que le controle de gestion POUR LE LISTING
+     * seulement - la lecture par identifiant (GET /api/bons-sortie/{id}, aussi utilisee pour
+     * l'impression PDF) deferencait encore {@code agent.getService().getId()} sans garde,
+     * provoquant une NullPointerException (500 opaque via GlobalExceptionHandler) au lieu du
+     * 403 attendu des qu'un tiers hors vision globale consultait le bon de sortie heritage d'un
+     * agent sans service.
+     */
+    @Test
+    void lectureParIdNePlanteJamaisMemeAvecUnBonDeSortieHeritageSansService() throws Exception {
+        long suffixe = IdentifiantsTest.prochainSuffixe();
+        Service autreService = serviceRepository.save(nouveauService("SVC2" + suffixe, "Autre service de test"));
+        Utilisateur caAutreService = creerUtilisateurAvecHabilitation("ca_autre_ss_" + suffixe, autreService, CodeRoleMetier.CHARGE_AFFAIRES);
+        Utilisateur rh = creerUtilisateurAvecHabilitation("rh_ss_" + suffixe, null, CodeRoleMetier.RH);
+
+        BonSortie bonHeritage = new BonSortie();
+        bonHeritage.setAgent(superAdminSansService);
+        bonHeritage.setMoyenUtilise(MoyenUtilise.OMNIUM_SERVICE);
+        bonHeritage.setKilometrage(5);
+        bonHeritage.setDateSortie(LocalDate.now());
+        bonHeritage.setHeureSortie(java.time.LocalTime.of(8, 0));
+        bonHeritage.setLieu("Heritage");
+        bonHeritage.setCodeAffaireSaisi("CODE-HERITAGE-ID");
+        bonHeritage.setMotifSortie("Enregistrement heritage sans service - lecture par id");
+        bonHeritage.setOrigine(OrigineBonSortie.PRINCIPALE);
+        bonHeritage.setStatut(StatutBonSortie.BROUILLON);
+        bonSortieRepository.save(bonHeritage);
+
+        // Tiers hors vision globale et hors perimetre : doit etre refuse proprement (403), jamais 500.
+        String tokenCaAutreService = seConnecter(caAutreService.getIdentifiant());
+        mockMvc.perform(get("/api/bons-sortie/" + bonHeritage.getId()).header("Authorization", "Bearer " + tokenCaAutreService))
+                .andExpect(status().isForbidden());
+
+        // Vision globale (RH) : autorise malgre l'absence de service sur l'agent du bon de sortie.
+        String tokenRh = seConnecter(rh.getIdentifiant());
+        mockMvc.perform(get("/api/bons-sortie/" + bonHeritage.getId()).header("Authorization", "Bearer " + tokenRh))
+                .andExpect(status().isOk());
+
+        // Le titulaire lui-meme reste toujours autorise.
+        String tokenTitulaire = seConnecter(superAdminSansService.getIdentifiant());
+        mockMvc.perform(get("/api/bons-sortie/" + bonHeritage.getId()).header("Authorization", "Bearer " + tokenTitulaire))
+                .andExpect(status().isOk());
+    }
+
     // --- Aides ---
 
     private String seConnecter(String identifiant) throws Exception {

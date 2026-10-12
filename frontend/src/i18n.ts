@@ -396,6 +396,21 @@ void i18n.use(initReactI18next).init({
         "Impossible de créer ce chantier.": "Unable to create this site.",
         "Impossible de créer ce code mission.": "Unable to create this mission code.",
         "Impossible de créer ce véhicule.": "Unable to create this vehicle.",
+        // --- Cles manquees lors des deux evolutions precedentes (traduction complete + polish
+        // visuel du 2026-10-12), trouvees par audit du 2026-10-12 : voir Javadoc en tete de fichier
+        // - le repli i18next sur le francais est silencieux, donc sans audit ces oublis restent
+        // invisibles jusqu'a ce qu'un lecteur anglophone tombe dessus en production.
+        "Date exacte": "Exact date",
+        "Référence": "Reference",
+        "Début prévu": "Planned start",
+        "Fin prévue": "Planned end",
+        "Actif": "Active",
+        "Sélectionnez d'abord un service pour afficher son personnel.": "Select a department first to display its staff.",
+        "Chargement du personnel du service...": "Loading department staff...",
+        "Impossible de charger le personnel de ce service.": "Unable to load this department's staff.",
+        "Impossible de charger le personnel éligible.": "Unable to load eligible staff.",
+        "La date de fin est optionnelle : la période reste \"ouverte\" tant qu'elle n'est pas définie (ajustable ensuite), mais elle devra être renseignée avant toute soumission au circuit de validation.":
+          "The end date is optional: the period stays \"open\" until it is set (adjustable afterwards), but it will need to be filled in before any submission to the approval workflow.",
       },
     },
   },

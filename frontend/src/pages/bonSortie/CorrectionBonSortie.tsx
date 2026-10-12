@@ -68,7 +68,7 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
   const vehicules = useQuery({ queryKey: ["vehicules"], queryFn: listerVehicules, enabled: ouvert });
   const missions = useQuery({ queryKey: ["missions"], queryFn: listerMissions, enabled: ouvert });
 
-  const { register, handleSubmit, control, setValue, formState: { errors } } = useForm<Formulaire>({
+  const { register, handleSubmit, control, setValue, reset, formState: { errors } } = useForm<Formulaire>({
     resolver: zodResolver(schema),
     defaultValues: {
       missionId: bonSortie.missionSelectionneeId ? String(bonSortie.missionSelectionneeId) : "",
@@ -85,6 +85,32 @@ export function CorrectionBonSortie({ bonSortie, onCorrigeAvecSucces }: {
       motifSortie: bonSortie.motifSortie,
     },
   });
+  // Bug reel corrige le 2026-10-12 (audit) : `defaultValues` n'initialise le formulaire qu'au
+  // montage - react-hook-form ne le resynchronise jamais tout seul sur un changement du prop
+  // `bonSortie`. Or la mutation plus bas lit `bonSortie.lockVersion` A JOUR (pas un instantane),
+  // donc si la requete du parent se rafraichit pendant que ce panneau reste ouvert (ex. une
+  // autre personne vise/valide/corrige ce meme bon entre-temps), le verrouillage optimiste
+  // (RG-SEC-001) ne declenchait plus jamais son conflit 409 : la soumission repartait avec le
+  // `lockVersion` desormais a jour mais des valeurs de champs perimees, ecrasant silencieusement
+  // l'intervention entre-temps au lieu d'etre refusee. Ne se declenche que sur un changement
+  // REEL de `lockVersion` (jamais a chaque rendu) pour ne pas interrompre une saisie en cours.
+  useEffect(() => {
+    reset({
+      missionId: bonSortie.missionSelectionneeId ? String(bonSortie.missionSelectionneeId) : "",
+      moyenUtilise: bonSortie.moyenUtilise,
+      precisionVehicule: bonSortie.precisionVehicule ?? "",
+      vehiculeId: bonSortie.vehiculeId ? String(bonSortie.vehiculeId) : "",
+      lt: bonSortie.lt ?? "",
+      kilometrage: bonSortie.kilometrage,
+      dateSortie: bonSortie.dateSortie,
+      heureSortie: bonSortie.heureSortie.slice(0, 5),
+      heureRetour: bonSortie.heureRetour?.slice(0, 5) ?? "",
+      lieu: bonSortie.lieu,
+      codeAffaireSaisi: bonSortie.codeAffaireSaisi,
+      motifSortie: bonSortie.motifSortie,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionnel : voir commentaire ci-dessus.
+  }, [bonSortie.lockVersion, reset]);
   const moyenUtiliseChoisi = useWatch({ control, name: "moyenUtilise" });
   // Code affaire et Code Mission designent la meme reference (confirme le 2026-08-27) : voir la
   // meme logique dans BonSortieNouveauPage.

@@ -26,7 +26,7 @@ import { ProtectedRoute, RouteAvecRole } from "./routes/ProtectedRoute";
  */
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ThemeProvider>
         <AuthProvider>
           <Routes>

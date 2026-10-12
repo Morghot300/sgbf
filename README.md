@@ -166,7 +166,6 @@ RBAC + périmètre par habilitation, contrôlé côté serveur uniquement ; JWT 
 **Fait et vérifié** : les 8 modules métier (socle/authentification, missions, bon de sortie, FIPH, audit/PDF/droits RH, frontend complet, charte graphique, tests) — voir le détail module par module dans [l'analyse fonctionnelle](documentation/01-analyse-fonctionnelle.md) (sections A à L).
 
 **Limites connues, à traiter avant une mise en production réelle** :
-- **Aucun dépôt Git n'est initialisé** dans ce répertoire à ce stade — tout le travail décrit ici vit uniquement sur le système de fichiers local.
 - **Pas de configuration ESLint** malgré les dépendances installées (voir §12) — `tsc -b` (strict) reste le seul filet de sécurité de typage automatisé côté frontend.
 - **Logo SNEF en PNG raster (389×129 px)**, pas en SVG vectoriel officiel — voir [note de validation charte graphique](documentation/charte-graphique-note-validation.md) pour le détail et les points à faire confirmer par la communication SNEF.
 - **Fédération LDAP/SSO non implémentée** (le document source la demande « si disponible » — aucun annuaire d'entreprise accessible depuis l'environnement de développement).
